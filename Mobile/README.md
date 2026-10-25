@@ -128,6 +128,9 @@ La comprobación es pública: no lee ni envía un token. Si Laravel no está
 ejecutándose, el estado de error es el resultado esperado. En web, Laravel
 también debe permitir el origen de Flutter mediante CORS.
 
+Para preparar un backend aislado y repetir la prueba completa, consulta
+[Verificar la conexión con Laravel](docs/verificacion-conexion-laravel.md).
+
 ## Preparar la sesión
 
 `SessionStorage` utiliza
@@ -164,5 +167,7 @@ Los archivos de este bloque se distribuyen así:
 - `android/`, `ios/` y `web/`: configuración de cada plataforma.
 - [Arquitectura Flutter](docs/arquitectura-flutter.md): responsabilidades y
   pasos para incorporar pantallas y servicios.
+- [Verificación con Laravel](docs/verificacion-conexion-laravel.md): preparación
+  del servidor, prueba real, capturas y límites de la evidencia.
 - [Análisis de React Native](docs/analisis-migracion-flutter.md): flujos,
   contrato del backend y decisiones para continuar la migración.
