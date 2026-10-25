@@ -1,9 +1,10 @@
 # AgroFusion para Flutter
 
-Este proyecto prepara la aplicación móvil de trazabilidad agrícola para la
-migración desde React Native. Esta etapa incluye el arranque de Flutter y una
-pantalla inicial; la conexión con Laravel y la sesión se incorporan en los
-siguientes bloques de la issue #3.
+Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
+equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
+cliente HTTP compartido, almacenamiento seguro del token y una pantalla para
+comprobar la conexión con Laravel. El login y el perfil se implementan en las
+issues #4 y #5, respectivamente.
 
 ## Preparar el entorno
 
@@ -75,14 +76,93 @@ flutter build web
 
 El resultado se genera en `build/web/`, una carpeta excluida de Git.
 
+Las pruebas de servicios y navegación utilizan respuestas simuladas y el
+almacenamiento de prueba del paquete. Comprueban el comportamiento del código;
+no verifican la conexión con Laravel real ni el cifrado en un dispositivo.
+
+## Configurar la API
+
+Define `API_BASE_URL` al ejecutar o compilar Flutter. La URL incluye el prefijo
+`/api` y se normaliza con una barra final. El valor de desarrollo por defecto
+es `http://127.0.0.1:8000/api`.
+
+Para ejecutar en Edge contra Laravel en el mismo equipo, usa:
+
+```powershell
+flutter run -d edge --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
+```
+
+Para el emulador oficial de Android, usa la dirección del equipo anfitrión:
+
+```powershell
+flutter run -d ID_DISPOSITIVO --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
+```
+
+Sustituye `ID_DISPOSITIVO` por el identificador que muestra `flutter devices`.
+En un teléfono físico, utiliza la IP local del equipo que ejecuta Laravel y
+comprueba que el teléfono puede acceder a su puerto. `localhost` dentro del
+teléfono identifica al propio teléfono.
+
+`--dart-define` configura la aplicación al compilar; cambia el valor y vuelve
+a ejecutarla cuando cambies de servidor. No guardes contraseñas ni tokens en
+esa configuración. El cliente usa únicamente el servidor configurado y no
+cambia automáticamente entre desarrollo y producción.
+
+En Android se permite HTTP en la variante `debug` para trabajar con Laravel
+local. Usa HTTPS para producción y para probar iOS sin agregar excepciones
+de transporte.
+
+## Comprobar la conexión
+
+Con Laravel disponible en la URL configurada, sigue estos pasos:
+
+1. Abre **Comprobar conexión** desde la pantalla inicial.
+2. Espera mientras se muestra **Comprobando conexión...**.
+3. Confirma que aparece **Conexión disponible**. El servicio exige una
+   respuesta JSON con `ok` booleano igual a `true` desde `GET /api/test-api`.
+4. Detén el servidor y vuelve a abrir la pantalla para comprobar el error.
+5. Inicia el servidor y pulsa **Reintentar** para recuperar la conexión.
+6. Usa el botón de volver para regresar al inicio.
+
+La comprobación es pública: no lee ni envía un token. Si Laravel no está
+ejecutándose, el estado de error es el resultado esperado. En web, Laravel
+también debe permitir el origen de Flutter mediante CORS.
+
+## Preparar la sesión
+
+`SessionStorage` utiliza
+[`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage)
+para leer, guardar y eliminar exclusivamente la clave del token de AgroFusion.
+No almacena contraseñas. La integración del login en la issue #4 debe guardar
+el token real recibido de Laravel.
+
+En iOS se usa Keychain con acceso cuando el dispositivo está desbloqueado,
+sin sincronizar el token con otros dispositivos. El proyecto incluye los
+entitlements de Keychain para las tres configuraciones de compilación. En
+Android se desactiva la copia de seguridad automática para evitar restaurar
+credenciales sin su clave de cifrado.
+
+El soporte web del paquete utiliza WebCrypto y está documentado como
+experimental. Utiliza HTTPS o `localhost` para esa plataforma. La validación
+de almacenamiento en Android e iOS requiere ejecutar en cada plataforma;
+las pruebas con almacenamiento simulado no la reemplazan.
+
 ## Ubicar el código
 
 Los archivos de este bloque se distribuyen así:
 
 - `lib/main.dart`: punto de entrada.
-- `lib/app.dart`: configuración de `MaterialApp` y tema.
+- `lib/app.dart`: creación del cliente compartido, tema y registro de rutas.
+- `lib/config/`: URL base y timeout.
+- `lib/models/`: respuesta de conectividad y errores de la API.
+- `lib/services/`: HTTP, comprobación de conectividad y token de sesión.
+- `lib/navigation/`: nombres de rutas.
 - `lib/screens/home/home_screen.dart`: pantalla inicial.
-- `test/app_test.dart`: comprobación de arranque.
+- `lib/screens/connection/`: estados de la comprobación de conexión.
+- `lib/widgets/`: componentes compartidos de carga y error con reintento.
+- `test/`: pruebas de arranque, configuración, HTTP, sesión y navegación.
 - `android/`, `ios/` y `web/`: configuración de cada plataforma.
+- [Arquitectura Flutter](docs/arquitectura-flutter.md): responsabilidades y
+  pasos para incorporar pantallas y servicios.
 - [Análisis de React Native](docs/analisis-migracion-flutter.md): flujos,
   contrato del backend y decisiones para continuar la migración.

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../navigation/app_routes.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -26,6 +28,14 @@ class HomeScreen extends StatelessWidget {
                   'Trazabilidad agrícola',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 32),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushNamed(AppRoutes.connection);
+                  },
+                  icon: const Icon(Icons.wifi_tethering),
+                  label: const Text('Comprobar conexión'),
                 ),
               ],
             ),
