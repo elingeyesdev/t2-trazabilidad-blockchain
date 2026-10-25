@@ -1,0 +1,534 @@
+<?php
+
+namespace App\Http\Controllers\Web;
+
+use App\Http\Controllers\Controller;
+use App\Models\Produccion;
+use App\Models\Lote;
+use App\Models\DestinoProduccion;
+use App\Models\UnidadMedida;
+use App\Models\HistorialEstadoLote;
+use App\Models\Almacen;
+use App\Support\AlmacenAmbito;
+use App\Models\ProduccionAlmacenamiento;
+use App\Support\CertificacionCampoService;
+use App\Support\EstadoLoteCatalogo;
+use App\Support\EvidenciaFoto;
+use App\Support\LoteTrazabilidadService;
+use App\Support\UbicacionGpsParser;
+use App\Support\UsuarioRol;
+use Illuminate\Support\Collection;
+use App\Services\AlmacenCapacidadService;
+use App\Services\CosechaPresentacionService;
+use App\Services\OperacionAgricolaAutomaticaService;
+use App\Services\PlanificacionCosechaService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class ProduccionController extends Controller
+{
+    public function __construct(
+        private readonly AlmacenCapacidadService $capacidadService,
+        private readonly LoteTrazabilidadService $trazabilidadService,
+        private readonly CertificacionCampoService $certificacionCampo,
+        private readonly CosechaPresentacionService $presentacionCosecha,
+        private readonly PlanificacionCosechaService $planificacionCosecha,
+    ) {
+        $this->middleware(function ($request, $next) {
+            if ($request->user()?->hasRole('transportista')) {
+                abort(403, 'No tienes permiso para acceder al registro de producción.');
+            }
+
+            return $next($request);
+        });
+    }
+
+    private function convertirAKg(float $cantidad, ?UnidadMedida $unidad): float
+    {
+        if (!$unidad) {
+            // Si no hay unidad, asumimos que ya está en kg
+            return $cantidad;
+        }
+
+        $abbr = strtolower(trim($unidad->abreviatura ?? $unidad->nombre ?? ''));
+
+        // Puedes ajustar este mapa según tus unidades reales
+        $factores = [
+            'kg' => 1,
+            'kilogramo' => 1,
+            'kilogramos' => 1,
+
+            'g' => 0.001,
+            'gr' => 0.001,
+            'gramo' => 0.001,
+            'gramos' => 0.001,
+
+            't' => 1000,
+            'tn' => 1000,
+            'ton' => 1000,
+            'tonelada' => 1000,
+            'toneladas' => 1000,
+
+            'qq' => 46,
+            'quintal' => 46,
+            'quintales' => 46,
+        ];
+
+        $factor = $factores[$abbr] ?? 1; // si no lo conoce, lo toma como kg
+
+        return $cantidad * $factor;
+    }
+
+    public function index(Request $request)
+    {
+        $query = $this->cosechasCompletadasQuery($request);
+
+        $stats = [
+            'total' => (clone $query)->count(),
+            'kg_total' => (float) (clone $query)->sum('cantidad'),
+            'lotes' => (clone $query)->count(),
+            'promedio' => 0,
+        ];
+        if ($stats['total'] > 0) {
+            $stats['promedio'] = $stats['kg_total'] / $stats['total'];
+        }
+
+        $producciones = $query
+            ->with(['lote.usuario', 'lote.insumoSemilla', 'lote.cultivo', 'destino', 'unidadMedida', 'almacenamientos.almacen'])
+            ->orderByDesc('fechacosecha')
+            ->orderByDesc('produccionid')
+            ->paginate(15)
+            ->withQueryString();
+
+        $estadoIdsPostCosecha = EstadoLoteCatalogo::idsLotePostCosecha() ?: [-1];
+        $loteIdsCosechadosFilter = Lote::query()
+            ->whereIn('estadolotetipoid', $estadoIdsPostCosecha)
+            ->orderBy('nombre')
+            ->pluck('loteid');
+
+        $loteFiltroSeleccionado = $request->filled('loteid')
+            ? Lote::find((int) $request->loteid)
+            : null;
+
+        return view('producciones.index', compact(
+            'producciones',
+            'stats',
+            'loteIdsCosechadosFilter',
+            'loteFiltroSeleccionado',
+        ));
+    }
+
+    /**
+     * Una cosecha por lote: el registro más reciente de lotes ya cosechados
+     * (incluye certificado, no conforme y finalizado, no solo «Cosechado»).
+     */
+    private function cosechasCompletadasQuery(Request $request)
+    {
+        $estadoIds = EstadoLoteCatalogo::idsLotePostCosecha();
+
+        $ultimasPorLote = Produccion::query()
+            ->selectRaw('MAX(produccionid) as produccionid')
+            ->whereHas('lote', fn ($q) => $q->whereIn('estadolotetipoid', $estadoIds === [] ? [-1] : $estadoIds))
+            ->groupBy('loteid');
+
+        $query = Produccion::query()->whereIn('produccionid', $ultimasPorLote);
+
+        if ($request->filled('loteid')) {
+            $query->where('loteid', (int) $request->loteid);
+        }
+
+        if ($request->filled('fecha_desde')) {
+            $query->whereDate('fechacosecha', '>=', $request->fecha_desde);
+        }
+
+        if ($request->filled('fecha_hasta')) {
+            $query->whereDate('fechacosecha', '<=', $request->fecha_hasta);
+        }
+
+        if ($request->filled('buscar')) {
+            $buscar = '%'.trim((string) $request->buscar).'%';
+            $query->where(function ($q) use ($buscar) {
+                $q->whereHas('lote', fn ($l) => $l->where('nombre', 'like', $buscar))
+                    ->orWhereHas('lote.cultivo', fn ($c) => $c->where('nombre', 'like', $buscar))
+                    ->orWhereHas('lote.insumoSemilla', fn ($i) => $i->where('nombre', 'like', $buscar))
+                    ->orWhereHas('destino', fn ($d) => $d->where('nombre', 'like', $buscar))
+                    ->orWhere('observaciones', 'like', $buscar);
+            });
+        }
+
+        $user = $request->user();
+        if ($user && UsuarioRol::debeAcotarPorAsignacion($user)) {
+            $query->whereHas('lote', fn ($q) => $q->where('usuarioid', (int) $user->usuarioid));
+        } elseif ($user && UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user)) {
+            $query->whereHas('lote', fn ($q) => $q->whereIn('usuarioid', UsuarioRol::idsUsuariosBajoJefeAgricultor($user)));
+        }
+
+        return $query;
+    }
+
+    public function create(Request $request)
+    {
+        $loteidParam = $request->integer('loteid') ?: null;
+
+        $lotesQuery = Lote::with(['usuario', 'cultivo', 'estadoTipo', 'actividades.tipoActividad']);
+
+        if ($loteidParam) {
+            $lotesQuery->where('loteid', $loteidParam);
+        }
+
+        if (auth()->user()?->hasRole('agricultor')) {
+            $lotesQuery->where('usuarioid', auth()->id());
+        }
+
+        $lotes = $lotesQuery->orderBy('nombre')->get();
+
+        if (! $loteidParam) {
+            $lotes = $lotes->filter(fn (Lote $lote) => $this->trazabilidadService->puedeRegistrarCosecha($lote))->values();
+        }
+
+        $unidades = UnidadMedida::where('categoria', 'peso')->get();
+
+        $lotePreseleccionado = $loteidParam
+            ?? (old('loteid') ?: ($lotes->count() === 1 ? $lotes->first()->loteid : null));
+        $lotePreseleccionadoLabel = null;
+        if ($lotePreseleccionado) {
+            $loteSel = $lotes->firstWhere('loteid', $lotePreseleccionado) ?? Lote::find($lotePreseleccionado);
+            $lotePreseleccionadoLabel = $loteSel?->nombre;
+        }
+
+        $returnUrl = $this->validReturnUrl($request->input('return'));
+
+        $estimacionLoteInicial = null;
+        $loteActivo = null;
+        $usarLoteFijo = false;
+        if ($lotePreseleccionado) {
+            $loteActivo = $lotes->firstWhere('loteid', $lotePreseleccionado)
+                ?? Lote::with(['usuario', 'cultivo', 'insumoSemilla', 'estadoTipo', 'catalogoTamanoConteo.tipoEmpaque'])
+                    ->find($lotePreseleccionado);
+            if ($loteActivo && $request->user() && ! $this->trazabilidadService->puedeUsuarioRegistrarCosecha($loteActivo, $request->user())) {
+                return redirect()
+                    ->route('lotes.trazabilidad', $loteActivo)
+                    ->with('error', 'Solo el jefe agrícola, administrador u operario asignado a la cosecha pueden registrar la cosecha.');
+            }
+            if ($loteActivo) {
+                $estimacionLoteInicial = $this->planificacionCosecha->estimacionUiDesdeLote($loteActivo);
+            }
+            $usarLoteFijo = $loteActivo !== null && ($lotes->count() === 1 || $loteidParam);
+        }
+
+        $selectedAlmacenId = null;
+        $almacenDestinoPreview = null;
+        $resumenAlmacenPreview = null;
+
+        return view('producciones.create', compact(
+            'lotes',
+            'unidades',
+            'lotePreseleccionado',
+            'lotePreseleccionadoLabel',
+            'returnUrl',
+            'estimacionLoteInicial',
+            'loteActivo',
+            'usarLoteFijo',
+            'loteidParam',
+        ));
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'loteid' => 'required|exists:lote,loteid',
+            'cantidad' => 'required|numeric|min:0.01',
+            'unidadmedidaid' => 'required|exists:unidadmedida,unidadmedidaid',
+            'observaciones' => 'nullable|string',
+            'evidencia_foto' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
+        ], [
+            'evidencia_foto.required' => 'Debe subir una foto de la cosecha realizada.',
+            'evidencia_foto.image' => 'El archivo debe ser una imagen.',
+            'evidencia_foto.max' => 'La imagen no puede superar 5 MB.',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $lote = Lote::with(['estadoTipo', 'cultivo'])->findOrFail($data['loteid']);
+            $user = $request->user();
+
+            if (! $this->trazabilidadService->puedeUsuarioRegistrarCosecha($lote, $user)) {
+                return back()->withErrors([
+                    'loteid' => 'No tiene permiso para registrar la cosecha de este lote. Solo el jefe agrícola, administrador u operario asignado a la cosecha pueden hacerlo.',
+                ])->withInput();
+            }
+
+            if (! $this->trazabilidadService->puedeRegistrarCosecha($lote)) {
+                $pendientes = $this->trazabilidadService->actividadesCrecimientoPendientes($lote);
+                $mensaje = $pendientes !== []
+                    ? 'Complete y marque como realizadas las actividades pendientes: '.implode(', ', $pendientes).'.'
+                    : 'El lote aún no está listo para cosecha. Estado actual: '.($lote->estadoTipo->nombre ?? 'sin estado');
+
+                return back()->withErrors(['loteid' => $mensaje])->withInput();
+            }
+
+            $destinoAlmacenamiento = DestinoProduccion::whereRaw('LOWER(TRIM(nombre)) = ?', ['almacenamiento'])->first();
+            $unidadProduccion = UnidadMedida::find($data['unidadmedidaid']);
+            $cantidadBaseKg = $this->capacidadService->convertirAKg((float) $data['cantidad'], $unidadProduccion);
+            $lote->loadMissing(['catalogoTamanoConteo.tipoEmpaque', 'insumoSemilla']);
+            $presentacion = $this->resolverPresentacionCosecha($lote, $cantidadBaseKg);
+
+            $rutaEvidencia = EvidenciaFoto::guardar($request->file('evidencia_foto'), 'producciones_evidencia');
+
+            $produccion = Produccion::create([
+                'loteid' => $data['loteid'],
+                'cantidad' => $data['cantidad'],
+                'unidadmedidaid' => $data['unidadmedidaid'],
+                'cantidad_base' => $cantidadBaseKg,
+                'catalogotamanoconteoid' => $presentacion['calibre_id'] ?? null,
+                'cantidad_unidades' => $presentacion['unidades'] ?? null,
+                'cantidad_empaques' => $presentacion['empaques'] ?? null,
+                'fechacosecha' => now()->toDateString(),
+                'destinoproduccionid' => $destinoAlmacenamiento->destinoproduccionid ?? null,
+                'observaciones' => $data['observaciones'] ?? null,
+                'imagenurl' => 'storage/'.$rutaEvidencia,
+            ]);
+
+            // Cambiar estado del lote a "Cosechado"
+            $estadoCosechadoId = EstadoLoteCatalogo::idPorSlug('cosechado');
+
+            if ($estadoCosechadoId) {
+                $lote->update([
+                    'estadolotetipoid' => $estadoCosechadoId,
+                    'fechamodificacion' => now(),
+                ]);
+
+                // Registrar en historial de estados
+                $unidad = UnidadMedida::find($data['unidadmedidaid']);
+                HistorialEstadoLote::create([
+                    'loteid' => $lote->loteid,
+                    'estadolotetipoid' => $estadoCosechadoId,
+                    'fecha_cambio' => now(),
+                    'observaciones' => $this->observacionHistorialCosecha($data, $unidad, $presentacion),
+                    'usuarioid' => $user->usuarioid,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            DB::commit();
+
+            $unidad = UnidadMedida::find($data['unidadmedidaid']);
+            $mensaje = $this->mensajeExitoCosecha($data, $lote, $unidad, $presentacion);
+            $mensaje .= ' Certifique el lote en Certificaciones y luego envíelo al almacén desde la trazabilidad del lote.';
+
+            $returnUrl = $this->validReturnUrl($request->input('return'));
+            $redirect = $returnUrl
+                ? redirect($returnUrl)->with('success', $mensaje)
+                : redirect()->route('producciones.index')->with('success', $mensaje);
+
+            return $redirect;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Error al registrar cosecha: ' . $e->getMessage()])->withInput();
+        }
+    }
+
+    public function show(Produccion $produccion)
+    {
+        $produccion->load([
+            'lote.usuario',
+            'lote.insumoSemilla',
+            'lote.cultivo',
+            'lote.catalogoTamanoConteo.tipoEmpaque',
+            'destino',
+            'unidadMedida',
+            'catalogoTamanoConteo.tipoEmpaque',
+            'almacenamientos.almacen',
+            'almacenamientos.catalogoTamanoConteo.tipoEmpaque',
+            'ventas',
+        ]);
+
+        $presentacion = $this->presentacionRegistrada($produccion);
+
+        return view('producciones.show', compact('produccion', 'presentacion'));
+    }
+
+    public function edit(Produccion $produccion)
+    {
+        $produccion->load('lote');
+
+        return redirect()
+            ->route('lotes.trazabilidad', $produccion->loteid)
+            ->with('info', 'La cosecha se consulta aquí; para gestionar el ciclo use el lote.');
+    }
+
+    public function update(Request $request, Produccion $produccion)
+    {
+        return redirect()
+            ->route('lotes.trazabilidad', $produccion->loteid)
+            ->with('info', 'La cosecha no se edita desde este módulo. Use el lote correspondiente.');
+    }
+
+    public function destroy(Produccion $produccion)
+    {
+        return redirect()
+            ->route('producciones.index')
+            ->with('info', 'Las cosechas completadas no se eliminan desde este listado. Gestione el lote si necesita corregir datos.');
+    }
+
+    /** @return Collection<int, Almacen> */
+    private function almacenesDestacadosParaCosecha(Collection $almacenes, string $orden = 'mas'): Collection
+    {
+        if ($almacenes->count() <= 4) {
+            return $almacenes->values();
+        }
+
+        $usoPorAlmacen = ProduccionAlmacenamiento::query()
+            ->selectRaw('almacenid, COUNT(*) as total')
+            ->groupBy('almacenid')
+            ->pluck('total', 'almacenid');
+
+        $ordenados = $almacenes->sortByDesc(
+            fn (Almacen $almacen) => (int) ($usoPorAlmacen[$almacen->almacenid] ?? 0)
+        );
+
+        if ($orden === 'menos') {
+            return $ordenados->reverse()->take(4)->values();
+        }
+
+        return $ordenados->take(4)->values();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function catalogoAlmacenesCosecha(Collection $almacenes): array
+    {
+        return $almacenes->map(function (Almacen $almacen) {
+            $resumen = $this->capacidadService->resumen($almacen);
+            $resuelto = UbicacionGpsParser::resolverAlmacen(
+                (int) $almacen->almacenid,
+                $almacen->nombre,
+                $almacen->ubicacion
+            );
+
+            return [
+                'id' => $almacen->almacenid,
+                'nombre' => $almacen->nombre,
+                'tipo' => $almacen->tipoAlmacen->nombre ?? 'General',
+                'ubicacion' => $almacen->ubicacion,
+                'disponible' => $resumen['disponible_kg'],
+                'capacidad' => $resumen['capacidad_kg'],
+                'um' => 'kg',
+                'tags' => strtolower($almacen->nombre.' '.($almacen->tipoAlmacen->nombre ?? '').' '.($almacen->ubicacion ?? '')),
+                'lat' => $resuelto['lat'],
+                'lng' => $resuelto['lng'],
+                'direccion' => $resuelto['direccion'],
+                'ubicacion_estimada' => $resuelto['estimada'],
+            ];
+        })->values()->all();
+    }
+
+    private function validReturnUrl(mixed $return): ?string
+    {
+        if (! is_string($return) || trim($return) === '') {
+            return null;
+        }
+
+        $return = trim($return);
+        $appUrl = rtrim((string) config('app.url'), '/');
+        if (! str_starts_with($return, '/') && ! str_starts_with($return, $appUrl)) {
+            return null;
+        }
+
+        return $return;
+    }
+
+    /** @return array<string, mixed> */
+    private function resolverPresentacionCosecha(Lote $lote, float $cantidadBaseKg): array
+    {
+        $calibre = $lote->catalogoTamanoConteo;
+        if (! $calibre && $lote->insumosemillaid) {
+            $ctx = $this->planificacionCosecha->contexto((int) $lote->insumosemillaid);
+            $calibreId = $ctx['calibre_default_id'] ?? null;
+            if ($calibreId) {
+                $calibre = \App\Models\CatalogoTamanoConteo::query()
+                    ->with('tipoEmpaque')
+                    ->find((int) $calibreId);
+            }
+        }
+
+        return $this->presentacionCosecha->desdeKg($cantidadBaseKg, $calibre);
+    }
+
+    /** @return array<string, mixed> */
+    private function presentacionRegistrada(Produccion $produccion): array
+    {
+        if ($produccion->cantidad_unidades !== null && $produccion->cantidad_empaques !== null) {
+            $calibre = $produccion->catalogoTamanoConteo ?? $produccion->lote?->catalogoTamanoConteo;
+            $empaqueLabel = CosechaPresentacionService::etiquetaEmpaquePlural(
+                CosechaPresentacionService::tipoEmpaqueParaCosechaEnCampo($calibre?->tipoEmpaque?->nombre)
+            );
+
+            return [
+                'ok' => true,
+                'kg' => round((float) ($produccion->cantidad_base ?? $produccion->cantidad), 2),
+                'unidades' => (int) $produccion->cantidad_unidades,
+                'empaques' => (int) $produccion->cantidad_empaques,
+                'empaque_label' => $empaqueLabel,
+                'calibre_nombre' => $calibre?->nombre,
+                'resumen' => number_format((int) $produccion->cantidad_empaques, 0, ',', '.').' '.$empaqueLabel
+                    .' · '.number_format((int) $produccion->cantidad_unidades, 0, ',', '.').' unidades · '
+                    .number_format((float) ($produccion->cantidad_base ?? 0), 2, ',', '.').' kg',
+            ];
+        }
+
+        $almacenActivo = $produccion->almacenamientos
+            ?->whereNull('fechasalida')
+            ->sortByDesc('fechaentrada')
+            ->first();
+
+        if ($almacenActivo) {
+            return $this->presentacionCosecha->paraAlmacenamiento($almacenActivo);
+        }
+
+        return $this->presentacionCosecha->paraProduccion($produccion);
+    }
+
+    /** @param  array<string, mixed>  $presentacion */
+    private function observacionAlmacenCosecha(Lote $lote, array $presentacion): string
+    {
+        $base = "Cosecha del lote {$lote->nombre}";
+        if ($presentacion['ok'] ?? false) {
+            return $base.' · '.($presentacion['resumen'] ?? '');
+        }
+
+        return $base;
+    }
+
+    /** @param  array<string, mixed>  $data */
+    /** @param  array<string, mixed>  $presentacion */
+    private function observacionHistorialCosecha(array $data, UnidadMedida $unidad, array $presentacion): string
+    {
+        $partes = [number_format((float) $data['cantidad'], 0, '.', '.').' '.$unidad->abreviatura];
+        if ($presentacion['ok'] ?? false) {
+            if (! empty($presentacion['empaques'])) {
+                $partes[] = number_format((int) $presentacion['empaques'], 0, ',', '.').' '.($presentacion['empaque_label'] ?? 'Cajas');
+            }
+            if (! empty($presentacion['unidades'])) {
+                $partes[] = number_format((int) $presentacion['unidades'], 0, ',', '.').' unidades';
+            }
+        }
+
+        return 'Cosecha: '.implode('/', $partes);
+    }
+
+    /** @param  array<string, mixed>  $data */
+    /** @param  array<string, mixed>  $presentacion */
+    private function mensajeExitoCosecha(array $data, Lote $lote, UnidadMedida $unidad, array $presentacion): string
+    {
+        $cultivo = $lote->cultivo?->nombre ?? $lote->cultivo_etiqueta ?? 'cultivo';
+        $mensaje = "¡Cosecha registrada! {$data['cantidad']} {$unidad->abreviatura} de {$cultivo}";
+        if ($presentacion['ok'] ?? false) {
+            $mensaje .= ' ('.($presentacion['resumen'] ?? '').')';
+        }
+
+        return $mensaje;
+    }
+}
