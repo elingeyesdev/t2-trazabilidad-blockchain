@@ -3,7 +3,7 @@
 Este documento explica al equipo de desarrollo cómo incorporar funcionalidades
 a `Mobile/` usando la base de la issue #3. El flujo de referencia es la
 comprobación pública de conexión con Laravel. Incluye los flujos de
-autenticación de la issue #4; la navegación por permisos corresponde a la issue #5.
+autenticación de la issue #4 y la consulta del perfil de la issue #5.
 
 ## Seguir el flujo de una petición
 
@@ -113,6 +113,31 @@ borra las credenciales que otro login haya reemplazado. Las peticiones con
 `AppLoading`; un error usa `AppErrorState` y su acción de reintento. El servicio
 interpreta el resultado con `ApiHealth`, de modo que una respuesta distinta
 de `{"ok": true}` no se muestra como una conexión disponible.
+
+## Consultar y compartir el perfil
+
+`HomeScreen` abre `/profile`, registrada con `requiresAuthentication: true`.
+`ProfileScreen` solicita `AuthController.refreshProfile` al abrirse y mediante
+la acción **Actualizar perfil**. Mientras consulta, oculta el contenido anterior
+y deshabilita el reenvío. Reutiliza `AuthService.restoreSession` para obtener
+el perfil con el token actual, verificar que no haya cambiado la sesión y
+aplicar la limpieza existente si Laravel rechaza el acceso.
+
+`AuthUser` conserva los campos del perfil, fechas, nombres de todos los roles,
+permisos efectivos y capacidades de edición. Valida los tipos de los campos
+recibidos, conserva CI/NIT como texto y no deriva permisos desde los roles.
+Las listas obtenidas del JSON no permiten mutaciones posteriores.
+
+La actualización sustituye el usuario compartido y notifica también al inicio.
+Se rechaza una respuesta con el identificador de otra cuenta. Los fallos de
+verificación reutilizan la recuperación global de sesión antes de permitir
+mostrar el perfil. Una respuesta posterior al desmontaje del controlador no
+actualiza al usuario.
+
+La fotografía se representa desde `avatar_url`, sin usar el Bearer para su
+descarga. El componente admite HTTP/HTTPS e imágenes raster embebidas y
+presenta un icono si la URI o la imagen no son utilizables. No introduce
+dependencias ni conserva copias del perfil en el almacenamiento de sesión.
 
 ## Reutilizar el cliente HTTP
 

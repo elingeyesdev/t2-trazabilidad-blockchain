@@ -4,8 +4,9 @@ Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
 equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
 cliente HTTP compartido, almacenamiento seguro del token, comprobación de
 conexión, inicio de sesión, registro pendiente de aprobación, cierre y
-restauración de sesión con Laravel. El perfil y la navegación por permisos
-corresponden a la issue #5.
+restauración de sesión con Laravel y consulta del perfil autenticado.
+La edición del perfil y la navegación por permisos forman parte de los
+otros bloques de la issue #5.
 
 ## Iniciar sesión
 
@@ -67,6 +68,31 @@ conserva el correo de la solicitud y limpia la contraseña.
 Un administrador debe aprobar la cuenta antes de que pueda iniciar sesión.
 Si intentas acceder mientras está pendiente, el login muestra el mensaje
 de Laravel y mantiene bloqueado el inicio autenticado.
+
+## Consultar el perfil
+
+Después de iniciar sesión, selecciona **Mi perfil**. La pantalla consulta
+`GET /api/me` con el token de la sesión y muestra nombre completo, nombre de
+usuario, correo, teléfono, CI/NIT, todos los roles y las fechas disponibles.
+Las fechas se presentan en la zona local; los datos opcionales vacíos aparecen
+como **Sin registrar** y una cuenta sin roles muestra **Sin roles asignados**.
+
+El avatar usa `avatar_url`, con soporte para imágenes HTTP/HTTPS y referencias
+heredadas de imágenes PNG, JPEG, WEBP o GIF embebidas. Si no hay una foto o
+no se puede cargar, muestra un icono de sustitución. No adjunta el token de
+sesión a las descargas de imágenes.
+
+Selecciona **Actualizar perfil** para recuperar los cambios del servidor.
+La consulta actualiza también el usuario que muestra el inicio y evita
+peticiones duplicadas durante la carga. El modelo conserva los permisos
+efectivos y las capacidades de edición recibidas; un rol por sí solo no
+genera permisos locales.
+
+La ruta `/profile` requiere una sesión verificada. Si `me` rechaza el token
+o la cuenta, vuelve al login y limpia sus credenciales. Si no puede verificar
+la sesión por un error de conexión, servidor, formato o almacenamiento,
+presenta la recuperación de sesión con reintento antes de mostrar datos.
+La pantalla de este bloque es de consulta.
 
 ## Cerrar sesión
 

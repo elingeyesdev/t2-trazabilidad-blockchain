@@ -9,6 +9,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
 import 'services/api_health_service.dart';
 import 'services/auth_service.dart';
@@ -150,6 +151,10 @@ class _AgroFusionAppState extends State<AgroFusionApp>
         ),
         AppRoutes.register: (_) =>
             _sessionGate(() => RegisterScreen(controller: _auth)),
+        AppRoutes.profile: (_) => _sessionGate(
+          () => ProfileScreen(controller: _auth),
+          requiresAuthentication: true,
+        ),
       },
     );
   }

@@ -26,7 +26,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -51,6 +51,14 @@ class HomeScreen extends StatelessWidget {
                   style: theme.textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 32),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushNamed(AppRoutes.profile);
+                  },
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text('Mi perfil'),
+                ),
+                const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: () {
                     Navigator.of(context).pushNamed(AppRoutes.connection);

@@ -8,7 +8,7 @@ import '../models/logout_result.dart';
 import '../models/registration_result.dart';
 import '../services/auth_service.dart';
 
-enum _AuthOperation { idle, restoring, login, register, logout }
+enum _AuthOperation { idle, restoring, profile, login, register, logout }
 
 class AuthController extends ChangeNotifier {
   static const _expiredError = ApiException(
@@ -34,6 +34,7 @@ class AuthController extends ChangeNotifier {
   bool get isSubmitting => _operation != _AuthOperation.idle;
   bool get isLoggingOut => _operation == _AuthOperation.logout;
   bool get isCheckingSession => _operation == _AuthOperation.restoring;
+  bool get isLoadingProfile => _operation == _AuthOperation.profile;
   ApiException? get sessionError => _sessionError;
   LogoutResult? get logoutResult => _logoutResult;
   bool get requiresLogoutRetry => _logoutResult?.localCleared == false;
@@ -55,17 +56,36 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> restoreSession() async {
+  Future<void> restoreSession() => _verifySession();
+
+  Future<void> refreshProfile() async {
+    final user = _user;
+    if (user != null) await _verifySession(expectedId: user.id);
+  }
+
+  Future<void> _verifySession({int? expectedId}) async {
     if (isSubmitting || _isDisposed || requiresLogoutRetry) return;
-    _operation = _AuthOperation.restoring;
-    _user = null;
+    _operation = expectedId == null
+        ? _AuthOperation.restoring
+        : _AuthOperation.profile;
+    if (expectedId == null) _user = null;
     _error = null;
     _sessionError = null;
     _logoutResult = null;
     notifyListeners();
     try {
-      _user = await _service.restoreSession();
+      final user = await _service.restoreSession();
+      if (_isDisposed) return;
+      if (expectedId != null) {
+        if (user == null) throw _expiredError;
+        if (user.id != expectedId) {
+          throw const ApiException('La API devolvió un perfil de otra cuenta.');
+        }
+      }
+      _user = user;
     } on ApiException catch (error) {
+      if (_isDisposed) return;
+      _user = null;
       if (error.statusCode == 401) {
         _error = _expiredError;
       } else if (error.statusCode == 403) {
