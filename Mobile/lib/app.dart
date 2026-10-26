@@ -4,15 +4,19 @@ import 'package:flutter/material.dart';
 
 import 'config/api_config.dart';
 import 'controllers/auth_controller.dart';
+import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/modules/module_access_denied.dart';
+import 'screens/modules/module_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
 import 'services/api_health_service.dart';
 import 'services/auth_service.dart';
+import 'services/module_service.dart';
 import 'services/session_storage.dart';
 import 'widgets/app_error_state.dart';
 import 'widgets/app_loading.dart';
@@ -70,6 +74,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   Widget _sessionGate(
     Widget Function() content, {
     bool requiresAuthentication = false,
+    AppModule? module,
   }) {
     return ListenableBuilder(
       listenable: _auth,
@@ -124,8 +129,11 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             ),
           );
         }
-        if (requiresAuthentication && _auth.user == null) {
+        if ((requiresAuthentication || module != null) && _auth.user == null) {
           return LoginScreen(controller: _auth);
+        }
+        if (module != null && !module.canOpen(_auth.user!)) {
+          return ModuleAccessDenied(title: module.label);
         }
         return content();
       },
@@ -155,6 +163,16 @@ class _AgroFusionAppState extends State<AgroFusionApp>
           () => ProfileScreen(controller: _auth),
           requiresAuthentication: true,
         ),
+        for (final module in AppModule.values)
+          module.route: (_) => _sessionGate(
+            () => ModuleScreen(
+              module: module,
+              user: _auth.user!,
+              service: ModuleService(_api),
+            ),
+            requiresAuthentication: true,
+            module: module,
+          ),
       },
     );
   }

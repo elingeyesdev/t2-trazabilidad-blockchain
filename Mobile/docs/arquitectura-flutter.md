@@ -165,6 +165,40 @@ como pendiente de consulta y bloquea otras escrituras hasta verificarlo;
 cerrar el formulario no elimina esa condición. Los `401` durante el guardado
 reutilizan la invalidación global, incluido el bloqueo si falla la limpieza.
 
+## Filtrar el menú y proteger las rutas
+
+`AppModule` declara los destinos de consulta, su ruta Flutter, endpoint,
+permiso efectivo y campos resumidos. `HomeScreen` filtra ese catálogo mediante
+`canOpen`, que consulta exclusivamente `AuthUser.permissions`. No interpreta
+roles ni concede permisos por prefijos, comodines o nombres de administrador.
+El perfil propio utiliza autenticación y sus capacidades de edición.
+
+`AgroFusionApp` registra las rutas del catálogo con `_sessionGate`, autenticación
+y el mismo `AppModule`. Antes de construir `ModuleScreen`, comprueba el permiso.
+Una notificación del controlador vuelve a evaluar el acceso: retirar un permiso
+desmonta el contenido protegido y presenta `ModuleAccessDenied`. La entrada
+directa no evita esa comprobación. Un `403` de la consulta presenta la misma
+pantalla; **Volver al inicio** elimina la pila anterior de navegación.
+
+`ModuleService` comprueba el permiso antes de llamar al cliente HTTP compartido.
+`ModulePage` interpreta listas simples o la paginación `data`, `current_page`
+y `last_page` de Laravel, valida identificadores y campos escalares y conserva
+solo los campos declarados para presentación. No muestra JSON completo,
+contraseñas, metadatos ni relaciones arbitrarias. Los enlaces de paginación
+recibidos no se siguen: cada consulta usa el endpoint configurado y el número
+de página. `ModuleScreen` muestra carga, registros, lista vacía o reintento;
+evita conservar una lista anterior visible mientras consulta otra página.
+
+El alcance de estos destinos es lectura de registros resumidos. Las operaciones
+de negocio y sus formularios no se consideran migrados por registrar una ruta.
+Consulta la tabla de opciones y permisos del [README](../README.md).
+
+Las pruebas `permission_navigation_test.dart` y `module_service_test.dart`
+comprueban visibilidad, rutas directas, permisos directos sin roles, ausencia
+de bypass de `admin`, paginación, denegación del servidor y retirada de permisos.
+`ApiNavegacionPermisosTest` comprueba que peticiones manuales a Laravel tampoco
+eluden los permisos y que `/api/usuarios` exige `usuarios.admin`.
+
 ## Reutilizar el cliente HTTP
 
 `ApiClient.request` recibe el método, la ruta relativa, los parámetros de
@@ -218,9 +252,11 @@ Para migrar una pantalla, sigue estos pasos:
    compartido por constructor. Mantén las llamadas HTTP fuera de la pantalla.
 4. Agrega la pantalla dentro de `lib/screens/` y reutiliza los estados de
    carga y error cuando correspondan.
-5. Declara el nombre en `AppRoutes` y registra el constructor de la pantalla
-   en las rutas de `AgroFusionApp`, mediante `_sessionGate`. Si necesita un
-   usuario verificado, establece `requiresAuthentication: true`.
+5. Para una consulta de módulos, agrega el destino y su permiso a `AppModule`;
+   el menú y las rutas usan ese catálogo. Para otras pantallas, declara el
+   nombre en `AppRoutes` y registra su constructor mediante `_sessionGate`.
+   Si necesita un usuario verificado, establece `requiresAuthentication: true`;
+   si exige permisos, aplica el criterio del catálogo antes de construirla.
 6. Prueba las respuestas del servicio y la navegación antes de registrar
    la funcionalidad como terminada.
 

@@ -5,8 +5,8 @@ equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
 cliente HTTP compartido, almacenamiento seguro del token, comprobación de
 conexión, inicio de sesión, registro pendiente de aprobación, cierre y
 restauración de sesión con Laravel y consulta del perfil autenticado.
-Incluye edición del nombre de usuario y fotografía. La navegación por permisos
-forma parte de los otros bloques de la issue #5.
+Incluye edición del nombre de usuario y fotografía, y navegación según los
+permisos efectivos recibidos de Laravel, con consultas de solo lectura.
 
 ## Iniciar sesión
 
@@ -129,6 +129,49 @@ Si falla la comunicación durante una escritura, el resultado puede ser
 incierto. El formulario ofrece **Consultar perfil** y bloquea otro guardado
 hasta completar esa consulta, incluso si cierras y vuelves a abrir la edición.
 La aplicación no repite automáticamente una actualización.
+
+## Navegar según tus permisos
+
+El inicio muestra **Mi perfil** y los módulos de consulta habilitados por
+`permissions` de `GET /api/me`. Tener un rol llamado `admin` no habilita todos
+los destinos. Los permisos directos también habilitan sus opciones, aunque
+la cuenta no tenga roles. Sin permisos de módulos, puedes consultar tu perfil
+y comprobar la conexión.
+
+Las opciones disponibles y sus permisos son:
+
+| Opción | Permiso efectivo |
+| --- | --- |
+| Lotes, Actividades y Cosechas | `lotes.view` |
+| Almacenes e Insumos | `inventario.view` |
+| Movimientos de almacén | `almacen.movimientos.view` |
+| Certificaciones | `certificaciones.view` |
+| Pedidos | `pedidos.view` |
+| Incidentes | `incidentes.view` |
+| Rutas | `rutas_multi.view` |
+| Asignaciones | `asignaciones.view` |
+| Documentos de entrega | `documentos.view` |
+| Usuarios | `usuarios.admin` |
+
+Selecciona una opción para consultar registros reales de Laravel. La pantalla
+muestra los campos resumidos del módulo, permite **Actualizar lista** y ofrece
+**Anterior** y **Siguiente** cuando el servidor pagina el resultado. Una lista
+sin registros presenta **No hay registros disponibles.** Estos destinos
+cubren la consulta: no incluyen creación, edición, eliminación ni descargas
+de documentos. Los demás flujos de negocio de React Native requieren su
+propia migración.
+
+El acceso directo a una ruta `/modules/...` también comprueba el permiso
+antes de enviar la consulta. Un `403` de Laravel presenta **Acceso no
+autorizado** y permite **Volver al inicio**; conserva la sesión. Un `401`
+reutiliza la retirada de sesión. Los errores de consulta ofrecen **Reintentar**.
+Si una actualización del perfil retira un permiso, el menú oculta su opción
+y la ruta abierta deja de mostrar los registros.
+
+Laravel vuelve a comprobar autorización y acceso a los datos en cada petición.
+Ocultar una opción en Flutter no sustituye esas comprobaciones ni los filtros
+de pertenencia o ámbito de los controladores. Las excepciones contextuales
+del servidor no generan permisos adicionales en el menú.
 
 ## Cerrar sesión
 
@@ -312,10 +355,11 @@ Los archivos de este bloque se distribuyen así:
 - `lib/models/`: usuario autenticado, conectividad y errores de la API.
 - `lib/controllers/`: estado observable de login, registro y cierre de sesión.
 - `lib/services/`: HTTP, autenticación, conectividad y almacenamiento del token.
-- `lib/navigation/`: nombres de rutas.
+- `lib/navigation/`: nombres de rutas y catálogo de módulos con sus permisos.
 - `lib/screens/auth/`: login, registro y confirmación de aprobación pendiente.
 - `lib/screens/home/home_screen.dart`: inicio para el usuario autenticado.
 - `lib/screens/connection/`: estados de la comprobación de conexión.
+- `lib/screens/modules/`: consultas de módulos y acceso denegado.
 - `lib/widgets/`: componentes compartidos de carga y error con reintento.
 - `test/`: pruebas de arranque, configuración, HTTP, sesión y navegación.
 - `android/`, `ios/` y `web/`: configuración de cada plataforma.
