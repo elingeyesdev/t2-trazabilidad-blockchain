@@ -68,18 +68,20 @@ final class UsuarioAvatar
 
     public static function storeUpload(Usuario $usuario, \Illuminate\Http\UploadedFile $file): string
     {
-        self::deleteStoredFile($usuario->imagenurl);
-
-        $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $ext = strtolower($file->extension() ?: 'jpg');
         if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
             $ext = 'jpg';
         }
 
         $path = $file->storeAs(
             'avatars',
-            'usuario-'.$usuario->usuarioid.'-'.time().'.'.$ext,
+            'usuario-'.$usuario->usuarioid.'-'.Str::uuid().'.'.$ext,
             'public'
         );
+
+        if ($path === false) {
+            throw new \RuntimeException('No se pudo guardar la foto de perfil.');
+        }
 
         return '/storage/'.$path;
     }
