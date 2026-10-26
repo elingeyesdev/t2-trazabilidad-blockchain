@@ -86,14 +86,18 @@ class ApiPerfilFlujoTest extends TestCase
             ->assertJsonPath('avatar_url', $foto->json('avatar_url'))
             ->assertJsonPath('permissions', ['lotes.view']);
 
+        $otroToken = $usuario->createToken('otro-dispositivo')->plainTextToken;
         $this->postJson('/api/logout', [], $this->cabeceras($token))
             ->assertOk()
             ->assertJsonPath('message', 'Sesión cerrada correctamente');
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
 
         $this->getJson('/api/me', $this->cabeceras($token))->assertUnauthorized();
         $this->patchJson('/api/me', ['nombreusuario' => 'intento-revocado'], $this->cabeceras($token))
             ->assertUnauthorized();
         $this->assertSame('ana.mamani', $usuario->fresh()->nombreusuario);
+        $this->getJson('/api/me', $this->cabeceras($otroToken))
+            ->assertOk()
+            ->assertJsonPath('usuarioid', $usuario->usuarioid);
     }
 }

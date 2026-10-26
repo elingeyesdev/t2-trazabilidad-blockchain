@@ -2,9 +2,88 @@
 
 Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
 equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
-cliente HTTP compartido, almacenamiento seguro del token y una pantalla para
-comprobar la conexión con Laravel. El login y el perfil se implementan en las
-issues #4 y #5, respectivamente.
+cliente HTTP compartido, almacenamiento seguro del token, comprobación de
+conexión, inicio de sesión, registro pendiente de aprobación, cierre y
+restauración de sesión con Laravel. El perfil y la navegación por permisos
+corresponden a la issue #5.
+
+## Iniciar sesión
+
+Si no hay una sesión guardada, ingresa el correo y la contraseña de una cuenta activa
+y aprobada en Laravel. Flutter envía `POST /api/login` sin credenciales previas,
+guarda el token y confirma el perfil con `GET /api/me` antes de mostrar el inicio.
+Si falla esta confirmación, limpia el token recién guardado y mantiene el login.
+
+El formulario conserva la contraseña tal como la escribes, permite mostrarla
+y bloquea envíos duplicados durante la carga. Los errores de Laravel aparecen
+en el formulario; las cuentas pendientes o inactivas permanecen sin acceso.
+La acción **Comprobar conexión** está disponible desde la pantalla de login.
+
+Consulta el
+[análisis de autenticación](docs/analisis-autenticacion-flutter.md) para revisar
+el contrato y la división de actividades.
+
+Para repetir login, registro pendiente, cierre y restauración con una base
+aislada, consulta la
+[verificación de autenticación con Laravel](docs/verificacion-autenticacion-laravel.md).
+
+## Restaurar y verificar la sesión
+
+Al abrir la aplicación, Flutter lee el token guardado y consulta `GET /api/me`
+antes de mostrar el inicio. Sin token, presenta el login sin realizar esa
+consulta. Al volver al primer plano, también revalida una sesión autenticada
+para comprobar que la cuenta siga autorizada.
+
+Mientras verifica, muestra **Verificando sesión...**. Si falla la conexión,
+el servidor o el acceso al almacenamiento, bloquea las pantallas y ofrece
+**Reintentar** o **Cerrar sesión**. Los fallos de red conservan el token para
+volver a verificarlo; no se utilizan datos guardados como prueba de acceso.
+
+Un token rechazado o una cuenta pendiente o inactiva vuelven al login después
+de limpiar sus credenciales. Si falla esa limpieza, el acceso permanece
+bloqueado hasta resolver el almacenamiento mediante el reintento.
+
+Un `401` de una petición autenticada también retira al usuario en memoria.
+Un `403` de permisos de otro módulo y los errores de comunicación de ese
+módulo conservan la sesión verificada. Las respuestas antiguas no invalidan
+una sesión nueva que haya reemplazado el token.
+
+## Solicitar una cuenta
+
+Desde el login, selecciona **Crear cuenta**. Completa nombre, apellido, correo,
+nombre de usuario, contraseña y confirmación. El teléfono es opcional.
+La API asigna el rol `agricultor`; el formulario utiliza ese contrato y no
+ofrece un selector de roles que el servidor ignore.
+
+Flutter envía `POST /api/register` sin Bearer y presenta los errores de Laravel
+junto a los campos. La comprobación local de campos obligatorios y coincidencia
+de contraseñas orienta la entrada; Laravel aplica sus reglas de validación.
+
+Una respuesta válida contiene una cuenta `pendiente` y ningún token. La
+pantalla muestra **Solicitud enviada** y el mensaje del servidor. El registro
+no autentica al usuario ni guarda credenciales de sesión. Al volver al login,
+conserva el correo de la solicitud y limpia la contraseña.
+
+Un administrador debe aprobar la cuenta antes de que pueda iniciar sesión.
+Si intentas acceder mientras está pendiente, el login muestra el mensaje
+de Laravel y mantiene bloqueado el inicio autenticado.
+
+## Cerrar sesión
+
+Desde el inicio autenticado, selecciona **Cerrar sesión** en la barra superior.
+La aplicación oculta el usuario mientras procesa `POST /api/logout`, elimina
+el token de esa sesión y vuelve al login. El botón de volver no recupera el
+inicio autenticado. Un `401` de logout indica que el token ya no autoriza el
+acceso y permite completar el cierre local.
+
+Si falla la comunicación con Laravel, se limpia la sesión del dispositivo y
+el login informa que no se pudo confirmar el cierre en el servidor. Si falla
+el borrado del almacenamiento, la aplicación mantiene el acceso bloqueado
+y ofrece **Reintentar** hasta poder eliminar las credenciales locales.
+
+El cierre actúa sobre la sesión utilizada: conserva las otras sesiones de
+Laravel y evita borrar un token distinto si otro login reemplazó el anterior
+durante la petición.
 
 ## Preparar el entorno
 
@@ -136,8 +215,8 @@ Para preparar un backend aislado y repetir la prueba completa, consulta
 `SessionStorage` utiliza
 [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage)
 para leer, guardar y eliminar exclusivamente la clave del token de AgroFusion.
-No almacena contraseñas. La integración del login en la issue #4 debe guardar
-el token real recibido de Laravel.
+No almacena contraseñas. El servicio de autenticación guarda el token real
+recibido de Laravel y confirma el perfil antes de dar acceso.
 
 En iOS se usa Keychain con acceso cuando el dispositivo está desbloqueado,
 sin sincronizar el token con otros dispositivos. El proyecto incluye los
@@ -157,10 +236,12 @@ Los archivos de este bloque se distribuyen así:
 - `lib/main.dart`: punto de entrada.
 - `lib/app.dart`: creación del cliente compartido, tema y registro de rutas.
 - `lib/config/`: URL base y timeout.
-- `lib/models/`: respuesta de conectividad y errores de la API.
-- `lib/services/`: HTTP, comprobación de conectividad y token de sesión.
+- `lib/models/`: usuario autenticado, conectividad y errores de la API.
+- `lib/controllers/`: estado observable de login, registro y cierre de sesión.
+- `lib/services/`: HTTP, autenticación, conectividad y almacenamiento del token.
 - `lib/navigation/`: nombres de rutas.
-- `lib/screens/home/home_screen.dart`: pantalla inicial.
+- `lib/screens/auth/`: login, registro y confirmación de aprobación pendiente.
+- `lib/screens/home/home_screen.dart`: inicio para el usuario autenticado.
 - `lib/screens/connection/`: estados de la comprobación de conexión.
 - `lib/widgets/`: componentes compartidos de carga y error con reintento.
 - `test/`: pruebas de arranque, configuración, HTTP, sesión y navegación.

@@ -18,6 +18,13 @@ class ApiClient {
   final ApiConfig config;
   final SessionStorage _sessionStorage;
   final http.Client _client;
+  final _sessionExpired = StreamController<bool>.broadcast(sync: true);
+
+  Stream<bool> get sessionExpired => _sessionExpired.stream;
+
+  void _notifySessionExpired(bool localCleared) {
+    if (!_sessionExpired.isClosed) _sessionExpired.add(localCleared);
+  }
 
   Future<Object?> request(
     String method,
@@ -25,6 +32,7 @@ class ApiClient {
     Map<String, String>? queryParameters,
     Map<String, Object?>? body,
     bool authenticated = true,
+    String? bearerToken,
   }) async {
     final uri = config.endpoint(path, queryParameters: queryParameters);
     final abort = Completer<void>();
@@ -39,7 +47,9 @@ class ApiClient {
     }
 
     try {
-      final token = authenticated ? await _sessionStorage.readToken() : null;
+      final token = authenticated
+          ? bearerToken ?? await _sessionStorage.readToken()
+          : null;
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
@@ -55,10 +65,22 @@ class ApiClient {
             },
           );
 
-      if (response.statusCode == 401 &&
-          token != null &&
-          await _sessionStorage.readToken() == token) {
-        await _sessionStorage.clearToken();
+      if (response.statusCode == 401 && token != null) {
+        try {
+          final current = await _sessionStorage.readToken();
+          if (current == token) {
+            await _sessionStorage.clearToken();
+            _notifySessionExpired(true);
+          } else if (current == null) {
+            _notifySessionExpired(true);
+          }
+        } catch (_) {
+          _notifySessionExpired(false);
+          throw const ApiException(
+            'No se pudo limpiar el almacenamiento de sesión. Intenta de nuevo.',
+            statusCode: 401,
+          );
+        }
       }
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -130,5 +152,8 @@ class ApiClient {
     );
   }
 
-  void close() => _client.close();
+  void close() {
+    _client.close();
+    unawaited(_sessionExpired.close());
+  }
 }
