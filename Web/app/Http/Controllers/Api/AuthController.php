@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\PerfilUsuarioResource;
 use App\Models\Usuario;
 use App\Support\CuentaEstado;
 use Illuminate\Http\Request;
@@ -100,7 +101,17 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
-        return response()->json($request->user()->load('roles'));
+        $usuario = $request->user();
+
+        if (! $usuario->cuentaAprobada()) {
+            return response()->json([
+                'message' => CuentaEstado::esPendiente($usuario->estado_cuenta)
+                    ? 'Tu cuenta está pendiente de aprobación por un administrador.'
+                    : 'Tu cuenta no está activa.',
+            ], 403);
+        }
+
+        return response()->json((new PerfilUsuarioResource($usuario))->resolve($request));
     }
 
 
