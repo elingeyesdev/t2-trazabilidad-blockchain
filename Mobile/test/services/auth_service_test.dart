@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:agrofusion_mobile/config/api_config.dart';
@@ -11,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../helpers/failing_session_storage.dart';
+
 const profile = {
   'usuarioid': 1,
   'nombre': 'Ana',
@@ -23,6 +26,13 @@ class UnwritableSessionStorage extends SessionStorage {
   @override
   Future<void> saveToken(String token) async {
     throw PlatformException(code: 'storage-unavailable');
+  }
+}
+
+class BrokenCleanupStorage extends SessionStorage {
+  @override
+  Future<void> clearToken() async {
+    throw StateError('Fallo de almacenamiento sin PlatformException.');
   }
 }
 
@@ -50,6 +60,159 @@ void main() {
   );
 
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  test(
+    'Logout revoca el token usado y elimina solo sus credenciales locales',
+    () async {
+      await storage.saveToken('1|token-valido');
+      await const FlutterSecureStorage().write(
+        key: 'otra_clave',
+        value: 'conservar',
+      );
+      final service = serviceWith((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/logout');
+        expect(request.headers['Authorization'], 'Bearer 1|token-valido');
+        return jsonResponse({'message': 'Sesión cerrada correctamente'});
+      });
+      final result = await service.logout();
+      expect(result.localCleared, isTrue);
+      expect(result.remoteClosed, isTrue);
+      expect(await storage.readToken(), isNull);
+      expect(await const FlutterSecureStorage().readAll(), {
+        'otra_clave': 'conservar',
+      });
+    },
+  );
+
+  test('Logout sin token no hace una petición al servidor', () async {
+    final service = serviceWith(
+      (_) async => throw StateError('No debe enviar HTTP sin token.'),
+    );
+    final result = await service.logout();
+    expect(result.localCleared, isTrue);
+    expect(result.remoteClosed, isTrue);
+  });
+
+  test(
+    'Un 401 de logout confirma que el token ya no autoriza la sesión',
+    () async {
+      await storage.saveToken('1|token-valido');
+      final service = serviceWith(
+        (_) async => jsonResponse({'message': 'Unauthenticated.'}, 401),
+      );
+      final result = await service.logout();
+      expect(result.remoteClosed, isTrue);
+      expect(result.localCleared, isTrue);
+      expect(await storage.readToken(), isNull);
+    },
+  );
+
+  for (final status in [403, 422, 503]) {
+    test(
+      'Logout $status limpia el dispositivo e informa que falta confirmar el servidor',
+      () async {
+        await storage.saveToken('1|token-valido');
+        final service = serviceWith((_) async => jsonResponse({}, status));
+        final result = await service.logout();
+        expect(result.remoteClosed, isFalse);
+        expect(result.localCleared, isTrue);
+        expect(result.message, contains('No se pudo confirmar'));
+        expect(await storage.readToken(), isNull);
+      },
+    );
+  }
+
+  for (final error in [
+    http.ClientException('offline'),
+    TimeoutException('timeout'),
+    StateError('unexpected-transport-error'),
+  ]) {
+    test(
+      'Logout con ${error.runtimeType} conserva la limpieza local',
+      () async {
+        await storage.saveToken('1|token-valido');
+        final service = serviceWith((_) async => throw error);
+        final result = await service.logout();
+        expect(result.remoteClosed, isFalse);
+        expect(result.localCleared, isTrue);
+        expect(await storage.readToken(), isNull);
+      },
+    );
+  }
+
+  test(
+    'Un fallo al borrar las credenciales exige reintento y no informa de un cierre completo',
+    () async {
+      final failing = FailingSessionStorage()..failClear = true;
+      await failing.saveToken('1|token-valido');
+      final service = serviceWith(
+        (_) async => jsonResponse({}),
+        session: failing,
+      );
+      final failed = await service.logout();
+      expect(failed.localCleared, isFalse);
+      expect(failed.remoteClosed, isTrue);
+      expect(failed.message, contains('Reintenta el cierre'));
+      expect(await failing.readToken(), '1|token-valido');
+
+      failing.failClear = false;
+      expect((await service.logout()).localCleared, isTrue);
+      expect(await failing.readToken(), isNull);
+    },
+  );
+
+  test(
+    'Un error de borrado distinto de PlatformException también bloquea el cierre',
+    () async {
+      final broken = BrokenCleanupStorage();
+      await broken.saveToken('1|token-valido');
+      final service = serviceWith(
+        (_) async => jsonResponse({}),
+        session: broken,
+      );
+      final result = await service.logout();
+      expect(result.localCleared, isFalse);
+      expect(await broken.readToken(), '1|token-valido');
+    },
+  );
+
+  test(
+    'Si no puede leer el token, logout todavía intenta borrar la sesión local',
+    () async {
+      final failing = FailingSessionStorage();
+      await failing.saveToken('1|token-valido');
+      failing.failRead = true;
+      final service = serviceWith(
+        (_) async => throw StateError('No debe enviar HTTP sin leer el token.'),
+        session: failing,
+      );
+      final result = await service.logout();
+      expect(result.localCleared, isTrue);
+      expect(result.remoteClosed, isFalse);
+      expect(
+        await const FlutterSecureStorage().read(key: 'agrofusion.auth_token'),
+        isNull,
+      );
+    },
+  );
+
+  for (final status in [200, 401]) {
+    test(
+      'Un logout $status anterior no elimina una sesión recién guardada',
+      () async {
+        await storage.saveToken('1|token-anterior');
+        final service = serviceWith((request) async {
+          expect(request.headers['Authorization'], 'Bearer 1|token-anterior');
+          await storage.saveToken('2|token-nuevo');
+          return jsonResponse({}, status);
+        });
+        final result = await service.logout();
+        expect(result.localCleared, isTrue);
+        expect(await storage.readToken(), '2|token-nuevo');
+      },
+    );
+  }
 
   const pending = {
     'message': 'Solicitud registrada. La cuenta queda pendiente de aprobación.',

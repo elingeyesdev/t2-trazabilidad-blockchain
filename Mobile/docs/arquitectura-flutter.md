@@ -2,8 +2,8 @@
 
 Este documento explica al equipo de desarrollo cómo incorporar funcionalidades
 a `Mobile/` usando la base de la issue #3. El flujo de referencia es la
-comprobación pública de conexión con Laravel. Incluye login y registro de
-la issue #4; la navegación por permisos corresponde a la issue #5.
+comprobación pública de conexión con Laravel. Incluye login, registro y logout
+de la issue #4; la navegación por permisos corresponde a la issue #5.
 
 ## Seguir el flujo de una petición
 
@@ -49,8 +49,7 @@ La ruta raíz presenta `LoginScreen` mientras no exista un usuario confirmado.
 El formulario conserva los campos ante errores, muestra los mensajes de
 validación de Laravel y bloquea envíos duplicados. El acceso a la comprobación
 pública de conexión se conserva desde login e inicio.
-La restauración al arrancar y el cierre de sesión corresponden a los siguientes
-bloques de la issue #4.
+La restauración al arrancar corresponde al bloque de estados de la issue #4.
 
 El registro usa la ruta `/register` y el mismo `AuthController` y `ApiClient`:
 
@@ -76,6 +75,25 @@ completos y que coincidan las contraseñas; los errores de validación de Larave
 se muestran por campo. Mientras envía, bloquea envíos duplicados y la salida
 de esa ruta. Una confirmación válida limpia las contraseñas del formulario;
 al volver al login, pasa el correo mediante el resultado de navegación.
+
+El cierre de sesión parte de `HomeScreen` y utiliza `AuthController.logout`.
+El controlador retira inmediatamente al usuario de la vista y presenta
+`AppLoading` mientras `AuthService` intenta revocar el token y limpiar el
+almacenamiento. El servicio devuelve `LogoutResult`, con los estados
+`remoteClosed` y `localCleared`, para distinguir el resultado del servidor
+del borrado local.
+
+Si se limpió la sesión local, la ruta raíz muestra login con un mensaje del
+resultado. Si el borrado falló, presenta `AppErrorState` y permite reintentar
+el cierre; mientras tanto bloquea login y registro. Un error de red no se
+presenta como confirmación de revocación remota. Un `401` de logout se trata
+como una sesión que ya no es válida en el servidor.
+
+`AuthService.logout` captura el token que se va a revocar y lo pasa a
+`ApiClient` mediante `bearerToken`. La limpieza se ejecuta en `finally` y
+compara el token guardado antes de borrarlo. Así, una petición anterior no
+borra las credenciales que otro login haya reemplazado. Las peticiones con
+`authenticated: false` ignoran un Bearer explícito y siguen siendo públicas.
 
 `ConnectionScreen` mantiene la petición en un `FutureBuilder`. La carga usa
 `AppLoading`; un error usa `AppErrorState` y su acción de reintento. El servicio

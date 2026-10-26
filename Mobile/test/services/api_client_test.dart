@@ -29,6 +29,24 @@ void main() {
 
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
+  test(
+    'Un Bearer explícito no altera una sesión más reciente ante un 401',
+    () async {
+      await session.saveToken('2|token-nuevo');
+      final api = createApi(
+        MockClient((request) async {
+          expect(request.headers['Authorization'], 'Bearer 1|token-anterior');
+          return http.Response('', 401);
+        }),
+      );
+      await expectLater(
+        api.request('POST', 'logout', bearerToken: '1|token-anterior'),
+        throwsA(isA<ApiException>()),
+      );
+      expect(await session.readToken(), '2|token-nuevo');
+    },
+  );
+
   test('Envía JSON, Bearer y parámetros al servidor configurado', () async {
     await session.saveToken('1|token-de-prueba');
     final api = createApi(
@@ -72,7 +90,12 @@ void main() {
       );
 
       await expectLater(
-        api.request('POST', 'login', authenticated: false),
+        api.request(
+          'POST',
+          'login',
+          authenticated: false,
+          bearerToken: 'token-que-no-debe-enviarse',
+        ),
         throwsA(
           isA<ApiException>().having((e) => e.statusCode, 'statusCode', 401),
         ),

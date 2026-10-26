@@ -98,6 +98,22 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: theme.textTheme.titleMedium,
                           ),
                           const SizedBox(height: 32),
+                          if (widget.controller.logoutResult
+                              case final result?) ...[
+                            Semantics(
+                              liveRegion: true,
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(result.message),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                           TextFormField(
                             controller: _email,
                             enabled: !busy,

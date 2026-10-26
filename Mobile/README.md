@@ -3,10 +3,9 @@
 Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
 equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
 cliente HTTP compartido, almacenamiento seguro del token, comprobación de
-conexión, inicio de sesión y registro pendiente de aprobación con Laravel.
-El cierre de sesión y la restauración se incorporan en los siguientes bloques
-de la issue #4;
-el perfil y la navegación por permisos corresponden a la issue #5.
+conexión, inicio de sesión, registro pendiente de aprobación y cierre de sesión
+con Laravel. La restauración se incorpora en el bloque de estados de la issue
+#4; el perfil y la navegación por permisos corresponden a la issue #5.
 
 ## Iniciar sesión
 
@@ -45,6 +44,23 @@ conserva el correo de la solicitud y limpia la contraseña.
 Un administrador debe aprobar la cuenta antes de que pueda iniciar sesión.
 Si intentas acceder mientras está pendiente, el login muestra el mensaje
 de Laravel y mantiene bloqueado el inicio autenticado.
+
+## Cerrar sesión
+
+Desde el inicio autenticado, selecciona **Cerrar sesión** en la barra superior.
+La aplicación oculta el usuario mientras procesa `POST /api/logout`, elimina
+el token de esa sesión y vuelve al login. El botón de volver no recupera el
+inicio autenticado. Un `401` de logout indica que el token ya no autoriza el
+acceso y permite completar el cierre local.
+
+Si falla la comunicación con Laravel, se limpia la sesión del dispositivo y
+el login informa que no se pudo confirmar el cierre en el servidor. Si falla
+el borrado del almacenamiento, la aplicación mantiene el acceso bloqueado
+y ofrece **Reintentar** hasta poder eliminar las credenciales locales.
+
+El cierre actúa sobre la sesión utilizada: conserva las otras sesiones de
+Laravel y evita borrar un token distinto si otro login reemplazó el anterior
+durante la petición.
 
 ## Preparar el entorno
 
@@ -198,7 +214,7 @@ Los archivos de este bloque se distribuyen así:
 - `lib/app.dart`: creación del cliente compartido, tema y registro de rutas.
 - `lib/config/`: URL base y timeout.
 - `lib/models/`: usuario autenticado, conectividad y errores de la API.
-- `lib/controllers/`: estado observable de login y registro.
+- `lib/controllers/`: estado observable de login, registro y cierre de sesión.
 - `lib/services/`: HTTP, autenticación, conectividad y almacenamiento del token.
 - `lib/navigation/`: nombres de rutas.
 - `lib/screens/auth/`: login, registro y confirmación de aprobación pendiente.

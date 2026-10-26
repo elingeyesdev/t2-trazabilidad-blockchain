@@ -4,16 +4,26 @@ import '../../models/auth_user.dart';
 import '../../navigation/app_routes.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.user});
+  const HomeScreen({super.key, required this.user, required this.onLogout});
 
   final AuthUser user;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('AgroFusion')),
+      appBar: AppBar(
+        title: const Text('AgroFusion'),
+        actions: [
+          IconButton(
+            onPressed: onLogout,
+            tooltip: 'Cerrar sesión',
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: Padding(

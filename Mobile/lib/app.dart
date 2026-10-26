@@ -11,6 +11,8 @@ import 'services/api_client.dart';
 import 'services/api_health_service.dart';
 import 'services/auth_service.dart';
 import 'services/session_storage.dart';
+import 'widgets/app_error_state.dart';
+import 'widgets/app_loading.dart';
 
 class AgroFusionApp extends StatefulWidget {
   const AgroFusionApp({
@@ -59,10 +61,30 @@ class _AgroFusionAppState extends State<AgroFusionApp> {
         AppRoutes.home: (_) => ListenableBuilder(
           listenable: _auth,
           builder: (context, _) {
+            if (_auth.isLoggingOut) {
+              return const PopScope(
+                canPop: false,
+                child: Scaffold(
+                  body: AppLoading(message: 'Cerrando sesión...'),
+                ),
+              );
+            }
+            final logout = _auth.logoutResult;
+            if (logout != null && !logout.localCleared) {
+              return PopScope(
+                canPop: false,
+                child: Scaffold(
+                  body: AppErrorState(
+                    message: logout.message,
+                    onRetry: _auth.logout,
+                  ),
+                ),
+              );
+            }
             final user = _auth.user;
             return user == null
                 ? LoginScreen(controller: _auth)
-                : HomeScreen(user: user);
+                : HomeScreen(user: user, onLogout: _auth.logout);
           },
         ),
         AppRoutes.connection: (_) =>

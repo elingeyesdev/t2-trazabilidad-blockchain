@@ -25,6 +25,7 @@ class ApiClient {
     Map<String, String>? queryParameters,
     Map<String, Object?>? body,
     bool authenticated = true,
+    String? bearerToken,
   }) async {
     final uri = config.endpoint(path, queryParameters: queryParameters);
     final abort = Completer<void>();
@@ -39,7 +40,9 @@ class ApiClient {
     }
 
     try {
-      final token = authenticated ? await _sessionStorage.readToken() : null;
+      final token = authenticated
+          ? bearerToken ?? await _sessionStorage.readToken()
+          : null;
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }

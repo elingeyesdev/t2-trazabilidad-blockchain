@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
+import '../models/logout_result.dart';
 import '../models/registration_result.dart';
 import 'api_client.dart';
 import 'session_storage.dart';
@@ -11,6 +12,37 @@ class AuthService {
 
   final ApiClient _api;
   final SessionStorage _storage;
+
+  Future<LogoutResult> logout() async {
+    String? token;
+    var tokenKnown = false;
+    var remoteClosed = false;
+    var localCleared = false;
+    try {
+      token = await _storage.readToken();
+      tokenKnown = true;
+      if (token == null) {
+        remoteClosed = true;
+      } else {
+        await _api.request('POST', 'logout', bearerToken: token);
+        remoteClosed = true;
+      }
+    } on ApiException catch (error) {
+      remoteClosed = error.statusCode == 401;
+    } catch (_) {
+      remoteClosed = false;
+    } finally {
+      try {
+        if (!tokenKnown || await _storage.readToken() == token) {
+          await _storage.clearToken();
+        }
+        localCleared = true;
+      } catch (_) {
+        localCleared = false;
+      }
+    }
+    return LogoutResult(localCleared: localCleared, remoteClosed: remoteClosed);
+  }
 
   Future<RegistrationResult> register({
     required String name,
