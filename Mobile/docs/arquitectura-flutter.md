@@ -54,6 +54,28 @@ token, presenta el login; si existe, `AuthService` consulta `GET /api/me` con
 ese Bearer y valida el perfil antes de establecer al usuario. El servicio
 comprueba además que el token guardado siga siendo el de la petición.
 
+`AuthController` conserva `_sessionUserId` después de confirmar el perfil.
+Al revalidar, retira el usuario visible y exige ese identificador antes de
+aplicar la respuesta. Un fallo transitorio o un perfil de otra cuenta conserva
+el identificador esperado para los reintentos, mientras el contenido sigue
+bloqueado. Un cierre explícito o la invalidación de sesión elimina esa
+referencia; otro login establece la identidad de la cuenta confirmada.
+`refreshProfile` aplica la misma comprobación y conserva su carga dentro de
+la pantalla de perfil.
+
+La restauración sustituye `AuthUser` completo: perfil, roles, permisos efectivos
+y capacidades proceden de la respuesta verificada. No fusiona concesiones
+anteriores ni las persiste. El bloqueo global desmonta los destinos durante
+la revalidación; al finalizar, cada ruta vuelve a comprobar el permiso. Un
+módulo que conserva acceso consulta otra vez sus registros; uno revocado
+presenta denegación. Los futuros de pantallas desmontadas no reconstruyen su
+contenido cuando termina una consulta anterior.
+
+`profile_restoration_test.dart` comprueba sustitución del perfil completo,
+reapertura sin otro login, concesión y retirada de permisos al reanudar,
+respuestas tardías, cambio de token, identidad esperada durante reintentos
+y recuperación de una revalidación sin conexión.
+
 `AgroFusionApp` observa el ciclo de vida de Flutter y revalida una sesión
 autenticada al volver al primer plano. `_sessionGate` presenta carga,
 recuperación de errores o limpieza pendiente antes del contenido de cada ruta.

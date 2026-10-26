@@ -35,6 +35,20 @@ antes de mostrar el inicio. Sin token, presenta el login sin realizar esa
 consulta. Al volver al primer plano, también revalida una sesión autenticada
 para comprobar que la cuenta siga autorizada.
 
+Cada consulta sustituye el perfil completo, los roles, las capacidades de
+edición y los permisos efectivos. No combina permisos anteriores con los
+recibidos. El menú incorpora los permisos concedidos y retira los revocados;
+si estás en un módulo que dejó de estar autorizado, presenta acceso denegado.
+Las consultas de un módulo abierto se renuevan después de verificar la sesión
+y sus respuestas anteriores no vuelven a mostrar registros.
+
+Para una sesión ya conocida, la revalidación también exige el mismo
+identificador de cuenta, incluso al reintentar después de un fallo. Una
+respuesta de otra cuenta bloquea el acceso hasta recuperar el perfil correcto
+o cerrar la sesión. Esta identidad se mantiene solo en memoria: el
+almacenamiento conserva exclusivamente el token y no guarda copias de roles,
+permisos o datos de perfil como prueba de autorización.
+
 Mientras verifica, muestra **Verificando sesión...**. Si falla la conexión,
 el servidor o el acceso al almacenamiento, bloquea las pantallas y ofrece
 **Reintentar** o **Cerrar sesión**. Los fallos de red conservan el token para

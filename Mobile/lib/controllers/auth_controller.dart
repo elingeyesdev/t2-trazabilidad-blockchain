@@ -33,6 +33,7 @@ class AuthController extends ChangeNotifier {
   final AuthService _service;
   late final StreamSubscription<bool> _expirationSubscription;
   AuthUser? _user;
+  int? _sessionUserId;
   ApiException? _error;
   ApiException? _sessionError;
   _AuthOperation _operation = _AuthOperation.idle;
@@ -61,6 +62,7 @@ class AuthController extends ChangeNotifier {
       return;
     }
     _user = null;
+    _sessionUserId = null;
     _sessionError = null;
     _profileUpdateNeedsRefresh = false;
     if (localCleared) {
@@ -142,6 +144,7 @@ class AuthController extends ChangeNotifier {
       if (_isDisposed) return false;
       if (error.statusCode == 401) {
         _user = null;
+        _sessionUserId = null;
         _error = _expiredError;
       } else {
         _error = error;
@@ -156,18 +159,21 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> refreshProfile({bool keepError = false}) async {
-    final user = _user;
-    if (user != null) {
-      await _verifySession(expectedId: user.id, keepError: keepError);
+    if (_user != null) {
+      await _verifySession(profileOnly: true, keepError: keepError);
     }
   }
 
-  Future<void> _verifySession({int? expectedId, bool keepError = false}) async {
+  Future<void> _verifySession({
+    bool profileOnly = false,
+    bool keepError = false,
+  }) async {
     if (isSubmitting || _isDisposed || requiresLogoutRetry) return;
-    _operation = expectedId == null
-        ? _AuthOperation.restoring
-        : _AuthOperation.profile;
-    if (expectedId == null) _user = null;
+    final expectedId = _sessionUserId;
+    _operation = profileOnly
+        ? _AuthOperation.profile
+        : _AuthOperation.restoring;
+    if (!profileOnly) _user = null;
     if (!keepError) _error = null;
     _sessionError = null;
     _logoutResult = null;
@@ -182,13 +188,16 @@ class AuthController extends ChangeNotifier {
         }
       }
       _user = user;
+      _sessionUserId = user?.id;
       _profileUpdateNeedsRefresh = false;
     } on ApiException catch (error) {
       if (_isDisposed) return;
       _user = null;
       if (error.statusCode == 401) {
+        _sessionUserId = null;
         _error = _expiredError;
       } else if (error.statusCode == 403) {
+        _sessionUserId = null;
         _error = error;
       } else {
         _sessionError = error;
@@ -203,6 +212,7 @@ class AuthController extends ChangeNotifier {
     if (isSubmitting || _isDisposed) return;
     _operation = _AuthOperation.logout;
     _user = null;
+    _sessionUserId = null;
     _profileUpdateNeedsRefresh = false;
     _error = null;
     _sessionError = null;
@@ -263,11 +273,13 @@ class AuthController extends ChangeNotifier {
     _operation = _AuthOperation.login;
     _logoutResult = null;
     _user = null;
+    _sessionUserId = null;
     _error = null;
     notifyListeners();
 
     try {
       _user = await _service.login(email, password);
+      _sessionUserId = _user!.id;
       _profileUpdateNeedsRefresh = false;
       return true;
     } on ApiException catch (error) {
