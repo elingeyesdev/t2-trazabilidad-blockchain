@@ -277,3 +277,4 @@ La implementación y sus comprobaciones están en los siguientes archivos:
 - [Pruebas de edición y acceso](../tests/Feature/ApiPerfilActualizacionTest.php).
 - [Pruebas de compatibilidad web](../tests/Feature/PerfilWebActualizacionTest.php).
 - [Análisis de las reglas existentes](analisis-api-perfil-flutter.md).
+- [Resultados y reproducción de la verificación final](verificacion-api-perfil-flutter.md).
