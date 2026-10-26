@@ -2,12 +2,12 @@
 
 Este documento explica al equipo de desarrollo cómo incorporar funcionalidades
 a `Mobile/` usando la base de la issue #3. El flujo de referencia es la
-comprobación pública de conexión con Laravel; el login y la navegación por
-permisos se implementan en las issues #4 y #5.
+comprobación pública de conexión con Laravel. Incluye el login del segundo
+bloque de la issue #4; la navegación por permisos corresponde a la issue #5.
 
 ## Seguir el flujo de una petición
 
-El flujo implementado es:
+La comprobación pública de conexión sigue este flujo:
 
 ```text
 HomeScreen -> ruta /connection -> ConnectionScreen
@@ -21,9 +21,36 @@ HomeScreen -> ruta /connection -> ConnectionScreen
                             ApiHealth.fromJson
 ```
 
-`main.dart` inicializa Flutter y monta `AgroFusionApp`. La aplicación crea un
-solo `ApiClient`, registra las rutas y libera el cliente cuando se desmonta.
-Los tests pueden inyectar un cliente propio; quien lo inyecta debe cerrarlo.
+`main.dart` inicializa Flutter y monta `AgroFusionApp`. La aplicación comparte
+`SessionStorage` entre el cliente HTTP y el servicio de autenticación, crea
+un solo `ApiClient` y libera su cliente y controlador cuando se desmonta.
+Los tests pueden inyectar un cliente y almacenamiento propios; quien inyecta
+el cliente debe cerrarlo.
+
+El login sigue este flujo:
+
+```text
+LoginScreen -> AuthController -> AuthService -> POST /api/login
+                                    |
+                           SessionStorage.saveToken
+                                    |
+                               GET /api/me
+                                    |
+                           AuthUser -> HomeScreen
+```
+
+`AuthService` interpreta las respuestas de Laravel y valida el token y el
+perfil. El usuario se confirma mediante `me` y debe coincidir con la identidad
+devuelta por login. Si falla esa confirmación, el servicio limpia el token
+recién guardado. `AuthController` comunica carga, error y usuario confirmado
+mediante `ChangeNotifier`, sin añadir dependencias de gestión de estado.
+
+La ruta raíz presenta `LoginScreen` mientras no exista un usuario confirmado.
+El formulario conserva los campos ante errores, muestra los mensajes de
+validación de Laravel y bloquea envíos duplicados. El acceso a la comprobación
+pública de conexión se conserva desde login e inicio.
+La restauración al arrancar y el cierre de sesión corresponden a los siguientes
+bloques de la issue #4.
 
 `ConnectionScreen` mantiene la petición en un `FutureBuilder`. La carga usa
 `AppLoading`; un error usa `AppErrorState` y su acción de reintento. El servicio

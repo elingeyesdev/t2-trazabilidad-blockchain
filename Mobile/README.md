@@ -2,9 +2,28 @@
 
 Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
 equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
-cliente HTTP compartido, almacenamiento seguro del token y una pantalla para
-comprobar la conexión con Laravel. El login y el perfil se implementan en las
-issues #4 y #5, respectivamente.
+cliente HTTP compartido, almacenamiento seguro del token, comprobación de
+conexión e inicio de sesión con Laravel. El registro, el cierre de sesión y
+la restauración se incorporan en los siguientes bloques de la issue #4;
+el perfil y la navegación por permisos corresponden a la issue #5.
+
+## Iniciar sesión
+
+Al abrir la aplicación, ingresa el correo y la contraseña de una cuenta activa
+y aprobada en Laravel. Flutter envía `POST /api/login` sin credenciales previas,
+guarda el token y confirma el perfil con `GET /api/me` antes de mostrar el inicio.
+Si falla esta confirmación, limpia el token recién guardado y mantiene el login.
+
+El formulario conserva la contraseña tal como la escribes, permite mostrarla
+y bloquea envíos duplicados durante la carga. Los errores de Laravel aparecen
+en el formulario; las cuentas pendientes o inactivas permanecen sin acceso.
+La acción **Comprobar conexión** está disponible desde la pantalla de login.
+
+Este bloque inicia la sesión dentro de la ejecución abierta de la aplicación.
+La restauración al volver a abrirla se incorpora en el bloque de estados de
+autenticación. Consulta el
+[análisis de autenticación](docs/analisis-autenticacion-flutter.md) para revisar
+el contrato y la división de actividades.
 
 ## Preparar el entorno
 
@@ -157,10 +176,12 @@ Los archivos de este bloque se distribuyen así:
 - `lib/main.dart`: punto de entrada.
 - `lib/app.dart`: creación del cliente compartido, tema y registro de rutas.
 - `lib/config/`: URL base y timeout.
-- `lib/models/`: respuesta de conectividad y errores de la API.
-- `lib/services/`: HTTP, comprobación de conectividad y token de sesión.
+- `lib/models/`: usuario autenticado, conectividad y errores de la API.
+- `lib/controllers/`: estado observable del inicio de sesión.
+- `lib/services/`: HTTP, autenticación, conectividad y almacenamiento del token.
 - `lib/navigation/`: nombres de rutas.
-- `lib/screens/home/home_screen.dart`: pantalla inicial.
+- `lib/screens/auth/`: formulario de inicio de sesión.
+- `lib/screens/home/home_screen.dart`: inicio para el usuario autenticado.
 - `lib/screens/connection/`: estados de la comprobación de conexión.
 - `lib/widgets/`: componentes compartidos de carga y error con reintento.
 - `test/`: pruebas de arranque, configuración, HTTP, sesión y navegación.

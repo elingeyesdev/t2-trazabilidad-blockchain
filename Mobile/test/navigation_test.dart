@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:agrofusion_mobile/app.dart';
 import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/screens/auth/login_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
 import 'package:agrofusion_mobile/widgets/app_loading.dart';
@@ -38,7 +39,7 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('Trazabilidad agrícola'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

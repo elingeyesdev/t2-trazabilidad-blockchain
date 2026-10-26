@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../models/auth_user.dart';
 import '../../navigation/app_routes.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, required this.user});
+
+  final AuthUser user;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +26,14 @@ class HomeScreen extends StatelessWidget {
                   size: 64,
                   color: theme.colorScheme.primary,
                 ),
+                const SizedBox(height: 16),
+                Text(
+                  'Hola, ${user.name}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(user.email, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 Text(
                   'Trazabilidad agrícola',
