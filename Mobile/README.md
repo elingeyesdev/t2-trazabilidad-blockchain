@@ -177,8 +177,13 @@ propia migración.
 
 El acceso directo a una ruta `/modules/...` también comprueba el permiso
 antes de enviar la consulta. Un `403` de Laravel presenta **Acceso no
-autorizado** y permite **Volver al inicio**; conserva la sesión. Un `401`
-reutiliza la retirada de sesión. Los errores de consulta ofrecen **Reintentar**.
+autorizado** y permite **Volver al inicio**; conserva la sesión. Usa
+**Actualizar permisos** para consultar otra vez el perfil y la autorización.
+Si recuperas el permiso, la pantalla vuelve a consultar los registros; si el
+permiso fue retirado, permanece bloqueada y el menú elimina su opción. Si la
+cuenta o el token dejaron de ser válidos, se aplica la recuperación de sesión.
+Un `401` reutiliza la retirada de sesión. Los errores de consulta ofrecen
+**Reintentar**.
 Si una actualización del perfil retira un permiso, el menú oculta su opción
 y la ruta abierta deja de mostrar los registros.
 
@@ -186,6 +191,13 @@ Laravel vuelve a comprobar autorización y acceso a los datos en cada petición.
 Ocultar una opción en Flutter no sustituye esas comprobaciones ni los filtros
 de pertenencia o ámbito de los controladores. Las excepciones contextuales
 del servidor no generan permisos adicionales en el menú.
+
+Si llega un `401` mientras se consulta o actualiza el perfil, una respuesta
+anterior de esa operación no recupera la sesión ni confirma un guardado. Si
+falla el borrado del token, el acceso permanece bloqueado y **Reintentar**
+intenta completar el cierre. Las respuestas de validación `422` conservan el
+borrador; un resultado incierto de actualización exige **Consultar perfil**
+antes de volver a guardar.
 
 ## Cerrar sesión
 

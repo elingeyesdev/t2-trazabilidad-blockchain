@@ -260,7 +260,7 @@ void main() {
       expect(find.text('Ana Mamani'), findsNothing);
       expect(find.byType(LoginScreen), findsNothing);
       failing.failClear = false;
-      await tester.tap(find.text('Cerrar sesión'));
+      await tester.tap(find.text('Reintentar'));
       await tester.pumpAndSettle();
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(await failing.readToken(), isNull);

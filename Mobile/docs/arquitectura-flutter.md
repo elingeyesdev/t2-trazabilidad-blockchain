@@ -202,6 +202,13 @@ desmonta el contenido protegido y presenta `ModuleAccessDenied`. La entrada
 directa no evita esa comprobación. Un `403` de la consulta presenta la misma
 pantalla; **Volver al inicio** elimina la pila anterior de navegación.
 
+La acción **Actualizar permisos** llama a `restoreSession` desde la denegación
+local o del servidor. La consulta se ejecuta al solicitarla, sin ciclos de
+reintento automático ante un `403`. Cada `ModuleScreen` usa el usuario
+confirmado como clave: un perfil nuevo renueva el estado de la consulta,
+incluso si la carga y la confirmación terminan antes del siguiente frame.
+La ruta vuelve a aplicar el permiso antes de reconstruir el destino.
+
 `ModuleService` comprueba el permiso antes de llamar al cliente HTTP compartido.
 `ModulePage` interpreta listas simples o la paginación `data`, `current_page`
 y `last_page` de Laravel, valida identificadores y campos escalares y conserva
@@ -257,11 +264,24 @@ notifica un `401` autenticado que no corresponde a un token reemplazado.
 El evento indica si pudo limpiar las credenciales. `AuthController` retira
 al usuario en memoria y presenta login o recuperación de limpieza, según
 ese resultado. Las operaciones de acceso tratan sus propios errores; el
-aviso global se aplica a la sesión que ya está autenticada.
+aviso global también se aplica durante la restauración o consulta de perfil.
+
+Un `401` vigente incrementa `_sessionRevision` en `AuthController`. Las
+operaciones de consulta, guardado y selección de fotografía comparan la
+revisión capturada antes de aplicar su resultado o error. Una invalidación
+concurrente conserva su estado de login o limpieza pendiente, aunque una
+respuesta previa llegue después y el token no se haya podido borrar. Login,
+registro y logout siguen tratando sus propios errores de acceso.
 
 El controlador cancela la suscripción al desmontarse y `ApiClient.close`
 cierra el flujo de eventos. Los errores públicos de login o registro y los
 `403` de permisos de otros módulos no disparan una expiración global.
+
+`profile_error_recovery_test.dart` reproduce un `401` concurrente durante
+consulta, reanudación y guardado, incluido el fallo del almacenamiento. También
+comprueba la recuperación manual de permisos concedidos o retirados. Las
+pruebas de edición conservan la cobertura de `422`, `403`, escrituras de
+resultado incierto y errores por campo.
 
 ## Incorporar una funcionalidad
 

@@ -133,7 +133,10 @@ class _AgroFusionAppState extends State<AgroFusionApp>
           return LoginScreen(controller: _auth);
         }
         if (module != null && !module.canOpen(_auth.user!)) {
-          return ModuleAccessDenied(title: module.label);
+          return ModuleAccessDenied(
+            title: module.label,
+            onRefreshPermissions: _auth.restoreSession,
+          );
         }
         return content();
       },
@@ -166,9 +169,11 @@ class _AgroFusionAppState extends State<AgroFusionApp>
         for (final module in AppModule.values)
           module.route: (_) => _sessionGate(
             () => ModuleScreen(
+              key: ValueKey(_auth.user),
               module: module,
               user: _auth.user!,
               service: ModuleService(_api),
+              onRefreshPermissions: _auth.restoreSession,
             ),
             requiresAuthentication: true,
             module: module,

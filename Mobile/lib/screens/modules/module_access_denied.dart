@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../../navigation/app_routes.dart';
 
 class ModuleAccessDenied extends StatelessWidget {
-  const ModuleAccessDenied({super.key, required this.title});
+  const ModuleAccessDenied({
+    super.key,
+    required this.title,
+    required this.onRefreshPermissions,
+  });
 
   final String title;
+  final VoidCallback onRefreshPermissions;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -29,6 +34,12 @@ class ModuleAccessDenied extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: onRefreshPermissions,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Actualizar permisos'),
+              ),
+              const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => Navigator.of(
                   context,

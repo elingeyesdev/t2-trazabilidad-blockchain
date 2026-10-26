@@ -34,6 +34,7 @@ class AuthController extends ChangeNotifier {
   late final StreamSubscription<bool> _expirationSubscription;
   AuthUser? _user;
   int? _sessionUserId;
+  int _sessionRevision = 0;
   ApiException? _error;
   ApiException? _sessionError;
   _AuthOperation _operation = _AuthOperation.idle;
@@ -54,13 +55,16 @@ class AuthController extends ChangeNotifier {
   bool get requiresLogoutRetry => _logoutResult?.localCleared == false;
 
   void _sessionExpired(bool localCleared) {
+    final handlesItsOwnErrors =
+        _operation == _AuthOperation.login ||
+        _operation == _AuthOperation.register ||
+        _operation == _AuthOperation.logout;
     if (_isDisposed ||
-        _user == null ||
-        (isSubmitting &&
-            !isSavingProfile &&
-            _operation != _AuthOperation.pickingPhoto)) {
+        handlesItsOwnErrors ||
+        (_user == null && _sessionUserId == null && !isCheckingSession)) {
       return;
     }
+    _sessionRevision++;
     _user = null;
     _sessionUserId = null;
     _sessionError = null;
@@ -86,6 +90,7 @@ class AuthController extends ChangeNotifier {
     if (isSubmitting || _isDisposed || _user?.canUpdatePhoto != true) {
       return null;
     }
+    final revision = _sessionRevision;
     _operation = _AuthOperation.pickingPhoto;
     _error = null;
     notifyListeners();
@@ -93,9 +98,9 @@ class AuthController extends ChangeNotifier {
     try {
       photo = await select();
     } on ApiException catch (error) {
-      if (!_isDisposed) _error = error;
+      if (!_isDisposed && revision == _sessionRevision) _error = error;
     } catch (_) {
-      if (!_isDisposed) {
+      if (!_isDisposed && revision == _sessionRevision) {
         _error = const ApiException(
           'No se pudo abrir o leer la fotografía. Intenta de nuevo.',
         );
@@ -104,6 +109,7 @@ class AuthController extends ChangeNotifier {
       _operation = _AuthOperation.idle;
       if (!_isDisposed) notifyListeners();
     }
+    if (_isDisposed || revision != _sessionRevision) return null;
     if (!_isDisposed && _user != null) await refreshProfile(keepError: true);
     return !_isDisposed && _user?.canUpdatePhoto == true ? photo : null;
   }
@@ -128,6 +134,7 @@ class AuthController extends ChangeNotifier {
       return false;
     }
     _operation = _AuthOperation.savingProfile;
+    final revision = _sessionRevision;
     _error = null;
     notifyListeners();
     try {
@@ -136,12 +143,12 @@ class AuthController extends ChangeNotifier {
         username: username,
         photo: photo,
       );
-      if (_isDisposed) return false;
+      if (_isDisposed || revision != _sessionRevision) return false;
       _user = user;
       _profileUpdateNeedsRefresh = false;
       return true;
     } on ApiException catch (error) {
-      if (_isDisposed) return false;
+      if (_isDisposed || revision != _sessionRevision) return false;
       if (error.statusCode == 401) {
         _user = null;
         _sessionUserId = null;
@@ -170,6 +177,7 @@ class AuthController extends ChangeNotifier {
   }) async {
     if (isSubmitting || _isDisposed || requiresLogoutRetry) return;
     final expectedId = _sessionUserId;
+    final revision = _sessionRevision;
     _operation = profileOnly
         ? _AuthOperation.profile
         : _AuthOperation.restoring;
@@ -180,7 +188,7 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
     try {
       final user = await _service.restoreSession();
-      if (_isDisposed) return;
+      if (_isDisposed || revision != _sessionRevision) return;
       if (expectedId != null) {
         if (user == null) throw _expiredError;
         if (user.id != expectedId) {
@@ -191,7 +199,7 @@ class AuthController extends ChangeNotifier {
       _sessionUserId = user?.id;
       _profileUpdateNeedsRefresh = false;
     } on ApiException catch (error) {
-      if (_isDisposed) return;
+      if (_isDisposed || revision != _sessionRevision) return;
       _user = null;
       if (error.statusCode == 401) {
         _sessionUserId = null;

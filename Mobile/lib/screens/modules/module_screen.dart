@@ -15,11 +15,13 @@ class ModuleScreen extends StatefulWidget {
     required this.module,
     required this.user,
     required this.service,
+    required this.onRefreshPermissions,
   });
 
   final AppModule module;
   final AuthUser user;
   final ModuleService service;
+  final VoidCallback onRefreshPermissions;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
@@ -48,7 +50,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
         if (!loading &&
             snapshot.error is ApiException &&
             (snapshot.error! as ApiException).statusCode == 403) {
-          return ModuleAccessDenied(title: widget.module.label);
+          return ModuleAccessDenied(
+            title: widget.module.label,
+            onRefreshPermissions: widget.onRefreshPermissions,
+          );
         }
         return Scaffold(
           appBar: AppBar(
