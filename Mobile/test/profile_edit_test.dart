@@ -220,6 +220,25 @@ void main() {
     expect(saved, 0);
   });
 
+  testWidgets('Un aviso anterior no oculta el error de una fotografía nueva', (
+    tester,
+  ) async {
+    await startForm(
+      tester,
+      (_) async => jsonResponse(profile),
+      selectFile: () async =>
+          XFile.fromData(Uint8List(2097153), name: 'foto.png'),
+    );
+    await save(tester);
+    expect(find.text('No hay cambios para guardar.'), findsOneWidget);
+
+    await tester.tap(find.text('Seleccionar foto'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selecciona una imagen de hasta 2 MB.'), findsOneWidget);
+    expect(find.text('No hay cambios para guardar.'), findsNothing);
+  });
+
   testWidgets('Ante un 403 recupera capacidades sin cerrar una sesión válida', (
     tester,
   ) async {

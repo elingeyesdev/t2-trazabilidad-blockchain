@@ -76,10 +76,10 @@ class ApiClient {
         request.headers['Authorization'] = 'Bearer $token';
       }
 
-      final response =
-          await (() async {
-            return http.Response.fromStream(await _client.send(request));
-          })().timeout(
+      final response = await _client
+          .send(request)
+          .then(http.Response.fromStream)
+          .timeout(
             config.timeout,
             onTimeout: () {
               abort.complete();
@@ -87,22 +87,8 @@ class ApiClient {
             },
           );
 
-      if (response.statusCode == 401 && token != null) {
-        try {
-          final current = await _sessionStorage.readToken();
-          if (current == token) {
-            await _sessionStorage.clearToken();
-            _notifySessionExpired(true);
-          } else if (current == null) {
-            _notifySessionExpired(true);
-          }
-        } catch (_) {
-          _notifySessionExpired(false);
-          throw const ApiException(
-            'No se pudo limpiar el almacenamiento de sesión. Intenta de nuevo.',
-            statusCode: 401,
-          );
-        }
+      if (response.statusCode == 401 && authenticated) {
+        await _expireSession(token);
       }
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -130,6 +116,21 @@ class ApiClient {
     } on PlatformException {
       throw const ApiException(
         'No se pudo acceder al almacenamiento de sesión.',
+      );
+    }
+  }
+
+  Future<void> _expireSession(String? requestToken) async {
+    try {
+      final current = await _sessionStorage.readToken();
+      if (current != null && current != requestToken) return;
+      if (current != null) await _sessionStorage.clearToken();
+      _notifySessionExpired(true);
+    } catch (_) {
+      _notifySessionExpired(false);
+      throw const ApiException(
+        'No se pudo limpiar el almacenamiento de sesión. Intenta de nuevo.',
+        statusCode: 401,
       );
     }
   }

@@ -159,6 +159,8 @@ La actualización reutiliza la validación y el servicio del perfil web.
 Los archivos se guardan en el disco `public`. La foto anterior se elimina
 después de guardar correctamente la sustitución; si falla el guardado de
 la nueva imagen o la transacción, se conserva el perfil anterior.
+Si solo se actualiza el nombre, se conserva la referencia de la fotografía
+existente, incluidas las URLs externas.
 
 ## Respuestas de error
 
