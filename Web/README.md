@@ -2,6 +2,13 @@
 
 Sistema de gestión agrícola integrado: lotes, trazabilidad, inventario, logística y planta.
 
+## Integración del perfil con Flutter
+
+Para consultar el usuario autenticado, sus permisos efectivos y editar su perfil,
+consulta el [contrato de la API de perfil para Flutter](docs/api-perfil-flutter.md).
+La referencia incluye campos JSON, carga de fotos, respuestas de error y ejemplos
+para comprobar la integración desde PowerShell.
+
 ## Instalación rápida (compañeros / nuevo equipo)
 
 **Lee primero:** [INSTALACION.md](INSTALACION.md)
