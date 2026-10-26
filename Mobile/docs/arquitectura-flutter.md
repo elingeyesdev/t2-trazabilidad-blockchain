@@ -171,3 +171,5 @@ Para migrar una pantalla, sigue estos pasos:
 Las pruebas automatizadas usan `MockClient` y el almacenamiento simulado del
 paquete. Para verificar integración real, ejecuta la pantalla contra Laravel
 según el [README](../README.md) y documenta la URL y el resultado observado.
+La [verificación de autenticación](verificacion-autenticacion-laravel.md)
+incluye un entorno aislado, los casos ejecutados y sus capturas.

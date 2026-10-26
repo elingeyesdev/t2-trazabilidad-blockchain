@@ -23,6 +23,10 @@ Consulta el
 [análisis de autenticación](docs/analisis-autenticacion-flutter.md) para revisar
 el contrato y la división de actividades.
 
+Para repetir login, registro pendiente, cierre y restauración con una base
+aislada, consulta la
+[verificación de autenticación con Laravel](docs/verificacion-autenticacion-laravel.md).
+
 ## Restaurar y verificar la sesión
 
 Al abrir la aplicación, Flutter lee el token guardado y consulta `GET /api/me`
@@ -211,8 +215,8 @@ Para preparar un backend aislado y repetir la prueba completa, consulta
 `SessionStorage` utiliza
 [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage)
 para leer, guardar y eliminar exclusivamente la clave del token de AgroFusion.
-No almacena contraseñas. La integración del login en la issue #4 debe guardar
-el token real recibido de Laravel.
+No almacena contraseñas. El servicio de autenticación guarda el token real
+recibido de Laravel y confirma el perfil antes de dar acceso.
 
 En iOS se usa Keychain con acceso cuando el dispositivo está desbloqueado,
 sin sincronizar el token con otros dispositivos. El proyecto incluye los
