@@ -307,3 +307,6 @@ paquete. Para verificar integración real, ejecuta la pantalla contra Laravel
 según el [README](../README.md) y documenta la URL y el resultado observado.
 La [verificación de autenticación](verificacion-autenticacion-laravel.md)
 incluye un entorno aislado, los casos ejecutados y sus capturas.
+La [verificación de perfil y permisos](verificacion-perfil-permisos-laravel.md)
+añade una base separada con varios roles, permisos directos, denegación y
+revocación de permisos y tokens durante una sesión.

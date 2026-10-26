@@ -192,6 +192,10 @@ Ocultar una opción en Flutter no sustituye esas comprobaciones ni los filtros
 de pertenencia o ámbito de los controladores. Las excepciones contextuales
 del servidor no generan permisos adicionales en el menú.
 
+Para reproducir la integración con seis cuentas ficticias, los cambios de
+permisos y la revocación de sesión, consulta
+[Verificar perfil y navegación con Laravel](docs/verificacion-perfil-permisos-laravel.md).
+
 Si llega un `401` mientras se consulta o actualiza el perfil, una respuesta
 anterior de esa operación no recupera la sesión ni confirma un guardado. Si
 falla el borrado del token, el acceso permanece bloqueado y **Reintentar**

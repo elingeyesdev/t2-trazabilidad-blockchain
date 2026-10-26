@@ -71,4 +71,37 @@ class ApiNavegacionPermisosTest extends TestCase
         $usuario->givePermissionTo(Permission::findOrCreate('usuarios.admin', 'web'));
         $this->getJson('/api/usuarios')->assertOk()->assertJsonPath('0.usuarioid', $usuario->usuarioid);
     }
+
+    public function test_sesion_con_varios_roles_recupera_permisos_vigentes_y_aplica_revocacion(): void
+    {
+        $usuario = $this->usuario();
+        foreach (['lotes.view', 'inventario.view', 'pedidos.view'] as $permiso) {
+            Permission::findOrCreate($permiso, 'web');
+        }
+        $campo = Role::findOrCreate('perfil_campo', 'web');
+        $campo->givePermissionTo('lotes.view');
+        $planta = Role::findOrCreate('perfil_planta', 'web');
+        $planta->givePermissionTo('inventario.view');
+        $usuario->assignRole([$campo, $planta]);
+        $usuario->givePermissionTo('pedidos.view');
+        $headers = ['Authorization' => 'Bearer '.$usuario->createToken('integracion-perfil')->plainTextToken];
+
+        $this->getJson('/api/me', $headers)->assertOk()
+            ->assertJsonCount(2, 'roles')
+            ->assertJsonPath('permissions', ['inventario.view', 'lotes.view', 'pedidos.view']);
+        $this->getJson('/api/pedidos', $headers)->assertOk();
+
+        $campo->revokePermissionTo('lotes.view');
+        $usuario->revokePermissionTo('pedidos.view');
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/api/me', $headers)->assertOk()
+            ->assertJsonCount(2, 'roles')
+            ->assertJsonPath('permissions', ['inventario.view']);
+        $this->getJson('/api/pedidos', $headers)->assertForbidden();
+
+        $this->postJson('/api/logout', [], $headers)->assertOk();
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/api/me', $headers)->assertUnauthorized();
+    }
 }
