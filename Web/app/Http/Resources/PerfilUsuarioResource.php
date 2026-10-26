@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\UsuarioAvatar;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,6 +12,7 @@ class PerfilUsuarioResource extends JsonResource
     {
         $usuario = $this->resource;
         $usuario->loadMissing('roles');
+        $avatar = $usuario->avatarUrl();
 
         return [
             ...$usuario->only([
@@ -29,6 +31,7 @@ class PerfilUsuarioResource extends JsonResource
                 'estado_cuenta',
                 'nombreusuario_editado',
             ]),
+            'avatar_url' => $avatar === UsuarioAvatar::placeholder() ? null : $avatar,
             'roles' => $usuario->roles
                 ->map(fn ($rol) => ['id' => $rol->id, 'name' => $rol->name])
                 ->values()

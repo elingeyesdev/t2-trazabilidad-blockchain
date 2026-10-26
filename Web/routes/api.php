@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\ClimaController;
 use App\Http\Controllers\Api\CertificacionController;
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PerfilUsuarioController;
 use App\Http\Controllers\Api\IncidenteEnvioController;
 use App\Http\Controllers\Api\RutaMultiEntregaController;
 use App\Http\Controllers\Api\AsignacionMultipleController;
@@ -179,6 +180,7 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me',     [AuthController::class, 'me'])->name('me');
+        Route::match(['put', 'patch'], '/me', [PerfilUsuarioController::class, 'update'])->name('me.update');
         Route::post('/logout',[AuthController::class, 'logout'])->name('logout');
     });
 
