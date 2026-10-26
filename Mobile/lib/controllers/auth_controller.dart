@@ -54,6 +54,9 @@ class AuthController extends ChangeNotifier {
   LogoutResult? get logoutResult => _logoutResult;
   bool get requiresLogoutRetry => _logoutResult?.localCleared == false;
 
+  bool _canApplyResult(int revision) =>
+      !_isDisposed && revision == _sessionRevision;
+
   void _sessionExpired(bool localCleared) {
     final handlesItsOwnErrors =
         _operation == _AuthOperation.login ||
@@ -98,9 +101,9 @@ class AuthController extends ChangeNotifier {
     try {
       photo = await select();
     } on ApiException catch (error) {
-      if (!_isDisposed && revision == _sessionRevision) _error = error;
+      if (_canApplyResult(revision)) _error = error;
     } catch (_) {
-      if (!_isDisposed && revision == _sessionRevision) {
+      if (_canApplyResult(revision)) {
         _error = const ApiException(
           'No se pudo abrir o leer la fotografía. Intenta de nuevo.',
         );
@@ -109,8 +112,8 @@ class AuthController extends ChangeNotifier {
       _operation = _AuthOperation.idle;
       if (!_isDisposed) notifyListeners();
     }
-    if (_isDisposed || revision != _sessionRevision) return null;
-    if (!_isDisposed && _user != null) await refreshProfile(keepError: true);
+    if (!_canApplyResult(revision)) return null;
+    if (_user != null) await refreshProfile(keepError: true);
     return !_isDisposed && _user?.canUpdatePhoto == true ? photo : null;
   }
 
@@ -143,12 +146,12 @@ class AuthController extends ChangeNotifier {
         username: username,
         photo: photo,
       );
-      if (_isDisposed || revision != _sessionRevision) return false;
+      if (!_canApplyResult(revision)) return false;
       _user = user;
       _profileUpdateNeedsRefresh = false;
       return true;
     } on ApiException catch (error) {
-      if (_isDisposed || revision != _sessionRevision) return false;
+      if (!_canApplyResult(revision)) return false;
       if (error.statusCode == 401) {
         _user = null;
         _sessionUserId = null;
@@ -188,7 +191,7 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
     try {
       final user = await _service.restoreSession();
-      if (_isDisposed || revision != _sessionRevision) return;
+      if (!_canApplyResult(revision)) return;
       if (expectedId != null) {
         if (user == null) throw _expiredError;
         if (user.id != expectedId) {
@@ -199,7 +202,7 @@ class AuthController extends ChangeNotifier {
       _sessionUserId = user?.id;
       _profileUpdateNeedsRefresh = false;
     } on ApiException catch (error) {
-      if (_isDisposed || revision != _sessionRevision) return;
+      if (!_canApplyResult(revision)) return;
       _user = null;
       if (error.statusCode == 401) {
         _sessionUserId = null;
