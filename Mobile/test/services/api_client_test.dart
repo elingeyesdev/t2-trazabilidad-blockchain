@@ -43,6 +43,52 @@ void main() {
   });
 
   test(
+    'Un 401 autenticado sin token también notifica la pérdida de sesión',
+    () async {
+      final api = createApi(
+        MockClient((request) async {
+          expect(request.headers['Authorization'], isNull);
+          return http.Response('', 401);
+        }),
+      );
+      final events = <bool>[];
+      final subscription = api.sessionExpired.listen(events.add);
+      addTearDown(subscription.cancel);
+
+      await expectLater(
+        api.request('GET', 'pedidos'),
+        throwsA(isA<ApiException>()),
+      );
+
+      expect(events, [true]);
+      expect(await session.readToken(), isNull);
+    },
+  );
+
+  test(
+    'Un 401 de una consulta sin token conserva una sesión guardada después',
+    () async {
+      final api = createApi(
+        MockClient((_) async {
+          await session.saveToken('2|sesion-nueva');
+          return http.Response('', 401);
+        }),
+      );
+      final events = <bool>[];
+      final subscription = api.sessionExpired.listen(events.add);
+      addTearDown(subscription.cancel);
+
+      await expectLater(
+        api.request('GET', 'pedidos'),
+        throwsA(isA<ApiException>()),
+      );
+
+      expect(events, isEmpty);
+      expect(await session.readToken(), '2|sesion-nueva');
+    },
+  );
+
+  test(
     'Un 401 que no puede limpiar el token emite un estado de limpieza pendiente',
     () async {
       const token = '1|token-actual';

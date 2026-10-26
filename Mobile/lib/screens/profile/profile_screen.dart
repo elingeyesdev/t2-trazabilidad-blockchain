@@ -36,7 +36,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = widget.controller;
-    final user = auth.user;
     return PopScope(
       canPop: !_editing,
       onPopInvokedWithResult: (didPop, result) {
@@ -55,32 +54,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
-        body: SafeArea(
-          child: _editing
-              ? ProfileEditForm(
-                  controller: auth,
-                  onCancel: () => setState(() => _editing = false),
-                  onSaved: () {
-                    setState(() => _editing = false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Perfil actualizado correctamente.'),
-                      ),
-                    );
-                  },
-                  onReload: () {
-                    setState(() => _editing = false);
-                    unawaited(_refresh());
-                  },
-                )
-              : !_loaded || auth.isLoadingProfile
-              ? const AppLoading(message: 'Cargando perfil...')
-              : user == null
-              ? const SizedBox.shrink()
-              : _profile(context, user),
-        ),
+        body: SafeArea(child: _content(context)),
       ),
     );
+  }
+
+  Widget _content(BuildContext context) {
+    final auth = widget.controller;
+    if (_editing) {
+      return ProfileEditForm(
+        controller: auth,
+        onCancel: () => setState(() => _editing = false),
+        onSaved: () {
+          setState(() => _editing = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Perfil actualizado correctamente.')),
+          );
+        },
+        onReload: () {
+          setState(() => _editing = false);
+          unawaited(_refresh());
+        },
+      );
+    }
+    if (!_loaded || auth.isLoadingProfile) {
+      return const AppLoading(message: 'Cargando perfil...');
+    }
+    final user = auth.user;
+    return user == null ? const SizedBox.shrink() : _profile(context, user);
   }
 
   Widget _profile(BuildContext context, AuthUser user) {

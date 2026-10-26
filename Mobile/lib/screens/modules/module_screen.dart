@@ -66,21 +66,26 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ),
             ],
           ),
-          body: SafeArea(
-            child: loading
-                ? const AppLoading(message: 'Cargando registros...')
-                : snapshot.hasError
-                ? AppErrorState(
-                    message: snapshot.error is ApiException
-                        ? (snapshot.error! as ApiException).message
-                        : 'No se pudieron consultar los registros.',
-                    onRetry: () => _load(_page),
-                  )
-                : _records(snapshot.data!),
-          ),
+          body: SafeArea(child: _content(snapshot)),
         );
       },
     );
+  }
+
+  Widget _content(AsyncSnapshot<ModulePage> snapshot) {
+    if (snapshot.connectionState != ConnectionState.done) {
+      return const AppLoading(message: 'Cargando registros...');
+    }
+    if (snapshot.hasError) {
+      final error = snapshot.error;
+      return AppErrorState(
+        message: error is ApiException
+            ? error.message
+            : 'No se pudieron consultar los registros.',
+        onRetry: () => _load(_page),
+      );
+    }
+    return _records(snapshot.requireData);
   }
 
   Widget _records(ModulePage page) => Column(

@@ -53,6 +53,20 @@ class ApiPerfilActualizacionTest extends TestCase
         $this->patchJson('/api/me', ['nombreusuario' => 'nuevo'])->assertUnauthorized();
     }
 
+    public function test_cambiar_solo_nombre_conserva_la_fotografia_externa(): void
+    {
+        $imagen = 'https://perfil-demo.supabase.co/storage/v1/object/public/avatars/foto.png';
+        $usuario = $this->crearUsuario(atributos: ['imagenurl' => $imagen]);
+
+        $this->patchJson('/api/me', ['nombreusuario' => 'perfil.nuevo'], $this->bearer($usuario))
+            ->assertOk()
+            ->assertJsonPath('nombreusuario', 'perfil.nuevo')
+            ->assertJsonPath('imagenurl', $imagen)
+            ->assertJsonPath('avatar_url', $imagen);
+
+        $this->assertSame($imagen, $usuario->fresh()->imagenurl);
+    }
+
     public function test_usuario_sin_permisos_administrativos_puede_cambiar_su_nombre_una_vez(): void
     {
         $usuario = $this->crearUsuario();

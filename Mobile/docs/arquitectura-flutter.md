@@ -251,7 +251,7 @@ El comportamiento de sesión y errores es:
 | --- | --- |
 | Petición autenticada, valor por defecto | Lee el token de `SessionStorage` y agrega Bearer si existe. |
 | Petición con `authenticated: false` | No lee ni envía credenciales; sirve para login, registro y comprobación pública. |
-| `401` de una petición que envió el token | Elimina ese token si sigue siendo el guardado y devuelve `ApiException`. |
+| `401` de una petición autenticada | Expira la sesión en memoria y limpia las credenciales, salvo que el token guardado haya sido reemplazado. Devuelve `ApiException`. |
 | `401` público | Devuelve el error sin borrar una sesión existente. |
 | `403` o `422` | Conserva el token y entrega el estado HTTP y los errores de validación disponibles. |
 | Fallo de red, timeout o error del servidor | Conserva el token y muestra un mensaje controlado. |
@@ -265,6 +265,9 @@ El evento indica si pudo limpiar las credenciales. `AuthController` retira
 al usuario en memoria y presenta login o recuperación de limpieza, según
 ese resultado. Las operaciones de acceso tratan sus propios errores; el
 aviso global también se aplica durante la restauración o consulta de perfil.
+Si la petición salió sin token y tampoco hay uno guardado al recibir el `401`,
+el aviso retira igualmente al usuario en memoria. Si entretanto se guardó un
+token nuevo, la respuesta anterior conserva esa sesión.
 
 Un `401` vigente incrementa `_sessionRevision` en `AuthController`. Las
 operaciones de consulta, guardado y selección de fotografía comparan la
@@ -310,3 +313,9 @@ incluye un entorno aislado, los casos ejecutados y sus capturas.
 La [verificación de perfil y permisos](verificacion-perfil-permisos-laravel.md)
 añade una base separada con varios roles, permisos directos, denegación y
 revocación de permisos y tokens durante una sesión.
+
+Los preparadores `Web/scripts/preparar-auth-flutter.php` y
+`Web/scripts/preparar-perfil-flutter.php` comparten el arranque de
+`Web/scripts/entorno-flutter.php`. Este crea una base SQLite temporal, comprueba
+que Laravel use esa base antes de migrar y rechaza sobrescribir un entorno
+de verificación existente. Cada preparador conserva sus propios datos ficticios.

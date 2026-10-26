@@ -61,6 +61,27 @@ void main() {
 
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
+  testWidgets(
+    'La pérdida del token local retira la sesión al consultar un módulo',
+    (tester) async {
+      await storage.saveToken('1|errores');
+      final client = api((request) async {
+        if (request.url.path == '/api/me') return json(profile);
+        expect(request.headers['Authorization'], isNull);
+        return json({}, 401);
+      }, storage);
+      await tester.pumpWidget(AgroFusionApp(apiClient: client));
+      await tester.pumpAndSettle();
+
+      await storage.clearToken();
+      await push(tester, AppModule.pedidos.route);
+
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text('Hola, Ana'), findsNothing);
+      expect(await storage.readToken(), isNull);
+    },
+  );
+
   for (final revalidation in ['perfil', 'reanudación']) {
     for (final failCleanup in [false, true]) {
       testWidgets(

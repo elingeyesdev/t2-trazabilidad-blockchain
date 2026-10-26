@@ -38,9 +38,6 @@ class PerfilUsuarioService
                     $imagenAnterior = $actual->imagenurl;
                     $imagenNueva = UsuarioAvatar::storeUpload($actual, $datos['imagen']);
                     $actual->imagenurl = $imagenNueva;
-                } elseif (UsuarioAvatar::storageRelativePath($actual->imagenurl) === null
-                    && str_contains((string) $actual->imagenurl, 'supabase.co')) {
-                    $actual->imagenurl = null;
                 }
 
                 $actual->fechamodificacion = now();

@@ -50,6 +50,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
   }
 
   Future<void> _selectPhoto() async {
+    setState(() => _notice = null);
     final photo = await widget.controller.selectProfilePhoto(() async {
       final file =
           await (widget.selectFile?.call() ??
