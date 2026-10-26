@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/auth_user.dart';
+import '../../navigation/app_module.dart';
 import '../../navigation/app_routes.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -12,6 +13,9 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final modules = AppModule.values
+        .where((module) => module.canOpen(user))
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -26,7 +30,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -51,6 +55,35 @@ class HomeScreen extends StatelessWidget {
                   style: theme.textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 32),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushNamed(AppRoutes.profile);
+                  },
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text('Mi perfil'),
+                ),
+                const SizedBox(height: 12),
+                if (modules.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'No tienes módulos de consulta habilitados.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                for (final module in modules)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: ListTile(
+                      leading: Icon(module.icon),
+                      title: Text(module.label),
+                      subtitle: const Text('Consultar registros'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () =>
+                          Navigator.of(context).pushNamed(module.route),
+                    ),
+                  ),
+                const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: () {
                     Navigator.of(context).pushNamed(AppRoutes.connection);

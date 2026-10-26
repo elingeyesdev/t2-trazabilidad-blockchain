@@ -1,8 +1,10 @@
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
 import '../models/logout_result.dart';
+import '../models/profile_photo.dart';
 import '../models/registration_result.dart';
 import 'api_client.dart';
 import 'session_storage.dart';
@@ -14,6 +16,66 @@ class AuthService {
   final SessionStorage _storage;
 
   Stream<bool> get sessionExpired => _api.sessionExpired;
+
+  Future<AuthUser> updateProfile({
+    required int userId,
+    String? username,
+    ProfilePhoto? photo,
+  }) async {
+    if (username == null && photo == null) {
+      throw const ApiException('No hay cambios para guardar.');
+    }
+    final token = await _readToken();
+    if (token == null) {
+      throw const ApiException(
+        'La sesión no es válida. Inicia sesión de nuevo.',
+        statusCode: 401,
+      );
+    }
+    final response = photo == null
+        ? await _api.request(
+            'PATCH',
+            'me',
+            bearerToken: token,
+            body: {'nombreusuario': username!.trim()},
+          )
+        : await _api.request(
+            'POST',
+            'me',
+            bearerToken: token,
+            fields: {
+              '_method': 'PATCH',
+              if (username != null) 'nombreusuario': username.trim(),
+            },
+            files: [
+              http.MultipartFile.fromBytes(
+                'imagen',
+                photo.bytes,
+                filename: photo.filename,
+                contentType: http.MediaType.parse(photo.contentType),
+              ),
+            ],
+          );
+    if (await _readToken() != token) {
+      throw const ApiException(
+        'La sesión cambió durante el guardado. Consulta el perfil de nuevo.',
+      );
+    }
+    late final AuthUser user;
+    try {
+      user = AuthUser.fromJson(response);
+    } on ApiException {
+      throw const ApiException(
+        'No se pudo confirmar el perfil actualizado. Consulta el perfil de nuevo.',
+      );
+    }
+    if (user.id != userId) {
+      throw const ApiException(
+        'No se pudo confirmar el perfil actualizado. Consulta el perfil de nuevo.',
+      );
+    }
+    return user;
+  }
 
   Future<AuthUser?> restoreSession() async {
     final token = await _readToken();

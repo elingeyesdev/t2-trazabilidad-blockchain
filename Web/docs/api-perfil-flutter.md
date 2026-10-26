@@ -150,9 +150,10 @@ Para cargar una foto desde Flutter, utiliza `POST /api/me` con cuerpo
 `multipart/form-data`, campo `_method=PATCH` y archivo `imagen`.
 Deja que la biblioteca HTTP genere el delimitador multipart.
 El [cliente HTTP compartido](../../Mobile/lib/services/api_client.dart) permite
-consultar el perfil y cambiar el nombre mediante JSON. La integración de fotos
-requiere incorporar el envío multipart al cliente compartido al implementar
-el perfil móvil.
+consultar el perfil y cambiar el nombre mediante JSON, y admite formularios
+multipart con los mismos controles de sesión y errores.
+[AuthService](../../Mobile/lib/services/auth_service.dart) integra ambos envíos
+para la edición del perfil móvil.
 
 La actualización reutiliza la validación y el servicio del perfil web.
 Los archivos se guardan en el disco `public`. La foto anterior se elimina

@@ -4,8 +4,9 @@ Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
 equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
 cliente HTTP compartido, almacenamiento seguro del token, comprobación de
 conexión, inicio de sesión, registro pendiente de aprobación, cierre y
-restauración de sesión con Laravel. El perfil y la navegación por permisos
-corresponden a la issue #5.
+restauración de sesión con Laravel y consulta del perfil autenticado.
+Incluye edición del nombre de usuario y fotografía, y navegación según los
+permisos efectivos recibidos de Laravel, con consultas de solo lectura.
 
 ## Iniciar sesión
 
@@ -33,6 +34,20 @@ Al abrir la aplicación, Flutter lee el token guardado y consulta `GET /api/me`
 antes de mostrar el inicio. Sin token, presenta el login sin realizar esa
 consulta. Al volver al primer plano, también revalida una sesión autenticada
 para comprobar que la cuenta siga autorizada.
+
+Cada consulta sustituye el perfil completo, los roles, las capacidades de
+edición y los permisos efectivos. No combina permisos anteriores con los
+recibidos. El menú incorpora los permisos concedidos y retira los revocados;
+si estás en un módulo que dejó de estar autorizado, presenta acceso denegado.
+Las consultas de un módulo abierto se renuevan después de verificar la sesión
+y sus respuestas anteriores no vuelven a mostrar registros.
+
+Para una sesión ya conocida, la revalidación también exige el mismo
+identificador de cuenta, incluso al reintentar después de un fallo. Una
+respuesta de otra cuenta bloquea el acceso hasta recuperar el perfil correcto
+o cerrar la sesión. Esta identidad se mantiene solo en memoria: el
+almacenamiento conserva exclusivamente el token y no guarda copias de roles,
+permisos o datos de perfil como prueba de autorización.
 
 Mientras verifica, muestra **Verificando sesión...**. Si falla la conexión,
 el servidor o el acceso al almacenamiento, bloquea las pantallas y ofrece
@@ -67,6 +82,126 @@ conserva el correo de la solicitud y limpia la contraseña.
 Un administrador debe aprobar la cuenta antes de que pueda iniciar sesión.
 Si intentas acceder mientras está pendiente, el login muestra el mensaje
 de Laravel y mantiene bloqueado el inicio autenticado.
+
+## Consultar el perfil
+
+Después de iniciar sesión, selecciona **Mi perfil**. La pantalla consulta
+`GET /api/me` con el token de la sesión y muestra nombre completo, nombre de
+usuario, correo, teléfono, CI/NIT, todos los roles y las fechas disponibles.
+Las fechas se presentan en la zona local; los datos opcionales vacíos aparecen
+como **Sin registrar** y una cuenta sin roles muestra **Sin roles asignados**.
+
+El avatar usa `avatar_url`, con soporte para imágenes HTTP/HTTPS y referencias
+heredadas de imágenes PNG, JPEG, WEBP o GIF embebidas. Si no hay una foto o
+no se puede cargar, muestra un icono de sustitución. No adjunta el token de
+sesión a las descargas de imágenes.
+
+Selecciona **Actualizar perfil** para recuperar los cambios del servidor.
+La consulta actualiza también el usuario que muestra el inicio y evita
+peticiones duplicadas durante la carga. El modelo conserva los permisos
+efectivos y las capacidades de edición recibidas; un rol por sí solo no
+genera permisos locales.
+
+La ruta `/profile` requiere una sesión verificada. Si `me` rechaza el token
+o la cuenta, vuelve al login y limpia sus credenciales. Si no puede verificar
+la sesión por un error de conexión, servidor, formato o almacenamiento,
+presenta la recuperación de sesión con reintento antes de mostrar datos.
+
+## Editar el nombre de usuario y la fotografía
+
+Desde **Mi perfil**, selecciona **Editar perfil**. Las capacidades devueltas
+por Laravel determinan qué campos puedes cambiar. El nombre de usuario
+admite un solo cambio; después, el formulario mantiene disponible la
+fotografía si el servidor lo permite. Nombre personal, apellido, correo,
+roles y permisos se consultan sin enviarlos en esta actualización.
+
+Usa **Seleccionar foto** para abrir el selector de archivos del sistema.
+El formulario admite JPG/JPEG, PNG, WEBP y GIF de hasta 2 MB. Las
+comprobaciones locales orientan la selección; Laravel valida el contenido,
+la unicidad del nombre y la autorización en cada petición.
+
+La selección funciona con el plugin oficial
+[`file_selector`](https://pub.dev/packages/file_selector), usando bytes
+compatibles con web. Cancelar el selector conserva el borrador.
+**Quitar selección** retira solo la foto elegida del formulario; no elimina
+la fotografía guardada en Laravel. Al regresar del selector, la aplicación
+vuelve a verificar el perfil sin descartar el nombre que estás escribiendo.
+
+**Guardar cambios** envía solo los campos modificados. Para cambiar el nombre
+utiliza `PATCH /api/me` con JSON; si hay una fotografía, envía `POST /api/me`
+multipart con `_method=PATCH` y el archivo `imagen`. La confirmación sustituye
+el perfil y las capacidades en memoria y presenta **Perfil actualizado
+correctamente.** Se bloquean los envíos duplicados y la salida durante el
+guardado o la selección.
+
+Los errores `422` aparecen junto al campo y conservan el borrador. Ante un
+`403`, la aplicación consulta otra vez el perfil para actualizar las
+capacidades y comprobar la autorización de la cuenta. Un `401` retira la
+sesión mediante el cliente compartido.
+
+Si falla la comunicación durante una escritura, el resultado puede ser
+incierto. El formulario ofrece **Consultar perfil** y bloquea otro guardado
+hasta completar esa consulta, incluso si cierras y vuelves a abrir la edición.
+La aplicación no repite automáticamente una actualización.
+
+## Navegar según tus permisos
+
+El inicio muestra **Mi perfil** y los módulos de consulta habilitados por
+`permissions` de `GET /api/me`. Tener un rol llamado `admin` no habilita todos
+los destinos. Los permisos directos también habilitan sus opciones, aunque
+la cuenta no tenga roles. Sin permisos de módulos, puedes consultar tu perfil
+y comprobar la conexión.
+
+Las opciones disponibles y sus permisos son:
+
+| Opción | Permiso efectivo |
+| --- | --- |
+| Lotes, Actividades y Cosechas | `lotes.view` |
+| Almacenes e Insumos | `inventario.view` |
+| Movimientos de almacén | `almacen.movimientos.view` |
+| Certificaciones | `certificaciones.view` |
+| Pedidos | `pedidos.view` |
+| Incidentes | `incidentes.view` |
+| Rutas | `rutas_multi.view` |
+| Asignaciones | `asignaciones.view` |
+| Documentos de entrega | `documentos.view` |
+| Usuarios | `usuarios.admin` |
+
+Selecciona una opción para consultar registros reales de Laravel. La pantalla
+muestra los campos resumidos del módulo, permite **Actualizar lista** y ofrece
+**Anterior** y **Siguiente** cuando el servidor pagina el resultado. Una lista
+sin registros presenta **No hay registros disponibles.** Estos destinos
+cubren la consulta: no incluyen creación, edición, eliminación ni descargas
+de documentos. Los demás flujos de negocio de React Native requieren su
+propia migración.
+
+El acceso directo a una ruta `/modules/...` también comprueba el permiso
+antes de enviar la consulta. Un `403` de Laravel presenta **Acceso no
+autorizado** y permite **Volver al inicio**; conserva la sesión. Usa
+**Actualizar permisos** para consultar otra vez el perfil y la autorización.
+Si recuperas el permiso, la pantalla vuelve a consultar los registros; si el
+permiso fue retirado, permanece bloqueada y el menú elimina su opción. Si la
+cuenta o el token dejaron de ser válidos, se aplica la recuperación de sesión.
+Un `401` reutiliza la retirada de sesión. Los errores de consulta ofrecen
+**Reintentar**.
+Si una actualización del perfil retira un permiso, el menú oculta su opción
+y la ruta abierta deja de mostrar los registros.
+
+Laravel vuelve a comprobar autorización y acceso a los datos en cada petición.
+Ocultar una opción en Flutter no sustituye esas comprobaciones ni los filtros
+de pertenencia o ámbito de los controladores. Las excepciones contextuales
+del servidor no generan permisos adicionales en el menú.
+
+Para reproducir la integración con seis cuentas ficticias, los cambios de
+permisos y la revocación de sesión, consulta
+[Verificar perfil y navegación con Laravel](docs/verificacion-perfil-permisos-laravel.md).
+
+Si llega un `401` mientras se consulta o actualiza el perfil, una respuesta
+anterior de esa operación no recupera la sesión ni confirma un guardado. Si
+falla el borrado del token, el acceso permanece bloqueado y **Reintentar**
+intenta completar el cierre. Las respuestas de validación `422` conservan el
+borrador; un resultado incierto de actualización exige **Consultar perfil**
+antes de volver a guardar.
 
 ## Cerrar sesión
 
@@ -108,6 +243,17 @@ Descarga las dependencias declaradas en `pubspec.yaml`:
 ```powershell
 flutter pub get
 ```
+
+Si actualizas una instalación anterior a la incorporación del selector de
+fotografías, detén la aplicación y regenera los archivos derivados desde
+`Mobile/` antes de volver a ejecutar o compilar:
+
+```powershell
+flutter clean
+flutter pub get
+```
+
+Esto evita reutilizar un registro de plugins generado sin `file_selector`.
 
 Incluye `pubspec.lock` en los commits para que el equipo utilice las mismas
 versiones de dependencias. Los archivos generados, las cachés y la
@@ -239,10 +385,11 @@ Los archivos de este bloque se distribuyen así:
 - `lib/models/`: usuario autenticado, conectividad y errores de la API.
 - `lib/controllers/`: estado observable de login, registro y cierre de sesión.
 - `lib/services/`: HTTP, autenticación, conectividad y almacenamiento del token.
-- `lib/navigation/`: nombres de rutas.
+- `lib/navigation/`: nombres de rutas y catálogo de módulos con sus permisos.
 - `lib/screens/auth/`: login, registro y confirmación de aprobación pendiente.
 - `lib/screens/home/home_screen.dart`: inicio para el usuario autenticado.
 - `lib/screens/connection/`: estados de la comprobación de conexión.
+- `lib/screens/modules/`: consultas de módulos y acceso denegado.
 - `lib/widgets/`: componentes compartidos de carga y error con reintento.
 - `test/`: pruebas de arranque, configuración, HTTP, sesión y navegación.
 - `android/`, `ios/` y `web/`: configuración de cada plataforma.
