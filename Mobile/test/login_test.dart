@@ -59,6 +59,7 @@ void main() {
       return http.Response('', 500);
     });
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
+    await tester.pumpAndSettle();
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.byType(HomeScreen), findsNothing);
 
@@ -79,6 +80,7 @@ void main() {
           : confirmation.future,
     );
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
+    await tester.pumpAndSettle();
     await enterCredentials(tester);
     await tester.tap(find.text('Iniciar sesión'));
     await tester.pump();
@@ -106,6 +108,7 @@ void main() {
         (_) async => jsonResponse({'message': error.$2}, error.$1),
       );
       await tester.pumpWidget(AgroFusionApp(apiClient: api));
+      await tester.pumpAndSettle();
       await enterCredentials(tester);
       await tester.tap(find.text('Iniciar sesión'));
       await tester.pumpAndSettle();
@@ -127,6 +130,7 @@ void main() {
         }, 422),
       );
       await tester.pumpWidget(AgroFusionApp(apiClient: api));
+      await tester.pumpAndSettle();
       await enterCredentials(tester);
       await tester.tap(find.text('Iniciar sesión'));
       await tester.pumpAndSettle();
@@ -151,6 +155,7 @@ void main() {
         return pending.future;
       });
       await tester.pumpWidget(AgroFusionApp(apiClient: api));
+      await tester.pumpAndSettle();
       await enterCredentials(tester);
       await tester.tap(find.text('Iniciar sesión'));
       await tester.tap(find.text('Iniciar sesión'));
@@ -182,6 +187,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final api = apiWith((_) async => http.Response('', 500));
       await tester.pumpWidget(AgroFusionApp(apiClient: api));
+      await tester.pumpAndSettle();
       expect(
         tester.widget<TextField>(find.byType(TextField).at(1)).obscureText,
         isTrue,
@@ -204,6 +210,7 @@ void main() {
     final pending = Completer<http.Response>();
     final api = apiWith((_) => pending.future);
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
+    await tester.pumpAndSettle();
     await enterCredentials(tester);
     await tester.tap(find.text('Iniciar sesión'));
     await tester.pumpWidget(const SizedBox());

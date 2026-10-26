@@ -3,13 +3,13 @@
 Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
 equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
 cliente HTTP compartido, almacenamiento seguro del token, comprobación de
-conexión, inicio de sesión, registro pendiente de aprobación y cierre de sesión
-con Laravel. La restauración se incorpora en el bloque de estados de la issue
-#4; el perfil y la navegación por permisos corresponden a la issue #5.
+conexión, inicio de sesión, registro pendiente de aprobación, cierre y
+restauración de sesión con Laravel. El perfil y la navegación por permisos
+corresponden a la issue #5.
 
 ## Iniciar sesión
 
-Al abrir la aplicación, ingresa el correo y la contraseña de una cuenta activa
+Si no hay una sesión guardada, ingresa el correo y la contraseña de una cuenta activa
 y aprobada en Laravel. Flutter envía `POST /api/login` sin credenciales previas,
 guarda el token y confirma el perfil con `GET /api/me` antes de mostrar el inicio.
 Si falla esta confirmación, limpia el token recién guardado y mantiene el login.
@@ -19,11 +19,30 @@ y bloquea envíos duplicados durante la carga. Los errores de Laravel aparecen
 en el formulario; las cuentas pendientes o inactivas permanecen sin acceso.
 La acción **Comprobar conexión** está disponible desde la pantalla de login.
 
-Este bloque inicia la sesión dentro de la ejecución abierta de la aplicación.
-La restauración al volver a abrirla se incorpora en el bloque de estados de
-autenticación. Consulta el
+Consulta el
 [análisis de autenticación](docs/analisis-autenticacion-flutter.md) para revisar
 el contrato y la división de actividades.
+
+## Restaurar y verificar la sesión
+
+Al abrir la aplicación, Flutter lee el token guardado y consulta `GET /api/me`
+antes de mostrar el inicio. Sin token, presenta el login sin realizar esa
+consulta. Al volver al primer plano, también revalida una sesión autenticada
+para comprobar que la cuenta siga autorizada.
+
+Mientras verifica, muestra **Verificando sesión...**. Si falla la conexión,
+el servidor o el acceso al almacenamiento, bloquea las pantallas y ofrece
+**Reintentar** o **Cerrar sesión**. Los fallos de red conservan el token para
+volver a verificarlo; no se utilizan datos guardados como prueba de acceso.
+
+Un token rechazado o una cuenta pendiente o inactiva vuelven al login después
+de limpiar sus credenciales. Si falla esa limpieza, el acceso permanece
+bloqueado hasta resolver el almacenamiento mediante el reintento.
+
+Un `401` de una petición autenticada también retira al usuario en memoria.
+Un `403` de permisos de otro módulo y los errores de comunicación de ese
+módulo conservan la sesión verificada. Las respuestas antiguas no invalidan
+una sesión nueva que haya reemplazado el token.
 
 ## Solicitar una cuenta
 

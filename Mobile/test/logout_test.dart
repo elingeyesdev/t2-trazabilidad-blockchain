@@ -53,6 +53,7 @@ void main() {
     await tester.pumpWidget(
       AgroFusionApp(apiClient: api, sessionStorage: session),
     );
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byType(TextFormField).first,
       'ana@example.test',

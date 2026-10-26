@@ -6,11 +6,14 @@ import 'package:agrofusion_mobile/screens/auth/login_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
 import 'package:agrofusion_mobile/widgets/app_loading.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
   ApiClient apiWith(MockClient client) {
     final api = ApiClient(
       config: ApiConfig(baseUrl: 'https://example.test/api'),
@@ -27,6 +30,7 @@ void main() {
     final response = Completer<http.Response>();
     final api = apiWith(MockClient((_) => response.future));
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Comprobar conexión'));
     await tester.pump();
@@ -56,6 +60,7 @@ void main() {
       }),
     );
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Comprobar conexión'));
     await tester.pumpAndSettle();

@@ -38,6 +38,7 @@ void main() {
     );
     addTearDown(api.close);
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Crear cuenta'));
     await tester.tap(find.text('Crear cuenta'));
     await tester.pumpAndSettle();

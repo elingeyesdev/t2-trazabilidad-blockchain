@@ -62,6 +62,154 @@ void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   test(
+    'Sin token la restauración devuelve una sesión anónima sin consultar HTTP',
+    () async {
+      final service = serviceWith(
+        (_) async => throw StateError('No debe consultar sin token.'),
+      );
+      expect(await service.restoreSession(), isNull);
+    },
+  );
+
+  test(
+    'La restauración verifica el token guardado y obtiene el usuario del servidor',
+    () async {
+      await storage.saveToken('1|token-guardado');
+      final service = serviceWith((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/me');
+        expect(request.headers['Authorization'], 'Bearer 1|token-guardado');
+        return jsonResponse(profile);
+      });
+      expect((await service.restoreSession())!.name, 'Ana');
+      expect(await storage.readToken(), '1|token-guardado');
+    },
+  );
+
+  for (final status in [401, 403]) {
+    test(
+      'La restauración $status elimina credenciales que ya no autorizan',
+      () async {
+        await storage.saveToken('1|token-guardado');
+        final service = serviceWith(
+          (_) async => jsonResponse({'message': 'Acceso denegado'}, status),
+        );
+        await expectLater(
+          service.restoreSession(),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.statusCode,
+              'statusCode',
+              status,
+            ),
+          ),
+        );
+        expect(await storage.readToken(), isNull);
+      },
+    );
+  }
+
+  test(
+    'Los fallos de conexión, servidor o formato conservan el token para reintentar',
+    () async {
+      await storage.saveToken('1|token-guardado');
+      final services = [
+        serviceWith((_) async => throw http.ClientException('offline')),
+        serviceWith((_) async => jsonResponse({}, 503)),
+        serviceWith((_) async => jsonResponse({'perfil': 'incompleto'})),
+      ];
+      for (final service in services) {
+        await expectLater(
+          service.restoreSession(),
+          throwsA(isA<ApiException>()),
+        );
+        expect(await storage.readToken(), '1|token-guardado');
+      }
+    },
+  );
+
+  test(
+    'Un almacenamiento ilegible impide restaurar sin borrar el token',
+    () async {
+      final failing = FailingSessionStorage();
+      await failing.saveToken('1|token-guardado');
+      failing.failRead = true;
+      final service = serviceWith(
+        (_) async => throw StateError('No debe consultar sin leer el token.'),
+        session: failing,
+      );
+      await expectLater(service.restoreSession(), throwsA(isA<ApiException>()));
+      expect(
+        await const FlutterSecureStorage().read(key: 'agrofusion.auth_token'),
+        '1|token-guardado',
+      );
+    },
+  );
+
+  test(
+    'Si no puede borrar un token rechazado, exige resolver el almacenamiento',
+    () async {
+      final failing = FailingSessionStorage()..failClear = true;
+      await failing.saveToken('1|token-guardado');
+      final service = serviceWith(
+        (_) async => jsonResponse({}, 401),
+        session: failing,
+      );
+      await expectLater(
+        service.restoreSession(),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.statusCode,
+            'statusCode',
+            isNull,
+          ),
+        ),
+      );
+      expect(await failing.readToken(), '1|token-guardado');
+    },
+  );
+
+  test(
+    'Una respuesta de restauración antigua no autentica ni borra una sesión nueva',
+    () async {
+      await storage.saveToken('1|token-anterior');
+      final service = serviceWith((_) async {
+        await storage.saveToken('2|token-nuevo');
+        return jsonResponse(profile);
+      });
+      await expectLater(
+        service.restoreSession(),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.message,
+            'message',
+            contains('La sesión cambió'),
+          ),
+        ),
+      );
+      expect(await storage.readToken(), '2|token-nuevo');
+    },
+  );
+
+  test(
+    'Un login anterior tampoco borra una sesión reemplazada al confirmar el perfil',
+    () async {
+      final service = serviceWith((request) async {
+        if (request.url.path == '/api/login') {
+          return jsonResponse({'user': profile, 'token': '1|token-anterior'});
+        }
+        await storage.saveToken('2|token-nuevo');
+        return jsonResponse(profile);
+      });
+      await expectLater(
+        service.login('ana@example.test', 'clave'),
+        throwsA(isA<ApiException>()),
+      );
+      expect(await storage.readToken(), '2|token-nuevo');
+    },
+  );
+
+  test(
     'Logout revoca el token usado y elimina solo sus credenciales locales',
     () async {
       await storage.saveToken('1|token-valido');

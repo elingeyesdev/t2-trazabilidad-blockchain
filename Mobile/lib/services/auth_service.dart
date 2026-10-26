@@ -13,6 +13,63 @@ class AuthService {
   final ApiClient _api;
   final SessionStorage _storage;
 
+  Stream<bool> get sessionExpired => _api.sessionExpired;
+
+  Future<AuthUser?> restoreSession() async {
+    final token = await _readToken();
+    if (token == null) return null;
+    try {
+      return await _loadUser(token);
+    } on ApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        bool cleared;
+        try {
+          cleared = await _clearTokenIfCurrent(token);
+        } catch (_) {
+          throw const ApiException(
+            'No se pudo limpiar el almacenamiento de sesión. Intenta de nuevo.',
+          );
+        }
+        if (!cleared) {
+          throw const ApiException(
+            'La sesión cambió mientras se verificaba. Reintenta.',
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  Future<String?> _readToken() async {
+    try {
+      return await _storage.readToken();
+    } catch (_) {
+      throw const ApiException(
+        'No se pudo acceder al almacenamiento de sesión. Intenta de nuevo.',
+      );
+    }
+  }
+
+  Future<bool> _clearTokenIfCurrent(String token) async {
+    final current = await _storage.readToken();
+    if (current == null) return true;
+    if (current != token) return false;
+    await _storage.clearToken();
+    return true;
+  }
+
+  Future<AuthUser> _loadUser(String token) async {
+    final user = AuthUser.fromJson(
+      await _api.request('GET', 'me', bearerToken: token),
+    );
+    if (await _readToken() != token) {
+      throw const ApiException(
+        'La sesión cambió mientras se verificaba. Reintenta.',
+      );
+    }
+    return user;
+  }
+
   Future<LogoutResult> logout() async {
     String? token;
     var tokenKnown = false;
@@ -86,7 +143,7 @@ class AuthService {
 
     try {
       await _storage.saveToken(token);
-      final user = AuthUser.fromJson(await _api.request('GET', 'me'));
+      final user = await _loadUser(token);
       if (user.id != loginUser.id) {
         throw const ApiException(
           'La API devolvió un perfil de usuario inválido.',
@@ -95,8 +152,8 @@ class AuthService {
       return user;
     } catch (error) {
       try {
-        await _storage.clearToken();
-      } on PlatformException {
+        await _clearTokenIfCurrent(token);
+      } catch (_) {
         throw const ApiException(
           'No se pudo limpiar el almacenamiento de sesión. Intenta de nuevo.',
         );

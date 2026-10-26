@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../helpers/failing_session_storage.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const session = SessionStorage();
@@ -28,6 +30,61 @@ void main() {
   }
 
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  test('Notifica la expiración solo para un 401 de la sesión actual', () async {
+    await session.saveToken('1|token-actual');
+    final api = createApi(MockClient((_) async => http.Response('', 401)));
+    final events = <bool>[];
+    final subscription = api.sessionExpired.listen(events.add);
+    addTearDown(subscription.cancel);
+    await expectLater(api.request('GET', 'me'), throwsA(isA<ApiException>()));
+    expect(events, [true]);
+    expect(await session.readToken(), isNull);
+  });
+
+  test(
+    'Un 401 que no puede limpiar el token emite un estado de limpieza pendiente',
+    () async {
+      const token = '1|token-actual';
+      final storage = FailingSessionStorage()..failClear = true;
+      await storage.saveToken(token);
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((_) async => http.Response('', 401)),
+      );
+      addTearDown(api.close);
+      final events = <bool>[];
+      final subscription = api.sessionExpired.listen(events.add);
+      addTearDown(subscription.cancel);
+      await expectLater(api.request('GET', 'me'), throwsA(isA<ApiException>()));
+      expect(events, [false]);
+      expect(await storage.readToken(), token);
+    },
+  );
+
+  test(
+    'Un 403 de permisos o un 401 público no emiten expiración global',
+    () async {
+      await session.saveToken('1|token-actual');
+      var status = 403;
+      final api = createApi(MockClient((_) async => http.Response('', status)));
+      final events = <bool>[];
+      final subscription = api.sessionExpired.listen(events.add);
+      addTearDown(subscription.cancel);
+      await expectLater(
+        api.request('GET', 'lotes'),
+        throwsA(isA<ApiException>()),
+      );
+      status = 401;
+      await expectLater(
+        api.request('POST', 'login', authenticated: false),
+        throwsA(isA<ApiException>()),
+      );
+      expect(events, isEmpty);
+      expect(await session.readToken(), '1|token-actual');
+    },
+  );
 
   test(
     'Un Bearer explícito no altera una sesión más reciente ante un 401',

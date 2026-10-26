@@ -2,8 +2,8 @@
 
 Este documento explica al equipo de desarrollo cómo incorporar funcionalidades
 a `Mobile/` usando la base de la issue #3. El flujo de referencia es la
-comprobación pública de conexión con Laravel. Incluye login, registro y logout
-de la issue #4; la navegación por permisos corresponde a la issue #5.
+comprobación pública de conexión con Laravel. Incluye los flujos de
+autenticación de la issue #4; la navegación por permisos corresponde a la issue #5.
 
 ## Seguir el flujo de una petición
 
@@ -49,7 +49,21 @@ La ruta raíz presenta `LoginScreen` mientras no exista un usuario confirmado.
 El formulario conserva los campos ante errores, muestra los mensajes de
 validación de Laravel y bloquea envíos duplicados. El acceso a la comprobación
 pública de conexión se conserva desde login e inicio.
-La restauración al arrancar corresponde al bloque de estados de la issue #4.
+Al iniciar, `AgroFusionApp` ejecuta `AuthController.restoreSession`. Si no hay
+token, presenta el login; si existe, `AuthService` consulta `GET /api/me` con
+ese Bearer y valida el perfil antes de establecer al usuario. El servicio
+comprueba además que el token guardado siga siendo el de la petición.
+
+`AgroFusionApp` observa el ciclo de vida de Flutter y revalida una sesión
+autenticada al volver al primer plano. `_sessionGate` presenta carga,
+recuperación de errores o limpieza pendiente antes del contenido de cada ruta.
+Las rutas protegidas usan `requiresAuthentication: true`, como el inicio,
+para presentar login cuando no existe un usuario verificado.
+
+Los fallos transitorios de restauración conservan el token y bloquean las
+pantallas hasta reintentar o cerrar sesión. Un `401` o `403` de `me` limpia
+las credenciales rechazadas; si falla el borrado, la aplicación mantiene la
+recuperación del almacenamiento como requisito para continuar.
 
 El registro usa la ruta `/register` y el mismo `AuthController` y `ApiClient`:
 
@@ -126,9 +140,16 @@ El comportamiento de sesión y errores es:
 | JSON inválido en una respuesta exitosa | Devuelve un error controlado de formato. |
 
 El almacenamiento nativo se configura mediante `flutter_secure_storage`.
-El cliente no registra tokens ni contraseñas. El controlador de autenticación
-de la issue #4 debe coordinar el usuario en memoria y la navegación cuando
-una petición indique que la sesión dejó de ser válida.
+El cliente no registra tokens ni contraseñas. `ApiClient.sessionExpired`
+notifica un `401` autenticado que no corresponde a un token reemplazado.
+El evento indica si pudo limpiar las credenciales. `AuthController` retira
+al usuario en memoria y presenta login o recuperación de limpieza, según
+ese resultado. Las operaciones de acceso tratan sus propios errores; el
+aviso global se aplica a la sesión que ya está autenticada.
+
+El controlador cancela la suscripción al desmontarse y `ApiClient.close`
+cierra el flujo de eventos. Los errores públicos de login o registro y los
+`403` de permisos de otros módulos no disparan una expiración global.
 
 ## Incorporar una funcionalidad
 
@@ -142,7 +163,8 @@ Para migrar una pantalla, sigue estos pasos:
 4. Agrega la pantalla dentro de `lib/screens/` y reutiliza los estados de
    carga y error cuando correspondan.
 5. Declara el nombre en `AppRoutes` y registra el constructor de la pantalla
-   en las rutas de `AgroFusionApp`.
+   en las rutas de `AgroFusionApp`, mediante `_sessionGate`. Si necesita un
+   usuario verificado, establece `requiresAuthentication: true`.
 6. Prueba las respuestas del servicio y la navegación antes de registrar
    la funcionalidad como terminada.
 

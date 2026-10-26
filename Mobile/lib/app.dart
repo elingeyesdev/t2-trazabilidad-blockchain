@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'config/api_config.dart';
@@ -28,7 +30,8 @@ class AgroFusionApp extends StatefulWidget {
   State<AgroFusionApp> createState() => _AgroFusionAppState();
 }
 
-class _AgroFusionAppState extends State<AgroFusionApp> {
+class _AgroFusionAppState extends State<AgroFusionApp>
+    with WidgetsBindingObserver {
   late final ApiClient _api =
       widget.apiClient ??
       ApiClient(
@@ -40,12 +43,92 @@ class _AgroFusionAppState extends State<AgroFusionApp> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_auth.restoreSession());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _auth.user != null) {
+      unawaited(_auth.restoreSession());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
     }
     super.dispose();
+  }
+
+  Widget _sessionGate(
+    Widget Function() content, {
+    bool requiresAuthentication = false,
+  }) {
+    return ListenableBuilder(
+      listenable: _auth,
+      builder: (context, _) {
+        if (_auth.isCheckingSession || _auth.isLoggingOut) {
+          return PopScope(
+            canPop: false,
+            child: Scaffold(
+              body: AppLoading(
+                message: _auth.isCheckingSession
+                    ? 'Verificando sesión...'
+                    : 'Cerrando sesión...',
+              ),
+            ),
+          );
+        }
+        final logout = _auth.logoutResult;
+        if (logout != null && !logout.localCleared) {
+          return PopScope(
+            canPop: false,
+            child: Scaffold(
+              body: AppErrorState(
+                message: logout.message,
+                onRetry: _auth.logout,
+              ),
+            ),
+          );
+        }
+        final error = _auth.sessionError;
+        if (error != null) {
+          return PopScope(
+            canPop: false,
+            child: Scaffold(
+              appBar: AppBar(title: const Text('AgroFusion')),
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: AppErrorState(
+                        message: error.message,
+                        onRetry: _auth.restoreSession,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _auth.logout,
+                      child: const Text('Cerrar sesión'),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        if (requiresAuthentication && _auth.user == null) {
+          return LoginScreen(controller: _auth);
+        }
+        return content();
+      },
+    );
   }
 
   @override
@@ -58,38 +141,15 @@ class _AgroFusionAppState extends State<AgroFusionApp> {
       ),
       initialRoute: AppRoutes.home,
       routes: {
-        AppRoutes.home: (_) => ListenableBuilder(
-          listenable: _auth,
-          builder: (context, _) {
-            if (_auth.isLoggingOut) {
-              return const PopScope(
-                canPop: false,
-                child: Scaffold(
-                  body: AppLoading(message: 'Cerrando sesión...'),
-                ),
-              );
-            }
-            final logout = _auth.logoutResult;
-            if (logout != null && !logout.localCleared) {
-              return PopScope(
-                canPop: false,
-                child: Scaffold(
-                  body: AppErrorState(
-                    message: logout.message,
-                    onRetry: _auth.logout,
-                  ),
-                ),
-              );
-            }
-            final user = _auth.user;
-            return user == null
-                ? LoginScreen(controller: _auth)
-                : HomeScreen(user: user, onLogout: _auth.logout);
-          },
+        AppRoutes.home: (_) => _sessionGate(
+          () => HomeScreen(user: _auth.user!, onLogout: _auth.logout),
+          requiresAuthentication: true,
         ),
-        AppRoutes.connection: (_) =>
-            ConnectionScreen(healthService: ApiHealthService(_api)),
-        AppRoutes.register: (_) => RegisterScreen(controller: _auth),
+        AppRoutes.connection: (_) => _sessionGate(
+          () => ConnectionScreen(healthService: ApiHealthService(_api)),
+        ),
+        AppRoutes.register: (_) =>
+            _sessionGate(() => RegisterScreen(controller: _auth)),
       },
     );
   }
