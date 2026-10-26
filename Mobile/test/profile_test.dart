@@ -286,6 +286,74 @@ void main() {
     },
   );
 
+  testWidgets('Integra la edición con el perfil y muestra la confirmación', (
+    tester,
+  ) async {
+    var current = profile;
+    await startApp(tester, (request) async {
+      if (request.method == 'PATCH') {
+        current = {
+          ...profile,
+          'nombreusuario': 'ana.nueva',
+          'profile_capabilities': {
+            'update_username': false,
+            'update_photo': true,
+          },
+        };
+      }
+      return jsonResponse(current);
+    });
+    await openProfile(tester);
+    await tester.ensureVisible(find.text('Editar perfil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar perfil'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'ana.nueva');
+    await tester.ensureVisible(find.text('Guardar cambios'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guardar cambios'));
+    await tester.pumpAndSettle();
+    expect(find.text('@ana.nueva'), findsOneWidget);
+    expect(find.text('Perfil actualizado correctamente.'), findsOneWidget);
+    expect(find.byType(TextFormField), findsNothing);
+  });
+
+  for (final failCleanup in [false, true]) {
+    testWidgets(
+      'Un 401 de actualización bloquea la edición, limpieza fallida: $failCleanup',
+      (tester) async {
+        final failing = FailingSessionStorage();
+        await startApp(
+          tester,
+          (request) async => request.method == 'GET'
+              ? jsonResponse(profile)
+              : jsonResponse({}, 401),
+          session: failing,
+        );
+        await openProfile(tester);
+        await tester.ensureVisible(find.text('Editar perfil'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Editar perfil'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextFormField), 'ana.nueva');
+        failing.failClear = failCleanup;
+        await tester.ensureVisible(find.text('Guardar cambios'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Guardar cambios'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ProfileScreen), findsNothing);
+        if (failCleanup) {
+          expect(find.byType(LoginScreen), findsNothing);
+          failing.failClear = false;
+          await tester.tap(find.text('Reintentar'));
+          await tester.pumpAndSettle();
+        }
+        expect(find.byType(LoginScreen), findsOneWidget);
+        expect(await failing.readToken(), isNull);
+      },
+    );
+  }
+
   testWidgets('Ignora una URI local de fotografía recibida desde la API', (
     tester,
   ) async {

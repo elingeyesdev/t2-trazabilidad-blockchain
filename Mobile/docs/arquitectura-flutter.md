@@ -136,16 +136,47 @@ actualiza al usuario.
 
 La fotografía se representa desde `avatar_url`, sin usar el Bearer para su
 descarga. El componente admite HTTP/HTTPS e imágenes raster embebidas y
-presenta un icono si la URI o la imagen no son utilizables. No introduce
-dependencias ni conserva copias del perfil en el almacenamiento de sesión.
+presenta un icono si la URI o la imagen no son utilizables. No conserva copias
+del perfil en el almacenamiento de sesión.
+
+## Actualizar el perfil
+
+`ProfileEditForm` usa las capacidades de `AuthUser` para ofrecer el cambio de
+nombre y fotografía. `AuthController.updateProfile` bloquea operaciones
+simultáneas, comprueba las capacidades disponibles y comunica el resultado.
+`AuthService.updateProfile` envía únicamente nombre y/o foto, vincula la
+petición al token utilizado y rechaza una respuesta de otra cuenta o sesión.
+La respuesta completa sustituye el usuario compartido y sus capacidades.
+
+`ProfilePhoto` conserva una copia de los bytes seleccionados, con límite de
+2 MB, extensión permitida y nombre normalizado para el envío. El cliente no
+envía rutas locales. Estas comprobaciones no sustituyen la validación de
+imagen y autorización de Laravel.
+
+El selector oficial `file_selector` entrega un `XFile`; el formulario usa
+`length` y `readAsBytes` sin importar `dart:io`. La operación de selección
+evita que la reanudación desde el diálogo del sistema descarte el formulario.
+Después vuelve a consultar el perfil y conserva el borrador mientras verifica.
+
+Los errores de validación conservan los datos introducidos. Un `403` de
+escritura provoca una consulta de perfil, conservando el mensaje si la cuenta
+sigue autorizada. Un resultado de escritura incierto marca el controlador
+como pendiente de consulta y bloquea otras escrituras hasta verificarlo;
+cerrar el formulario no elimina esa condición. Los `401` durante el guardado
+reutilizan la invalidación global, incluido el bloqueo si falla la limpieza.
 
 ## Reutilizar el cliente HTTP
 
 `ApiClient.request` recibe el método, la ruta relativa, los parámetros de
-consulta y un cuerpo JSON opcional. Usa el paquete
+consulta y un cuerpo JSON opcional, o `fields` y `files` para multipart. No
+combina un cuerpo JSON con un formulario multipart. Usa el paquete
 [`http`](https://pub.dev/packages/http) con una conexión compartida y timeout
 de 30 segundos. No sigue redirecciones ni reintenta automáticamente peticiones
 que podrían modificar datos.
+
+El multipart utiliza `AbortableMultipartRequest`; comparte el destino validado,
+Bearer, timeout, cancelación, interpretación de errores y expiración de sesión
+del JSON. El paquete genera el delimitador y `Content-Type` del formulario.
 
 Las rutas se escriben sin `/` inicial y los parámetros se pasan mediante
 `queryParameters`. `ApiConfig` rechaza URLs de destino externas y rutas que

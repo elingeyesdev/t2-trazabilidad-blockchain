@@ -5,10 +5,20 @@ import 'package:flutter/foundation.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
 import '../models/logout_result.dart';
+import '../models/profile_photo.dart';
 import '../models/registration_result.dart';
 import '../services/auth_service.dart';
 
-enum _AuthOperation { idle, restoring, profile, login, register, logout }
+enum _AuthOperation {
+  idle,
+  restoring,
+  profile,
+  pickingPhoto,
+  savingProfile,
+  login,
+  register,
+  logout,
+}
 
 class AuthController extends ChangeNotifier {
   static const _expiredError = ApiException(
@@ -28,6 +38,7 @@ class AuthController extends ChangeNotifier {
   _AuthOperation _operation = _AuthOperation.idle;
   LogoutResult? _logoutResult;
   bool _isDisposed = false;
+  bool _profileUpdateNeedsRefresh = false;
 
   AuthUser? get user => _user;
   ApiException? get error => _error;
@@ -35,14 +46,23 @@ class AuthController extends ChangeNotifier {
   bool get isLoggingOut => _operation == _AuthOperation.logout;
   bool get isCheckingSession => _operation == _AuthOperation.restoring;
   bool get isLoadingProfile => _operation == _AuthOperation.profile;
+  bool get isSavingProfile => _operation == _AuthOperation.savingProfile;
+  bool get profileUpdateNeedsRefresh => _profileUpdateNeedsRefresh;
   ApiException? get sessionError => _sessionError;
   LogoutResult? get logoutResult => _logoutResult;
   bool get requiresLogoutRetry => _logoutResult?.localCleared == false;
 
   void _sessionExpired(bool localCleared) {
-    if (_isDisposed || _user == null || isSubmitting) return;
+    if (_isDisposed ||
+        _user == null ||
+        (isSubmitting &&
+            !isSavingProfile &&
+            _operation != _AuthOperation.pickingPhoto)) {
+      return;
+    }
     _user = null;
     _sessionError = null;
+    _profileUpdateNeedsRefresh = false;
     if (localCleared) {
       _logoutResult = null;
       _error = _expiredError;
@@ -58,18 +78,97 @@ class AuthController extends ChangeNotifier {
 
   Future<void> restoreSession() => _verifySession();
 
-  Future<void> refreshProfile() async {
-    final user = _user;
-    if (user != null) await _verifySession(expectedId: user.id);
+  Future<ProfilePhoto?> selectProfilePhoto(
+    Future<ProfilePhoto?> Function() select,
+  ) async {
+    if (isSubmitting || _isDisposed || _user?.canUpdatePhoto != true) {
+      return null;
+    }
+    _operation = _AuthOperation.pickingPhoto;
+    _error = null;
+    notifyListeners();
+    ProfilePhoto? photo;
+    try {
+      photo = await select();
+    } on ApiException catch (error) {
+      if (!_isDisposed) _error = error;
+    } catch (_) {
+      if (!_isDisposed) {
+        _error = const ApiException(
+          'No se pudo abrir o leer la fotografía. Intenta de nuevo.',
+        );
+      }
+    } finally {
+      _operation = _AuthOperation.idle;
+      if (!_isDisposed) notifyListeners();
+    }
+    if (!_isDisposed && _user != null) await refreshProfile(keepError: true);
+    return !_isDisposed && _user?.canUpdatePhoto == true ? photo : null;
   }
 
-  Future<void> _verifySession({int? expectedId}) async {
+  Future<bool> updateProfile({String? username, ProfilePhoto? photo}) async {
+    final current = _user;
+    if (isSubmitting ||
+        _isDisposed ||
+        current == null ||
+        requiresLogoutRetry ||
+        _sessionError != null ||
+        _profileUpdateNeedsRefresh) {
+      return false;
+    }
+    if ((username != null && !current.canUpdateUsername) ||
+        (photo != null && !current.canUpdatePhoto)) {
+      _error = const ApiException(
+        'No tienes permiso para realizar este cambio de perfil.',
+        statusCode: 403,
+      );
+      notifyListeners();
+      return false;
+    }
+    _operation = _AuthOperation.savingProfile;
+    _error = null;
+    notifyListeners();
+    try {
+      final user = await _service.updateProfile(
+        userId: current.id,
+        username: username,
+        photo: photo,
+      );
+      if (_isDisposed) return false;
+      _user = user;
+      _profileUpdateNeedsRefresh = false;
+      return true;
+    } on ApiException catch (error) {
+      if (_isDisposed) return false;
+      if (error.statusCode == 401) {
+        _user = null;
+        _error = _expiredError;
+      } else {
+        _error = error;
+        _profileUpdateNeedsRefresh =
+            error.statusCode == null || error.statusCode! >= 500;
+      }
+      return false;
+    } finally {
+      _operation = _AuthOperation.idle;
+      if (!_isDisposed) notifyListeners();
+    }
+  }
+
+  Future<void> refreshProfile({bool keepError = false}) async {
+    final user = _user;
+    if (user != null) {
+      await _verifySession(expectedId: user.id, keepError: keepError);
+    }
+  }
+
+  Future<void> _verifySession({int? expectedId, bool keepError = false}) async {
     if (isSubmitting || _isDisposed || requiresLogoutRetry) return;
     _operation = expectedId == null
         ? _AuthOperation.restoring
         : _AuthOperation.profile;
     if (expectedId == null) _user = null;
-    _error = null;
+    if (!keepError) _error = null;
     _sessionError = null;
     _logoutResult = null;
     notifyListeners();
@@ -83,6 +182,7 @@ class AuthController extends ChangeNotifier {
         }
       }
       _user = user;
+      _profileUpdateNeedsRefresh = false;
     } on ApiException catch (error) {
       if (_isDisposed) return;
       _user = null;
@@ -103,6 +203,7 @@ class AuthController extends ChangeNotifier {
     if (isSubmitting || _isDisposed) return;
     _operation = _AuthOperation.logout;
     _user = null;
+    _profileUpdateNeedsRefresh = false;
     _error = null;
     _sessionError = null;
     _logoutResult = null;
@@ -167,6 +268,7 @@ class AuthController extends ChangeNotifier {
 
     try {
       _user = await _service.login(email, password);
+      _profileUpdateNeedsRefresh = false;
       return true;
     } on ApiException catch (error) {
       _error = error;

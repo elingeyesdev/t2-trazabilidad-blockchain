@@ -31,20 +31,42 @@ class ApiClient {
     String path, {
     Map<String, String>? queryParameters,
     Map<String, Object?>? body,
+    Map<String, String>? fields,
+    List<http.MultipartFile>? files,
     bool authenticated = true,
     String? bearerToken,
   }) async {
     final uri = config.endpoint(path, queryParameters: queryParameters);
     final abort = Completer<void>();
-    final request =
-        http.AbortableRequest(method, uri, abortTrigger: abort.future)
-          ..followRedirects = false
-          ..headers['Accept'] = 'application/json';
-
-    if (body != null) {
-      request.headers['Content-Type'] = 'application/json; charset=utf-8';
-      request.body = jsonEncode(body);
+    final http.BaseRequest request;
+    if (fields != null || files != null) {
+      if (body != null) {
+        throw const ApiException(
+          'No se puede combinar JSON con un formulario multipart.',
+        );
+      }
+      request =
+          http.AbortableMultipartRequest(
+              method,
+              uri,
+              abortTrigger: abort.future,
+            )
+            ..fields.addAll(fields ?? {})
+            ..files.addAll(files ?? []);
+    } else {
+      final jsonRequest = http.AbortableRequest(
+        method,
+        uri,
+        abortTrigger: abort.future,
+      );
+      if (body != null) {
+        jsonRequest.headers['Content-Type'] = 'application/json; charset=utf-8';
+        jsonRequest.body = jsonEncode(body);
+      }
+      request = jsonRequest;
     }
+    request.followRedirects = false;
+    request.headers['Accept'] = 'application/json';
 
     try {
       final token = authenticated

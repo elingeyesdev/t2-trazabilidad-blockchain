@@ -303,6 +303,45 @@ void main() {
   });
 
   test(
+    'El multipart conserva el timeout sin repetir automáticamente la escritura',
+    () async {
+      await session.saveToken('1|token-perfil');
+      var calls = 0;
+      final pending = Completer<http.Response>();
+      final api = createApi(
+        MockClient((_) {
+          calls++;
+          return pending.future;
+        }),
+        timeout: const Duration(milliseconds: 10),
+      );
+      await expectLater(
+        api.request(
+          'POST',
+          'me',
+          fields: {'_method': 'PATCH'},
+          files: [
+            http.MultipartFile.fromBytes('imagen', [
+              1,
+              2,
+            ], filename: 'foto.png'),
+          ],
+        ),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'mensaje',
+            contains('tardó demasiado'),
+          ),
+        ),
+      );
+      pending.complete(http.Response('{}', 200));
+      expect(calls, 1);
+      expect(await session.readToken(), '1|token-perfil');
+    },
+  );
+
+  test(
     'Una respuesta exitosa con JSON inválido produce un error controlado',
     () async {
       final api = createApi(

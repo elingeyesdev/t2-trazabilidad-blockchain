@@ -5,8 +5,8 @@ equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
 cliente HTTP compartido, almacenamiento seguro del token, comprobación de
 conexión, inicio de sesión, registro pendiente de aprobación, cierre y
 restauración de sesión con Laravel y consulta del perfil autenticado.
-La edición del perfil y la navegación por permisos forman parte de los
-otros bloques de la issue #5.
+Incluye edición del nombre de usuario y fotografía. La navegación por permisos
+forma parte de los otros bloques de la issue #5.
 
 ## Iniciar sesión
 
@@ -92,7 +92,43 @@ La ruta `/profile` requiere una sesión verificada. Si `me` rechaza el token
 o la cuenta, vuelve al login y limpia sus credenciales. Si no puede verificar
 la sesión por un error de conexión, servidor, formato o almacenamiento,
 presenta la recuperación de sesión con reintento antes de mostrar datos.
-La pantalla de este bloque es de consulta.
+
+## Editar el nombre de usuario y la fotografía
+
+Desde **Mi perfil**, selecciona **Editar perfil**. Las capacidades devueltas
+por Laravel determinan qué campos puedes cambiar. El nombre de usuario
+admite un solo cambio; después, el formulario mantiene disponible la
+fotografía si el servidor lo permite. Nombre personal, apellido, correo,
+roles y permisos se consultan sin enviarlos en esta actualización.
+
+Usa **Seleccionar foto** para abrir el selector de archivos del sistema.
+El formulario admite JPG/JPEG, PNG, WEBP y GIF de hasta 2 MB. Las
+comprobaciones locales orientan la selección; Laravel valida el contenido,
+la unicidad del nombre y la autorización en cada petición.
+
+La selección funciona con el plugin oficial
+[`file_selector`](https://pub.dev/packages/file_selector), usando bytes
+compatibles con web. Cancelar el selector conserva el borrador.
+**Quitar selección** retira solo la foto elegida del formulario; no elimina
+la fotografía guardada en Laravel. Al regresar del selector, la aplicación
+vuelve a verificar el perfil sin descartar el nombre que estás escribiendo.
+
+**Guardar cambios** envía solo los campos modificados. Para cambiar el nombre
+utiliza `PATCH /api/me` con JSON; si hay una fotografía, envía `POST /api/me`
+multipart con `_method=PATCH` y el archivo `imagen`. La confirmación sustituye
+el perfil y las capacidades en memoria y presenta **Perfil actualizado
+correctamente.** Se bloquean los envíos duplicados y la salida durante el
+guardado o la selección.
+
+Los errores `422` aparecen junto al campo y conservan el borrador. Ante un
+`403`, la aplicación consulta otra vez el perfil para actualizar las
+capacidades y comprobar la autorización de la cuenta. Un `401` retira la
+sesión mediante el cliente compartido.
+
+Si falla la comunicación durante una escritura, el resultado puede ser
+incierto. El formulario ofrece **Consultar perfil** y bloquea otro guardado
+hasta completar esa consulta, incluso si cierras y vuelves a abrir la edición.
+La aplicación no repite automáticamente una actualización.
 
 ## Cerrar sesión
 
@@ -134,6 +170,17 @@ Descarga las dependencias declaradas en `pubspec.yaml`:
 ```powershell
 flutter pub get
 ```
+
+Si actualizas una instalación anterior a la incorporación del selector de
+fotografías, detén la aplicación y regenera los archivos derivados desde
+`Mobile/` antes de volver a ejecutar o compilar:
+
+```powershell
+flutter clean
+flutter pub get
+```
+
+Esto evita reutilizar un registro de plugins generado sin `file_selector`.
 
 Incluye `pubspec.lock` en los commits para que el equipo utilice las mismas
 versiones de dependencias. Los archivos generados, las cachés y la

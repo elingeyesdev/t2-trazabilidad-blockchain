@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/auth_controller.dart';
 import '../../models/auth_user.dart';
 import '../../widgets/app_loading.dart';
+import 'profile_edit_form.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, required this.controller});
@@ -17,6 +18,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _loaded = false;
+  bool _editing = false;
 
   @override
   void initState() {
@@ -35,23 +37,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final auth = widget.controller;
     final user = auth.user;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mi perfil'),
-        actions: [
-          IconButton(
-            tooltip: 'Actualizar perfil',
-            onPressed: auth.isSubmitting ? null : _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: !_loaded || auth.isLoadingProfile
-            ? const AppLoading(message: 'Cargando perfil...')
-            : user == null
-            ? const SizedBox.shrink()
-            : _profile(context, user),
+    return PopScope(
+      canPop: !_editing,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _editing && !auth.isSubmitting) {
+          setState(() => _editing = false);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Mi perfil'),
+          actions: [
+            IconButton(
+              tooltip: 'Actualizar perfil',
+              onPressed: auth.isSubmitting || _editing ? null : _refresh,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: _editing
+              ? ProfileEditForm(
+                  controller: auth,
+                  onCancel: () => setState(() => _editing = false),
+                  onSaved: () {
+                    setState(() => _editing = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Perfil actualizado correctamente.'),
+                      ),
+                    );
+                  },
+                  onReload: () {
+                    setState(() => _editing = false);
+                    unawaited(_refresh());
+                  },
+                )
+              : !_loaded || auth.isLoadingProfile
+              ? const AppLoading(message: 'Cargando perfil...')
+              : user == null
+              ? const SizedBox.shrink()
+              : _profile(context, user),
+        ),
       ),
     );
   }
@@ -124,6 +151,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
+                if (user.canUpdateUsername || user.canUpdatePhoto) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      widget.controller.clearError();
+                      setState(() => _editing = true);
+                    },
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Editar perfil'),
+                  ),
+                ],
               ],
             ),
           ),
