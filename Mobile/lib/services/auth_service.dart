@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
+import '../models/registration_result.dart';
 import 'api_client.dart';
 import 'session_storage.dart';
 
@@ -10,6 +11,30 @@ class AuthService {
 
   final ApiClient _api;
   final SessionStorage _storage;
+
+  Future<RegistrationResult> register({
+    required String name,
+    required String lastName,
+    required String email,
+    required String username,
+    required String password,
+    String phone = '',
+  }) async {
+    final response = await _api.request(
+      'POST',
+      'register',
+      authenticated: false,
+      body: {
+        'nombre': name.trim(),
+        'apellido': lastName.trim(),
+        'email': email.trim(),
+        'nombreusuario': username.trim(),
+        'password': password,
+        if (phone.trim().isNotEmpty) 'telefono': phone.trim(),
+      },
+    );
+    return RegistrationResult.fromJson(response);
+  }
 
   Future<AuthUser> login(String email, String password) async {
     final response = await _api.request(

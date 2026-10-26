@@ -3,8 +3,9 @@
 Este proyecto prepara la aplicación móvil de trazabilidad agrícola para el
 equipo que migra AgroFusion desde React Native. Incluye navegación inicial,
 cliente HTTP compartido, almacenamiento seguro del token, comprobación de
-conexión e inicio de sesión con Laravel. El registro, el cierre de sesión y
-la restauración se incorporan en los siguientes bloques de la issue #4;
+conexión, inicio de sesión y registro pendiente de aprobación con Laravel.
+El cierre de sesión y la restauración se incorporan en los siguientes bloques
+de la issue #4;
 el perfil y la navegación por permisos corresponden a la issue #5.
 
 ## Iniciar sesión
@@ -24,6 +25,26 @@ La restauración al volver a abrirla se incorpora en el bloque de estados de
 autenticación. Consulta el
 [análisis de autenticación](docs/analisis-autenticacion-flutter.md) para revisar
 el contrato y la división de actividades.
+
+## Solicitar una cuenta
+
+Desde el login, selecciona **Crear cuenta**. Completa nombre, apellido, correo,
+nombre de usuario, contraseña y confirmación. El teléfono es opcional.
+La API asigna el rol `agricultor`; el formulario utiliza ese contrato y no
+ofrece un selector de roles que el servidor ignore.
+
+Flutter envía `POST /api/register` sin Bearer y presenta los errores de Laravel
+junto a los campos. La comprobación local de campos obligatorios y coincidencia
+de contraseñas orienta la entrada; Laravel aplica sus reglas de validación.
+
+Una respuesta válida contiene una cuenta `pendiente` y ningún token. La
+pantalla muestra **Solicitud enviada** y el mensaje del servidor. El registro
+no autentica al usuario ni guarda credenciales de sesión. Al volver al login,
+conserva el correo de la solicitud y limpia la contraseña.
+
+Un administrador debe aprobar la cuenta antes de que pueda iniciar sesión.
+Si intentas acceder mientras está pendiente, el login muestra el mensaje
+de Laravel y mantiene bloqueado el inicio autenticado.
 
 ## Preparar el entorno
 
@@ -177,10 +198,10 @@ Los archivos de este bloque se distribuyen así:
 - `lib/app.dart`: creación del cliente compartido, tema y registro de rutas.
 - `lib/config/`: URL base y timeout.
 - `lib/models/`: usuario autenticado, conectividad y errores de la API.
-- `lib/controllers/`: estado observable del inicio de sesión.
+- `lib/controllers/`: estado observable de login y registro.
 - `lib/services/`: HTTP, autenticación, conectividad y almacenamiento del token.
 - `lib/navigation/`: nombres de rutas.
-- `lib/screens/auth/`: formulario de inicio de sesión.
+- `lib/screens/auth/`: login, registro y confirmación de aprobación pendiente.
 - `lib/screens/home/home_screen.dart`: inicio para el usuario autenticado.
 - `lib/screens/connection/`: estados de la comprobación de conexión.
 - `lib/widgets/`: componentes compartidos de carga y error con reintento.

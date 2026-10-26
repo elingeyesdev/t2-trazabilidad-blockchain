@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../controllers/auth_controller.dart';
+import '../../models/registration_result.dart';
 import '../../navigation/app_routes.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -18,6 +19,17 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _obscurePassword = true;
+
+  Future<void> _openRegistration() async {
+    widget.controller.clearError();
+    final result = await Navigator.of(context).pushNamed(AppRoutes.register);
+    if (!mounted) return;
+    widget.controller.clearError();
+    if (result is RegistrationResult) {
+      _email.text = result.email;
+      _password.clear();
+    }
+  }
 
   @override
   void dispose() {
@@ -191,6 +203,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: busy ? null : _openRegistration,
+                            child: const Text('Crear cuenta'),
+                          ),
                           TextButton.icon(
                             onPressed: busy
                                 ? null

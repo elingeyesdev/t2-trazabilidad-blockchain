@@ -2,8 +2,8 @@
 
 Este documento explica al equipo de desarrollo cómo incorporar funcionalidades
 a `Mobile/` usando la base de la issue #3. El flujo de referencia es la
-comprobación pública de conexión con Laravel. Incluye el login del segundo
-bloque de la issue #4; la navegación por permisos corresponde a la issue #5.
+comprobación pública de conexión con Laravel. Incluye login y registro de
+la issue #4; la navegación por permisos corresponde a la issue #5.
 
 ## Seguir el flujo de una petición
 
@@ -51,6 +51,31 @@ validación de Laravel y bloquea envíos duplicados. El acceso a la comprobació
 pública de conexión se conserva desde login e inicio.
 La restauración al arrancar y el cierre de sesión corresponden a los siguientes
 bloques de la issue #4.
+
+El registro usa la ruta `/register` y el mismo `AuthController` y `ApiClient`:
+
+```text
+LoginScreen -> RegisterScreen -> AuthController.register
+                                         |
+                                 AuthService.register
+                                         |
+                                 POST /api/register
+                                         |
+                                RegistrationResult
+                                         |
+                          Confirmación de cuenta pendiente
+```
+
+`RegistrationResult` representa el mensaje y correo de una solicitud pendiente;
+es distinto de `AuthUser`. El servicio rechaza una respuesta que incluya un
+token o no confirme el estado pendiente y no escribe en `SessionStorage`.
+El controlador tampoco establece un usuario autenticado al registrar.
+
+El formulario envía únicamente los campos de la API. Comprueba que estén
+completos y que coincidan las contraseñas; los errores de validación de Laravel
+se muestran por campo. Mientras envía, bloquea envíos duplicados y la salida
+de esa ruta. Una confirmación válida limpia las contraseñas del formulario;
+al volver al login, pasa el correo mediante el resultado de navegación.
 
 `ConnectionScreen` mantiene la petición en un `FutureBuilder`. La carga usa
 `AppLoading`; un error usa `AppErrorState` y su acción de reintento. El servicio

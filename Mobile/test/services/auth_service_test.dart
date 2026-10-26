@@ -51,6 +51,131 @@ void main() {
 
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
+  const pending = {
+    'message': 'Solicitud registrada. La cuenta queda pendiente de aprobación.',
+    'user': {'email': 'ana@example.test', 'estado_cuenta': 'pendiente'},
+  };
+
+  Future<Object?> register(AuthService service, {String phone = ''}) =>
+      service.register(
+        name: ' Ana ',
+        lastName: ' Mamani ',
+        email: ' ana@example.test ',
+        username: ' ana.mamani ',
+        password: ' clave sin recortar ',
+        phone: phone,
+      );
+
+  test(
+    'El registro envía los campos de Laravel sin Bearer ni cambio de sesión',
+    () async {
+      await storage.saveToken('9|sesion-anterior');
+      final service = serviceWith((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/register');
+        expect(request.headers['Authorization'], isNull);
+        expect(jsonDecode(request.body), {
+          'nombre': 'Ana',
+          'apellido': 'Mamani',
+          'email': 'ana@example.test',
+          'nombreusuario': 'ana.mamani',
+          'password': ' clave sin recortar ',
+          'telefono': '70000000',
+        });
+        return jsonResponse(pending, 201);
+      });
+      final result = await register(service, phone: ' 70000000 ');
+      expect(result, isNotNull);
+      expect(await storage.readToken(), '9|sesion-anterior');
+      expect(await const FlutterSecureStorage().readAll(), {
+        'agrofusion.auth_token': '9|sesion-anterior',
+      });
+    },
+  );
+
+  test('El registro pendiente sin teléfono no guarda credenciales', () async {
+    final service = serviceWith((request) async {
+      expect(
+        (jsonDecode(request.body) as Map).containsKey('telefono'),
+        isFalse,
+      );
+      return jsonResponse(pending, 201);
+    });
+    final result = await service.register(
+      name: 'Ana',
+      lastName: 'Mamani',
+      email: 'ana@example.test',
+      username: 'ana',
+      password: 'secreto',
+    );
+    expect(result.email, 'ana@example.test');
+    expect(result.message, pending['message']);
+    expect(await storage.readToken(), isNull);
+  });
+
+  test(
+    'Rechaza confirmaciones que no representan una solicitud pendiente sin token',
+    () async {
+      for (final response in [
+        null,
+        {},
+        {'message': 'Solicitud registrada', 'user': profile},
+        {...pending, 'token': '1|token-no-esperado'},
+        {...pending, 'message': ''},
+        {
+          ...pending,
+          'user': {'email': '', 'estado_cuenta': 'pendiente'},
+        },
+      ]) {
+        final service = serviceWith((_) async => jsonResponse(response, 201));
+        await expectLater(register(service), throwsA(isA<ApiException>()));
+        expect(await storage.readToken(), isNull);
+      }
+    },
+  );
+
+  test(
+    'Conserva los errores de registro por campo sin alterar una sesión previa',
+    () async {
+      await storage.saveToken('9|sesion-anterior');
+      final service = serviceWith(
+        (_) async => jsonResponse({
+          'message': 'Revisa los datos enviados.',
+          'errors': {
+            'nombreusuario': ['Ese nombre de usuario ya está en uso.'],
+          },
+        }, 422),
+      );
+      await expectLater(
+        register(service),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.validationErrors['nombreusuario'],
+            'nombreusuario',
+            ['Ese nombre de usuario ya está en uso.'],
+          ),
+        ),
+      );
+      expect(await storage.readToken(), '9|sesion-anterior');
+    },
+  );
+
+  test('Un registro rechazado o sin conexión no crea una sesión', () async {
+    for (final status in [401, 403, 503]) {
+      final service = serviceWith(
+        (_) async =>
+            jsonResponse({'message': 'Registro no disponible'}, status),
+      );
+      await expectLater(register(service), throwsA(isA<ApiException>()));
+      expect(await storage.readToken(), isNull);
+    }
+    final offline = serviceWith(
+      (_) async => throw http.ClientException('offline'),
+    );
+    await expectLater(register(offline), throwsA(isA<ApiException>()));
+    expect(await storage.readToken(), isNull);
+  });
+
   test(
     'Login público conserva la contraseña y confirma el perfil con Bearer',
     () async {

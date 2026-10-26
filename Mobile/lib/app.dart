@@ -4,6 +4,7 @@ import 'config/api_config.dart';
 import 'controllers/auth_controller.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/register_screen.dart';
 import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/api_client.dart';
@@ -66,6 +67,7 @@ class _AgroFusionAppState extends State<AgroFusionApp> {
         ),
         AppRoutes.connection: (_) =>
             ConnectionScreen(healthService: ApiHealthService(_api)),
+        AppRoutes.register: (_) => RegisterScreen(controller: _auth),
       },
     );
   }
