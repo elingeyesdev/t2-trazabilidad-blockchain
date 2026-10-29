@@ -10,6 +10,7 @@ import 'package:agrofusion_mobile/screens/auth/login_screen.dart';
 import 'package:agrofusion_mobile/screens/home/home_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
+import 'package:agrofusion_mobile/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -81,6 +82,8 @@ void main() {
           ),
         ),
       );
+      await tester.tap(find.text('Trabajo'));
+      await tester.pumpAndSettle();
       for (final module in AppModule.values) {
         expect(
           find.text(module.label),
@@ -93,6 +96,188 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('Trabajo prioriza campo y oculta los grupos sin acceso', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          user: const AuthUser(
+            id: 1,
+            name: 'Ana',
+            email: 'ana@example.test',
+            permissions: {'lotes.view', 'inventario.view'},
+          ),
+          onLogout: () {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Trabajo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Trabajo de campo'), findsOneWidget);
+    expect(find.text('Almacenes e insumos'), findsOneWidget);
+    expect(find.text('Pedidos y entregas'), findsNothing);
+    expect(find.text('Calidad y administración'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('Actividades')).dy,
+      lessThan(tester.getTopLeft(find.text('Lotes')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Cosechas')).dy,
+      lessThan(tester.getTopLeft(find.text('Almacenes')).dy),
+    );
+    expect(
+      find.text('Revisa las tareas de campo y sus fechas.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('El inicio permite desplazarse con texto grande en un teléfono', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: HomeScreen(
+          user: AuthUser(
+            id: 1,
+            name: 'Ana',
+            email: 'ana@example.test',
+            permissions: {
+              for (final module in AppModule.values) module.permission,
+            },
+          ),
+          onLogout: () {},
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Trabajo'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Usuarios'));
+    await tester.pumpAndSettle();
+    expect(find.text('Consulta las cuentas de los usuarios.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.text('Mi perfil'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    tester.view.physicalSize = const Size(812, 375);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Usuarios'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('El botón atrás de Android vuelve de Trabajo a Inicio', (
+    tester,
+  ) async {
+    await start(
+      tester,
+      (_) async => json({
+        ...profile,
+        'permissions': ['lotes.view'],
+      }),
+    );
+    await tester.tap(find.text('Trabajo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tus accesos'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Ver actividades'), findsOneWidget);
+    expect(find.text('Tus accesos'), findsNothing);
+  });
+
+  testWidgets('Abre lotes y actividades y conserva Trabajo al regresar', (
+    tester,
+  ) async {
+    final records = {
+      '/api/lotes': [
+        {
+          'loteid': 7,
+          'nombre': 'Parcela Los Pinos',
+          'ubicacion': 'Sector norte',
+          'superficie': 2.5,
+        },
+      ],
+      '/api/actividades': [
+        {
+          'actividadid': 8,
+          'descripcion': 'Riego de Los Pinos',
+          'fecha_planificada': '2026-10-29',
+        },
+      ],
+    };
+    await start(
+      tester,
+      (request) async => request.url.path == '/api/me'
+          ? json({
+              ...profile,
+              'permissions': ['lotes.view'],
+            })
+          : json(records[request.url.path]),
+    );
+    await tester.tap(find.text('Trabajo'));
+    await tester.pumpAndSettle();
+    for (final item in {
+      'Lotes': 'Parcela Los Pinos',
+      'Actividades': 'Riego de Los Pinos',
+    }.entries) {
+      await tester.ensureVisible(find.text(item.key));
+      await tester.tap(find.text(item.key));
+      await tester.pumpAndSettle();
+      expect(find.text(item.value), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Tus accesos'), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Actividades muestra carga, vacío y actualización con datos', (
+    tester,
+  ) async {
+    final pending = Completer<http.Response>();
+    var calls = 0;
+    await start(tester, (request) async {
+      if (request.url.path == '/api/me') {
+        return json({
+          ...profile,
+          'permissions': ['lotes.view'],
+        });
+      }
+      if (++calls == 1) return pending.future;
+      return json([
+        {'actividadid': 9, 'descripcion': 'Preparar el terreno'},
+      ]);
+    });
+    await tester.tap(find.text('Ver actividades'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Cargando actividades...'), findsOneWidget);
+    pending.complete(json([]));
+    await tester.pumpAndSettle();
+    expect(find.text('Todavía no hay actividades'), findsOneWidget);
+    await tester.tap(find.text('Actualizar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Preparar el terreno'), findsOneWidget);
+    expect(calls, 2);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'El acceso directo sin permiso se bloquea antes de consultar el módulo',
@@ -134,6 +319,8 @@ void main() {
                 },
               ]),
       );
+      await tester.tap(find.text('Trabajo'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Pedidos'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Pedidos'));
@@ -141,7 +328,7 @@ void main() {
       expect(find.text('SOL-009'), findsOneWidget);
       expect(find.text('Planta: Planta Sur'), findsOneWidget);
       expect(find.text('Estado: pendiente'), findsOneWidget);
-      expect(find.text('Consulta de registros'), findsOneWidget);
+      expect(find.text('Revisa los pedidos y su estado.'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(find.text('Hola, Ana'), findsOneWidget);
@@ -158,7 +345,7 @@ void main() {
         return json([]);
       });
       await push(tester, AppModule.pedidos.route);
-      expect(find.text('No hay registros disponibles.'), findsOneWidget);
+      expect(find.text('Todavía no hay pedidos'), findsOneWidget);
       await tester.tap(find.byTooltip('Actualizar lista'));
       await tester.pumpAndSettle();
       expect(calls, 2);

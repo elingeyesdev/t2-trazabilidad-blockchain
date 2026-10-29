@@ -145,5 +145,21 @@ enum AppModule {
 
   String get route => '/modules/$endpoint';
 
+  String get description => switch (this) {
+    AppModule.lotes => 'Consulta tus lotes y su ubicación.',
+    AppModule.actividades => 'Revisa las tareas de campo y sus fechas.',
+    AppModule.producciones => 'Consulta las cantidades y fechas de cosecha.',
+    AppModule.almacenes => 'Encuentra los almacenes y su información.',
+    AppModule.insumos => 'Consulta semillas, materiales y existencias.',
+    AppModule.movimientos => 'Revisa las entradas y salidas del almacén.',
+    AppModule.certificaciones => 'Consulta los certificados de los lotes.',
+    AppModule.pedidos => 'Revisa los pedidos y su estado.',
+    AppModule.incidentes => 'Consulta los problemas reportados en entregas.',
+    AppModule.rutas => 'Consulta los recorridos y sus fechas.',
+    AppModule.asignaciones => 'Revisa los envíos y transportes asignados.',
+    AppModule.documentos => 'Encuentra los documentos de las entregas.',
+    AppModule.usuarios => 'Consulta las cuentas de los usuarios.',
+  };
+
   bool canOpen(AuthUser user) => user.permissions.contains(permission);
 }
