@@ -79,7 +79,11 @@ void main() {
                 if (module.titleField != null)
                   module.titleField!: 'Registro real',
                 for (final field in module.fields.keys)
-                  field: 'Dato de Laravel',
+                  field: switch (field) {
+                    'superficie' => 2.5,
+                    'fecha_planificada' || 'fechainicio' => '2026-10-29',
+                    _ => 'Dato de Laravel',
+                  },
                 'passwordhash': 'nunca mostrar',
                 'metadata': {'privado': true},
               },
