@@ -259,7 +259,9 @@ class LotesActividadesModuloSeeder extends Seeder
 
     private function resolverEstadoLoteTipoId(string $nombre): ?int
     {
-        $slug = mb_strtolower(trim($nombre));
+        $slug = mb_strtolower(\App\Support\EstadoLoteCatalogo::label(
+            \App\Support\EstadoLoteCatalogo::mapLegacyNombre($nombre)
+        ));
 
         $id = EstadoLoteTipo::whereRaw('LOWER(TRIM(nombre)) = ?', [$slug])->value('estadolotetipoid');
 
