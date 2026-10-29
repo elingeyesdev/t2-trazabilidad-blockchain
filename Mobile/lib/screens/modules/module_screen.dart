@@ -62,6 +62,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
     });
   }
 
+  void _openRecord(ModuleRecord record) {
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pushNamed('${widget.module.route}/${record.id}');
+  }
+
   String _normalize(String value) {
     var result = value.trim().toLowerCase();
     const accents = {
@@ -290,30 +295,57 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   Widget _recordCard(ModuleRecord record) => Container(
     margin: const EdgeInsets.only(bottom: 12),
-    decoration: BoxDecoration(
+    child: Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppTheme.line),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(record.title, style: Theme.of(context).textTheme.titleLarge),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: AppTheme.line),
-          ),
-          for (final field in record.details.entries)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                '${field.key}: ${field.value}',
-                style: Theme.of(context).textTheme.bodyLarge,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: AppTheme.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _supportsSearch ? () => _openRecord(record) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(record.title, style: Theme.of(context).textTheme.titleLarge),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Divider(height: 1, color: AppTheme.line),
               ),
-            ),
-        ],
+              for (final field in record.details.entries)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '${field.key}: ${field.value}',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+              if (_supportsSearch) ...[
+                const SizedBox(height: 12),
+                const Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Ver detalle',
+                        style: TextStyle(
+                          color: AppTheme.forest,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      color: AppTheme.forest,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     ),
   );
