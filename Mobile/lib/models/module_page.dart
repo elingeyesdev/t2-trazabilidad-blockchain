@@ -1,4 +1,5 @@
 import 'api_exception.dart';
+import 'field_record_info.dart';
 
 class ModulePage {
   const ModulePage(this.records, {this.currentPage = 1, this.lastPage = 1});
@@ -60,6 +61,7 @@ class ModuleRecord {
     required this.id,
     required this.title,
     required this.details,
+    this.fieldInfo,
   });
 
   factory ModuleRecord.fromJson(
@@ -92,6 +94,11 @@ class ModuleRecord {
         for (final field in fields.entries)
           field.value: text(field.key) ?? 'Sin registrar',
       }),
+      fieldInfo: switch (idField) {
+        'loteid' => FieldRecordInfo.lote(json),
+        'actividadid' => FieldRecordInfo.actividad(json),
+        _ => null,
+      },
     );
   }
 
@@ -102,4 +109,5 @@ class ModuleRecord {
   final int id;
   final String title;
   final Map<String, String> details;
+  final FieldRecordInfo? fieldInfo;
 }

@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
+import '../../widgets/record_status_badge.dart';
 import 'module_access_denied.dart';
 
 class ModuleDetailScreen extends StatefulWidget {
@@ -154,6 +155,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                       color: Colors.white.withValues(alpha: .82),
                     ),
                   ),
+                  if (record.fieldInfo?.status != null) ...[
+                    const SizedBox(height: 18),
+                    RecordStatusBadge(status: record.fieldInfo!.status!),
+                  ],
                 ],
               ),
             ),
@@ -173,9 +178,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final field in record.details.entries.where(
-                    (field) => field.key != 'Identificador',
-                  ))
+                  for (final field
+                      in (record.fieldInfo?.details ?? record.details).entries
+                          .where((field) => field.key != 'Identificador'))
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       child: Column(
@@ -187,7 +192,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            _displayValue(field),
+                            field.value,
                             style: Theme.of(context).textTheme.bodyLarge,
                           ),
                         ],
@@ -201,27 +206,4 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       ),
     ),
   );
-
-  String _displayValue(MapEntry<String, String> field) {
-    if (field.key == 'Superficie') {
-      final area = num.tryParse(field.value);
-      if (area != null && area.isFinite) {
-        return '${area.toStringAsFixed(2).replaceAll('.', ',')} ${area == 1 ? 'hectárea' : 'hectáreas'}';
-      }
-    }
-    const calendarDates = {'Fecha planificada', 'Fecha de siembra'};
-    const timestamps = {'Inicio', 'Finalización', 'Fecha de creación'};
-    if (calendarDates.contains(field.key) || timestamps.contains(field.key)) {
-      final parsed = DateTime.tryParse(field.value);
-      if (parsed != null) {
-        final date = timestamps.contains(field.key) ? parsed.toLocal() : parsed;
-        String two(int n) => n.toString().padLeft(2, '0');
-        final day = '${two(date.day)}/${two(date.month)}/${date.year}';
-        return timestamps.contains(field.key) && field.value.length > 10
-            ? '$day · ${two(date.hour)}:${two(date.minute)}'
-            : day;
-      }
-    }
-    return field.value;
-  }
 }

@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
+import '../../widgets/record_status_badge.dart';
 import 'module_access_denied.dart';
 
 class ModuleScreen extends StatefulWidget {
@@ -201,7 +202,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     ).split(RegExp(r'\s+')).where((term) => term.isNotEmpty).toList();
     final records = page.records.where((record) {
       final text = _normalize(
-        '${record.title} ${record.details.values.join(' ')}',
+        '${record.title} ${record.details.values.join(' ')} ${record.fieldInfo?.details.values.join(' ') ?? ''}',
       );
       return terms.every(text.contains);
     }).toList();
@@ -310,11 +311,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(record.title, style: Theme.of(context).textTheme.titleLarge),
+              if (record.fieldInfo?.status != null) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: RecordStatusBadge(status: record.fieldInfo!.status!),
+                ),
+              ],
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Divider(height: 1, color: AppTheme.line),
               ),
-              for (final field in record.details.entries)
+              if (record.fieldInfo != null && record.fieldInfo!.status == null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Estado: No disponible',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+              for (final field
+                  in (record.fieldInfo?.summary ?? record.details).entries)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
