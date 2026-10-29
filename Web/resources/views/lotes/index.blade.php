@@ -6,10 +6,7 @@
     use App\Support\EstadoLoteCatalogo;
     $filtrosActivos = collect($filtros ?? [])->filter(fn ($v) => $v !== null && $v !== '');
     $filtrosAbiertos = EstadoLoteCatalogo::filtrosPanelAbierto(request(), $filtrosActivos->isNotEmpty());
-    $semillaFiltroLabel = ($filtros['insumosemillaid'] ?? '')
-        ? (\App\Models\Insumo::find((int) $filtros['insumosemillaid'])?->nombre ?? '') : '';
-    $encargadoFiltro = $usuarios->firstWhere('usuarioid', (int) ($filtros['usuarioid'] ?? 0));
-    $encargadoFiltroLabel = $encargadoFiltro ? trim($encargadoFiltro->nombre.' '.$encargadoFiltro->apellido) : '';
+    $estadoCrecimientoId = $estados->first(fn ($estado) => EstadoLoteCatalogo::slugFromNombre($estado->nombre) === 'en_crecimiento')?->estadolotetipoid;
 @endphp
 
 @section('header')
@@ -42,7 +39,13 @@
         @foreach(['Lotes registrados' => $stats['total'], 'Lotes planificados' => $stats['planificados'], 'Superficie total (ha)' => number_format($stats['hectareas'], 1)] as $label => $value)
             <div class="col-6 col-lg-3"><div class="card card-sm"><div class="card-body"><div class="text-secondary mb-2">{{ $label }}</div><div class="h1 mb-0">{{ $value }}</div></div></div></div>
         @endforeach
-        <div class="col-6 col-lg-3"><div class="card card-sm"><div class="card-body"><div class="text-secondary mb-2">En crecimiento</div><a class="h1 mb-0 text-reset" href="{{ route('lotes.index', ['estadolotetipoid' => EstadoLoteCatalogo::idPorSlug('en_crecimiento')]) }}" aria-label="Ver {{ $stats['en_produccion'] }} lotes en crecimiento">{{ $stats['en_produccion'] }}</a></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card card-sm"><div class="card-body"><div class="text-secondary mb-2">En crecimiento</div>
+            @if($estadoCrecimientoId)
+                <a class="h1 mb-0 text-reset" href="{{ route('lotes.index', ['estadolotetipoid' => $estadoCrecimientoId]) }}" aria-label="Ver {{ $stats['en_produccion'] }} lotes en crecimiento">{{ $stats['en_produccion'] }}</a>
+            @else
+                <span class="h1 mb-0">{{ $stats['en_produccion'] }}</span>
+            @endif
+        </div></div></div>
     </div>
     <div class="text-secondary small mb-4">
         <div><strong>Estados del lote:</strong> al crear queda en Planificado. Pasa a En crecimiento al completar la siembra y a Cosechado al registrar la cosecha. También puedes cambiarlo manualmente al editar el lote.</div>
@@ -62,14 +65,17 @@
         <div id="filtrosLotesPanel" class="collapse {{ $filtrosAbiertos ? 'show' : '' }}">
             <form class="card-body border-bottom" method="GET" action="{{ route('lotes.index') }}">
                 <input type="hidden" name="filtros_abiertos" value="1">
-                @if(request()->filled('cultivoid') && !request()->filled('insumosemillaid'))<input type="hidden" name="cultivoid" value="{{ request('cultivoid') }}">@endif
                 <div class="row g-3">
-                    <div class="col-md-6 col-lg-3">
-                        <label class="form-label" for="buscarLote">Buscar</label>
-                        <input id="buscarLote" type="search" name="q" class="form-control" value="{{ $filtros['q'] ?? '' }}" placeholder="Nombre, calle o código TRAZ">
+                    <div class="col-md-12 col-lg-6">
+                        <label class="form-label" for="buscarLote">Buscar por nombre</label>
+                        <input id="buscarLote" type="search" name="q" class="form-control" maxlength="100" value="{{ $filtros['q'] ?? '' }}" placeholder="Nombre completo o parte del nombre">
                     </div>
                     <div class="col-md-6 col-lg-3">
-                        <x-tabler.catalogo-filter name="insumosemillaid" label="Semilla / cultivo" :value="$filtros['insumosemillaid'] ?? ''" :selected-label="$semillaFiltroLabel" :endpoint="route('catalogo-selector.insumos')" :params="['tipo_slug' => 'material_siembra']" />
+                        <label class="form-label" for="cultivoLote">Cultivo</label>
+                        <select id="cultivoLote" name="cultivoid" class="form-select">
+                            <option value="">Todos los cultivos</option>
+                            @foreach($cultivos as $cultivo)<option value="{{ $cultivo->cultivoid }}" @selected(($filtros['cultivoid'] ?? '') == $cultivo->cultivoid)>{{ $cultivo->nombre }}</option>@endforeach
+                        </select>
                     </div>
                     <div class="col-md-6 col-lg-3">
                         <label class="form-label" for="estadoLote">Estado</label>
@@ -81,8 +87,19 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-6 col-lg-3">
-                        <x-tabler.catalogo-filter name="usuarioid" label="Encargado" :value="$filtros['usuarioid'] ?? ''" :selected-label="$encargadoFiltroLabel" :endpoint="route('catalogo-selector.usuarios')" :params="['roles' => 'agricultor,jefe_agricultor']" />
+                    <div class="col-md-6">
+                        <label class="form-label" for="semillaLote">Semilla (opcional)</label>
+                        <select id="semillaLote" name="insumosemillaid" class="form-select">
+                            <option value="">Todas las semillas</option>
+                            @foreach($semillas as $semilla)<option value="{{ $semilla->insumoid }}" @selected(($filtros['insumosemillaid'] ?? '') == $semilla->insumoid)>{{ $semilla->nombre }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="encargadoLote">Encargado (opcional)</label>
+                        <select id="encargadoLote" name="usuarioid" class="form-select">
+                            <option value="">Todos los encargados</option>
+                            @foreach($usuarios as $usuario)<option value="{{ $usuario->usuarioid }}" @selected(($filtros['usuarioid'] ?? '') == $usuario->usuarioid)>{{ trim($usuario->nombre.' '.$usuario->apellido) }}</option>@endforeach
+                        </select>
                     </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 mt-3 align-items-center">

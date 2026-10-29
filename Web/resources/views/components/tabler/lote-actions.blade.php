@@ -3,7 +3,7 @@
     $estado = $lote->estadoTipo->nombre ?? 'Sin estado';
 @endphp
 <div class="d-flex gap-2 align-items-center">
-    <a class="btn btn-sm" href="{{ route('lotes.show', $lote) }}" aria-label="Ver {{ $lote->nombre }}"><i class="ti ti-eye me-1" aria-hidden="true"></i>Ver</a>
+    <a class="btn btn-sm" href="{{ route('lotes.show', $lote) }}" aria-label="Ver detalle de {{ $lote->nombre }}"><i class="ti ti-eye me-1" aria-hidden="true"></i>Ver detalle</a>
     <div class="dropdown">
         <button class="btn btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Acciones de {{ $lote->nombre }}">Acciones</button>
         <div class="dropdown-menu dropdown-menu-end">
