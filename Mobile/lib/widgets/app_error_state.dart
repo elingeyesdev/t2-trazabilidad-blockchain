@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_empty_state.dart';
 
 class AppErrorState extends StatelessWidget {
   const AppErrorState({
@@ -12,29 +13,16 @@ class AppErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Semantics(
-          liveRegion: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 48,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(message, textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
-              ),
-            ],
-          ),
+    return Semantics(
+      liveRegion: true,
+      child: AppEmptyState(
+        icon: Icons.cloud_off_outlined,
+        title: 'No pudimos cargar la información',
+        message: message,
+        action: FilledButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Reintentar'),
         ),
       ),
     );

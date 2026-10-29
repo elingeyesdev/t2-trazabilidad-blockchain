@@ -18,6 +18,7 @@ import 'services/api_health_service.dart';
 import 'services/auth_service.dart';
 import 'services/module_service.dart';
 import 'services/session_storage.dart';
+import 'theme/app_theme.dart';
 import 'widgets/app_error_state.dart';
 import 'widgets/app_loading.dart';
 
@@ -148,9 +149,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     return MaterialApp(
       title: 'AgroFusion',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF10B981)),
-      ),
+      theme: AppTheme.light,
       initialRoute: AppRoutes.home,
       routes: {
         AppRoutes.home: (_) => _sessionGate(

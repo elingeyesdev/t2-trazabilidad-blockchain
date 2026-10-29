@@ -5,6 +5,8 @@ import '../../models/auth_user.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import 'module_access_denied.dart';
@@ -74,7 +76,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   Widget _content(AsyncSnapshot<ModulePage> snapshot) {
     if (snapshot.connectionState != ConnectionState.done) {
-      return const AppLoading(message: 'Cargando registros...');
+      return AppLoading(
+        message: 'Cargando ${widget.module.label.toLowerCase()}...',
+      );
     }
     if (snapshot.hasError) {
       final error = snapshot.error;
@@ -90,31 +94,77 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   Widget _records(ModulePage page) => Column(
     children: [
-      const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('Consulta de registros'),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppTheme.sage,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(widget.module.icon, color: AppTheme.forest),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                widget.module.description,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppTheme.muted),
+              ),
+            ),
+          ],
+        ),
       ),
       Expanded(
         child: page.records.isEmpty
-            ? const Center(child: Text('No hay registros disponibles.'))
+            ? AppEmptyState(
+                icon: widget.module.icon,
+                title: 'Todavía no hay ${widget.module.label.toLowerCase()}',
+                message:
+                    'La información disponible para tu cuenta aparecerá aquí. Pulsa Actualizar para volver a consultar.',
+                action: OutlinedButton.icon(
+                  onPressed: () => _load(1),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Actualizar'),
+                ),
+              )
             : ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
                 itemCount: page.records.length,
                 itemBuilder: (context, index) {
                   final record = page.records[index];
-                  return Card(
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: AppTheme.line),
+                    ),
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             record.title,
-                            style: Theme.of(context).textTheme.titleMedium,
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
-                          const SizedBox(height: 8),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Divider(height: 1, color: AppTheme.line),
+                          ),
                           for (final field in record.details.entries)
-                            Text('${field.key}: ${field.value}'),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                '${field.key}: ${field.value}',
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ),
                         ],
                       ),
                     ),
