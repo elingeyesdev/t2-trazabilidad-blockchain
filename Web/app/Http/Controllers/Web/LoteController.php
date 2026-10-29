@@ -21,6 +21,7 @@ use App\Support\InsumoCatalogo;
 use App\Support\LoteAgricolaNombre;
 use App\Support\LoteCultivoResolver;
 use App\Support\LoteAcceso;
+use App\Support\BusquedaTexto;
 use App\Support\LoteKpiStats;
 use App\Support\LoteDefaults;
 use App\Services\PlanificacionCosechaService;
@@ -38,6 +39,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 // use App\Services\SupabaseStorage; // COMENTADO TEMPORALMENTE
 
 class LoteController extends Controller
@@ -55,32 +57,38 @@ class LoteController extends Controller
 
     public function index(Request $request)
     {
-        $query = Lote::query()
-            ->with(['usuario', 'cultivo', 'insumoSemilla', 'estadoTipo']);
+        $visibles = Lote::query();
+        $this->aplicarScopeLotesVisibles($visibles, $request->user());
 
-        $this->aplicarScopeLotesVisibles($query, $request->user());
+        // Options come from the full authorized set, independently of the active filters.
+        $cultivos = Cultivo::whereIn('cultivoid', (clone $visibles)->select('cultivoid'))->orderBy('nombre')->get();
+        $estadoIds = (clone $visibles)->distinct()->pluck('estadolotetipoid');
+        $estados = EstadoLoteTipo::whereIn('estadolotetipoid', $estadoIds)->orderBy('nombre')->get();
+        $semillas = Insumo::whereIn('insumoid', (clone $visibles)->select('insumosemillaid'))->orderBy('nombre')->get();
+        $usuarios = Usuario::whereIn('usuarioid', (clone $visibles)->select('usuarioid'))->orderBy('nombre')->get();
 
-        if ($request->filled('q')) {
-            $term = '%'.trim((string) $request->q).'%';
-            $query->where(function ($q) use ($term) {
-                $q->where('nombre', 'like', $term)
-                    ->orWhere('ubicacion', 'like', $term)
-                    ->orWhere('codigo_trazabilidad', 'like', $term);
-            });
+        if (is_string($request->input('q'))) {
+            $request->merge(['q' => trim($request->input('q'))]);
         }
-
-        if ($request->filled('insumosemillaid')) {
-            $query->where('insumosemillaid', (int) $request->insumosemillaid);
-        } elseif ($request->filled('cultivoid')) {
-            $query->where('cultivoid', (int) $request->cultivoid);
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'cultivoid' => ['nullable', 'integer', Rule::in($cultivos->modelKeys())],
+            'estadolotetipoid' => ['nullable', 'integer', Rule::in($estados->modelKeys())],
+            'insumosemillaid' => ['nullable', 'integer', Rule::in($semillas->modelKeys())],
+            'usuarioid' => ['nullable', 'integer', Rule::in($usuarios->modelKeys())],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'filtros_abiertos' => ['nullable', 'boolean'],
+        ]);
+        $filtros = array_intersect_key($validated, array_flip(['q', 'cultivoid', 'estadolotetipoid', 'insumosemillaid', 'usuarioid']));
+        $query = (clone $visibles)->with(['usuario', 'cultivo', 'insumoSemilla', 'estadoTipo']);
+        if (filled($filtros['q'] ?? null)) {
+            $literal = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], BusquedaTexto::normalizar($filtros['q']));
+            $query->whereRaw(BusquedaTexto::sqlSinAcentos('lote.nombre')." LIKE ? ESCAPE '!'", ['%'.$literal.'%']);
         }
-
-        if ($request->filled('estadolotetipoid')) {
-            $query->where('estadolotetipoid', (int) $request->estadolotetipoid);
-        }
-
-        if ($request->filled('usuarioid')) {
-            $query->where('usuarioid', (int) $request->usuarioid);
+        foreach (['cultivoid', 'estadolotetipoid', 'insumosemillaid', 'usuarioid'] as $field) {
+            if (filled($filtros[$field] ?? null)) {
+                $query->where($field, $filtros[$field]);
+            }
         }
 
         $statsBase = Lote::query();
@@ -91,15 +99,7 @@ class LoteController extends Controller
 
         $lotes = $query->orderByDesc('loteid')->paginate(15)->withQueryString();
 
-        $filtros = $request->only(['q', 'insumosemillaid', 'cultivoid', 'estadolotetipoid', 'usuarioid']);
-        $estados = EstadoLoteCatalogo::paraSelect();
-        $usuarios = Usuario::query()
-            ->where('activo', true)
-            ->whereIn('role', ['agricultor', 'admin'])
-            ->orderBy('nombre')
-            ->get();
-
-        return view('lotes.index', compact('lotes', 'stats', 'filtros', 'estados', 'usuarios'));
+        return view('lotes.index', compact('lotes', 'stats', 'filtros', 'cultivos', 'estados', 'semillas', 'usuarios'));
     }
 
     /**
