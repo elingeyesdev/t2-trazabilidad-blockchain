@@ -114,16 +114,16 @@ class ApiCampoOwnershipAislamientoTest extends TestCase
 
         Sanctum::actingAs($opA);
 
-        $this->getJson('/api/lotes/'.$loteB->loteid)->assertForbidden();
-        $this->getJson('/api/actividades/'.$actB->actividadid)->assertForbidden();
+        $this->getJson('/api/lotes/'.$loteB->loteid)->assertNotFound();
+        $this->getJson('/api/actividades/'.$actB->actividadid)->assertNotFound();
 
-        $idsLotes = collect($this->getJson('/api/lotes')->assertOk()->json())
+        $idsLotes = collect($this->getJson('/api/lotes')->assertOk()->json('data'))
             ->pluck('loteid')
             ->map(fn ($id) => (int) $id)
             ->all();
         $this->assertNotContains((int) $loteB->loteid, $idsLotes);
 
-        $idsAct = collect($this->getJson('/api/actividades')->assertOk()->json())
+        $idsAct = collect($this->getJson('/api/actividades')->assertOk()->json('data'))
             ->pluck('actividadid')
             ->map(fn ($id) => (int) $id)
             ->all();
@@ -143,7 +143,7 @@ class ApiCampoOwnershipAislamientoTest extends TestCase
         $this->getJson('/api/lotes/'.$lote->loteid)->assertOk();
         $this->getJson('/api/actividades/'.$act->actividadid)->assertOk();
 
-        $idsLotes = collect($this->getJson('/api/lotes')->assertOk()->json())
+        $idsLotes = collect($this->getJson('/api/lotes')->assertOk()->json('data'))
             ->pluck('loteid')
             ->map(fn ($id) => (int) $id)
             ->all();

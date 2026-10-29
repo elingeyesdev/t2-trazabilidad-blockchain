@@ -5,36 +5,143 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Actividad;
 use App\Models\Lote;
+use App\Http\Resources\Api\ActividadConsultaResource;
 use App\Support\ActividadPermisos;
 use App\Support\LoteAcceso;
 use App\Support\UsuarioRol;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ActividadController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Actividad::query()->with(['lote', 'usuario', 'tipoActividad', 'prioridad']);
-        ActividadPermisos::aplicarScopeVisibles($query, $request->user());
+        $filters = $request->validate($this->reglasConsulta(incluirLote: true));
+        $query = $this->consultaActividadesVisibles($request, $filters);
 
-        return response()->json($query->get());
+        return ActividadConsultaResource::collection(
+            $query->orderBy($filters['sort'] ?? 'actividadid', $filters['direction'] ?? 'desc')
+                ->paginate($filters['per_page'] ?? 15)
+                ->withQueryString()
+        );
+    }
+
+    public function porLote(Request $request, $lote)
+    {
+        $filters = $request->validate($this->reglasConsulta(incluirLote: false));
+        $loteQuery = Lote::query();
+        LoteAcceso::aplicarScopeVisibles($loteQuery, $request->user());
+        $lote = $loteQuery->findOrFail($lote);
+
+        $query = $lote->actividades()->with($this->relacionesActividad());
+        ActividadPermisos::aplicarScopeVisibles($query->getQuery(), $request->user());
+        $query = $this->aplicarFiltros($query->getQuery(), $filters);
+
+        return ActividadConsultaResource::collection(
+            $query->orderBy($filters['sort'] ?? 'actividadid', $filters['direction'] ?? 'desc')
+                ->paginate($filters['per_page'] ?? 15)
+                ->withQueryString()
+        );
+    }
+
+    public function showEnLote(Request $request, $lote, $actividad)
+    {
+        $loteQuery = Lote::query();
+        LoteAcceso::aplicarScopeVisibles($loteQuery, $request->user());
+        $lote = $loteQuery->findOrFail($lote);
+
+        $query = $lote->actividades()->with($this->relacionesActividad());
+        ActividadPermisos::aplicarScopeVisibles($query->getQuery(), $request->user());
+        $actividad = $query->whereKey($actividad)->firstOrFail();
+
+        return new ActividadConsultaResource($actividad);
     }
 
     public function show(Request $request, $actividad)
     {
-        $actividad = $actividad instanceof Actividad
-            ? $actividad
-            : Actividad::query()->findOrFail($actividad);
+        $query = Actividad::query()->with($this->relacionesActividad());
+        ActividadPermisos::aplicarScopeVisibles($query, $request->user());
+        $actividad = $query->findOrFail($actividad);
 
-        abort_unless(
-            ActividadPermisos::puedeAcceder($request->user(), $actividad),
-            403,
-            'No tienes acceso a esta actividad.'
-        );
+        return new ActividadConsultaResource($actividad);
+    }
 
-        return response()->json(
-            $actividad->load(['lote', 'usuario', 'tipoActividad', 'prioridad'])
-        );
+    /** @return array<string, array<int, string>|string> */
+    private function reglasConsulta(bool $incluirLote): array
+    {
+        $rules = [
+            'q' => ['sometimes', 'string', 'max:100'],
+            'estado' => ['sometimes', 'string', Rule::in(['pendiente', 'completada'])],
+            'tipoactividadid' => ['sometimes', 'integer', 'min:1'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'sort' => ['sometimes', 'string', Rule::in(['actividadid', 'descripcion', 'fechainicio', 'fecha_planificada', 'fechafin'])],
+            'direction' => ['sometimes', 'string', Rule::in(['asc', 'desc'])],
+        ];
+
+        if ($incluirLote) {
+            $rules['loteid'] = ['sometimes', 'integer', 'min:1'];
+        } else {
+            $rules['loteid'] = ['prohibited'];
+        }
+
+        return $rules;
+    }
+
+    /** @param array<string, mixed> $filters
+     *  @return Builder<Actividad>
+     */
+    private function consultaActividadesVisibles(Request $request, array $filters): Builder
+    {
+        $query = Actividad::query()->with($this->relacionesActividad());
+        ActividadPermisos::aplicarScopeVisibles($query, $request->user());
+
+        return $this->aplicarFiltros($query, $filters);
+    }
+
+    /** @param array<string, mixed> $filters
+     *  @return Builder<Actividad>
+     */
+    private function aplicarFiltros(Builder $query, array $filters): Builder
+    {
+        if (filled($filters['q'] ?? null)) {
+            $term = '%'.trim($filters['q']).'%';
+            $query->where(function (Builder $builder) use ($term) {
+                $builder->where('descripcion', 'like', $term)
+                    ->orWhereHas('lote', fn (Builder $lote) => $lote->where('nombre', 'like', $term))
+                    ->orWhereHas('tipoActividad', fn (Builder $tipo) => $tipo->where('nombre', 'like', $term))
+                    ->orWhereHas('usuario', fn (Builder $usuario) => $usuario->where('nombre', 'like', $term));
+            });
+        }
+
+        if (($filters['estado'] ?? null) === 'pendiente') {
+            $query->whereNull('fechafin');
+        } elseif (($filters['estado'] ?? null) === 'completada') {
+            $query->whereNotNull('fechafin');
+        }
+
+        foreach (['loteid', 'tipoactividadid'] as $field) {
+            if (isset($filters[$field])) {
+                $query->where($field, $filters[$field]);
+            }
+        }
+
+        return $query;
+    }
+
+    /** @return array<string, string> */
+    private function relacionesActividad(): array
+    {
+        return [
+            'lote:loteid,nombre,cultivoid,estadolotetipoid,usuarioid',
+            'lote.cultivo:cultivoid,nombre',
+            'lote.estadoTipo:estadolotetipoid,nombre',
+            'usuario:usuarioid,nombre,apellido',
+            'ejecutor:usuarioid,nombre,apellido',
+            'tipoActividad:tipoactividadid,nombre',
+            'prioridad:prioridadid,nombre',
+        ];
     }
 
     public function store(Request $request)

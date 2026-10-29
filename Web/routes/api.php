@@ -96,6 +96,10 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     // ========================================================
     Route::get('lotes', [LoteController::class, 'index'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/actividades', [ActividadController::class, 'porLote'])
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/actividades/{actividad}', [ActividadController::class, 'showEnLote'])
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
     Route::post('lotes', [LoteController::class, 'store'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,create']);
     Route::get('lotes/{lote}', [LoteController::class, 'show'])
