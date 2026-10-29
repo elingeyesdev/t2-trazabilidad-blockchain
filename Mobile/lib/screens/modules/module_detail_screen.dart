@@ -45,10 +45,14 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
   void _backToList() {
     final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
-    } else {
-      navigator.pushReplacementNamed(widget.module.route);
+    final listRoute = widget.module.route;
+    var foundList = false;
+    navigator.popUntil((route) {
+      foundList = route.settings.name == listRoute;
+      return foundList || route.isFirst;
+    });
+    if (!foundList) {
+      navigator.pushNamed(listRoute);
     }
   }
 
@@ -66,6 +70,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       }
       return Scaffold(
         appBar: AppBar(
+          leading: IconButton(
+            tooltip: 'Volver a la lista',
+            onPressed: _backToList,
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
           title: Text(_isLote ? 'Detalle del lote' : 'Detalle de actividad'),
           actions: [
             IconButton(
@@ -83,11 +92,6 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   icon: Icons.search_off_rounded,
                   title: 'El registro ya no está disponible',
                   message: 'Vuelve a la lista y actualiza la información.',
-                  action: OutlinedButton.icon(
-                    onPressed: _backToList,
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    label: const Text('Volver a la lista'),
-                  ),
                 )
               : snapshot.hasError
               ? AppErrorState(
@@ -97,6 +101,22 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   onRetry: _refresh,
                 )
               : _details(snapshot.requireData),
+        ),
+        bottomNavigationBar: DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppTheme.line)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+              child: OutlinedButton.icon(
+                onPressed: _backToList,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Volver a la lista'),
+              ),
+            ),
+          ),
         ),
       );
     },
