@@ -1,95 +1,33 @@
-@extends('layouts.app')
-
+@extends('layouts.tabler-lotes')
 @section('title', 'Ubicación del lote | AgroFusion')
-@section('page_title', 'Ubicación — '.$lote->nombre)
-
-@section('breadcrumbs')
-    <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ route('lotes.index') }}">Lotes</a></li>
-    <li class="breadcrumb-item"><a href="{{ route('lotes.show', $lote) }}">{{ $lote->nombre }}</a></li>
-    <li class="breadcrumb-item active">Ubicación</li>
+@section('header')
+    @include('lotes.tabler.header', ['sectionTitle' => 'Ubicación del lote'])
 @endsection
-
-@push('styles')
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    @include('lotes.partials.detalle-styles')
-@endpush
-
 @section('content')
-    @include('lotes.partials.detalle-header')
-    @include('lotes.partials.detalle-stats')
-    @include('lotes.partials.detalle-nav')
-
-    <div class="card lote-section-card">
-        <div class="card-body">
-            <h5 class="mb-3"><i class="fas fa-map mr-2 text-success"></i>Ubicación del lote</h5>
-
-            @if($lote->latitud && $lote->longitud)
-                <div class="p-3 bg-light rounded mb-3">
-                    <div class="d-flex align-items-start">
-                        <i class="fas fa-road text-success fa-lg mr-3 mt-1"></i>
-                        <div>
-                            <strong class="d-block text-muted small text-uppercase mb-1">Dirección / referencia</strong>
-                            <span class="font-weight-bold" style="font-size: 1.05rem;">{{ $lote->ubicacion_visible }}</span>
-                        </div>
+    @include('lotes.tabler.navigation')
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <section class="card">
+                <div class="card-header"><h2 class="card-title">Mapa del lote</h2></div>
+                @if($lote->latitud !== null && $lote->longitud !== null)
+                    <div id="map" class="lote-location-map" aria-label="Mapa de ubicación del lote" data-lote-map data-lat="{{ $lote->latitud }}" data-lng="{{ $lote->longitud }}" data-area="{{ $lote->superficie ?? 0 }}" data-name="{{ $lote->nombre }}"></div>
+                    <div class="card-footer text-secondary small">El círculo representa una superficie aproximada; no delimita los linderos del terreno.</div>
+                @else
+                    <div class="empty"><div class="empty-icon"><i class="ti ti-map-pin-off" aria-hidden="true"></i></div><p class="empty-title">Ubicación sin coordenadas</p><p class="empty-subtitle text-secondary">Este lote aún no tiene una ubicación geográfica registrada.</p>
+                        @can('lotes.update')<div class="empty-action"><a class="btn btn-primary" href="{{ route('lotes.edit', $lote) }}">Agregar coordenadas</a></div>@endcan
                     </div>
-                </div>
-                <div id="map"></div>
-                <div class="row mt-3">
-                    <div class="col-md-6">
-                        <div class="p-3 bg-light rounded">
-                            <strong><i class="fas fa-ruler-combined mr-1"></i> Superficie</strong><br>{{ $lote->superficie_etiqueta }}
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="p-3 bg-light rounded">
-                            <strong><i class="fas fa-seedling mr-1"></i> Cultivo</strong><br>{{ $lote->cultivo->nombre ?? '—' }}
-                        </div>
-                    </div>
-                </div>
-            @else
-                <div class="text-center py-5">
-                    <i class="fas fa-map-marked-alt fa-4x text-muted mb-3"></i>
-                    <h5>Sin coordenadas</h5>
-                    <p class="text-muted">Este lote no tiene ubicación geográfica registrada.</p>
-                    @can('lotes.update')
-                        <a href="{{ route('lotes.edit', $lote) }}" class="btn btn-success">
-                            <i class="fas fa-edit mr-1"></i> Agregar en edición del lote
-                        </a>
-                    @endcan
-                </div>
-            @endif
+                @endif
+            </section>
         </div>
+        <div class="col-lg-4"><section class="card"><div class="card-header"><h2 class="card-title">Referencia del terreno</h2></div><div class="card-body">
+            <div class="datagrid">
+                <div class="datagrid-item"><div class="datagrid-title">Dirección / referencia</div><div class="datagrid-content">{{ $lote->ubicacion_visible }}</div></div>
+                <div class="datagrid-item"><div class="datagrid-title">Superficie registrada</div><div class="datagrid-content">{{ $lote->superficie_etiqueta }}</div></div>
+                <div class="datagrid-item"><div class="datagrid-title">Semilla / cultivo</div><div class="datagrid-content">{{ $lote->cultivo_etiqueta ?: 'Sin registrar' }}</div></div>
+                <div class="datagrid-item"><div class="datagrid-title">Latitud</div><div class="datagrid-content">{{ $lote->latitud ?? 'Sin registrar' }}</div></div>
+                <div class="datagrid-item"><div class="datagrid-title">Longitud</div><div class="datagrid-content">{{ $lote->longitud ?? 'Sin registrar' }}</div></div>
+            </div>
+        </div></section></div>
     </div>
-
-    @include('lotes.partials.detalle-actions')
+    @include('lotes.tabler.actions')
 @endsection
-
-@push('scripts')
-    @if($lote->latitud && $lote->longitud)
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                var lat = {{ $lote->latitud }};
-                var lng = {{ $lote->longitud }};
-                var sup = {{ $lote->superficie ?? 0 }};
-                var map = L.map('map').setView([lat, lng], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-                L.marker([lat, lng]).addTo(map)
-                    .bindPopup({!! json_encode('<strong>'.$lote->nombre.'</strong><br>'.$lote->ubicacion_visible.'<br>'.$lote->superficie_etiqueta) !!})
-                    .openPopup();
-                if (sup > 0) {
-                    L.circle([lat, lng], {
-                        color: '#2c5530',
-                        fillColor: '#28a745',
-                        fillOpacity: 0.3,
-                        radius: Math.sqrt(sup * 10000 / Math.PI)
-                    }).addTo(map);
-                }
-                setTimeout(function () { map.invalidateSize(); }, 200);
-            });
-        </script>
-    @endif
-@endpush

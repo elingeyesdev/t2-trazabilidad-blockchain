@@ -153,7 +153,8 @@ class PdvMercadoAlvaroCompletoSeeder extends Seeder
             }
 
             $pedido->refresh();
-            app(RecepcionPuntoVentaService::class)->confirmar($pedido, $admin);
+            $receptor = Usuario::query()->findOrFail($punto->usuarioid);
+            app(RecepcionPuntoVentaService::class)->confirmar($pedido, $receptor);
 
             $stockPdv = Insumo::query()
                 ->where('almacenid', $punto->almacenid)

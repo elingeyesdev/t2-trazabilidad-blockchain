@@ -1,66 +1,42 @@
-@extends('layouts.app')
-
+@extends('layouts.tabler-lotes')
 @section('title', 'Información del lote | AgroFusion')
-@section('page_title', $lote->nombre)
-
-@section('breadcrumbs')
-    <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ route('lotes.index') }}">Lotes</a></li>
-    <li class="breadcrumb-item active">{{ $lote->nombre }}</li>
+@section('header')
+    @include('lotes.tabler.header', ['sectionTitle' => 'Información del lote'])
 @endsection
-
-@push('styles')
-    @include('lotes.partials.detalle-styles')
-@endpush
-
 @section('content')
-    @include('lotes.partials.detalle-header')
-    @include('lotes.partials.detalle-stats')
-    @include('lotes.partials.detalle-nav')
-
-    <div class="row lote-content-grid">
-        <div class="col-lg-6 mb-4 mb-lg-0">
-            @include('lotes.partials.datos-lote-panel')
+    @include('lotes.tabler.navigation')
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <section class="card h-100">
+                <div class="card-header"><h2 class="card-title">Datos del lote</h2></div>
+                <div class="card-body">
+                    <div class="datagrid">
+                        <div class="datagrid-item"><div class="datagrid-title">Responsable</div><div class="datagrid-content">{{ trim(($lote->usuario->nombre ?? '').' '.($lote->usuario->apellido ?? '')) ?: 'Sin asignar' }}</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Semilla / cultivo</div><div class="datagrid-content">{{ $lote->cultivo_etiqueta ?: 'Sin registrar' }}</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Superficie</div><div class="datagrid-content">{{ $lote->superficie_etiqueta }}</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Fecha de siembra</div><div class="datagrid-content">{{ $lote->fechasiembra ? \Carbon\Carbon::parse($lote->fechasiembra)->format('d/m/Y') : 'No registrada' }}</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Código de trazabilidad</div><div class="datagrid-content"><code>{{ $lote->codigo_trazabilidad ?: 'Sin código' }}</code></div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Identificador del lote</div><div class="datagrid-content">#{{ $lote->loteid }}</div></div>
+                    </div>
+                    <hr class="my-4">
+                    <div class="datagrid-title">Dirección / referencia</div>
+                    <p class="mb-2">{{ $lote->ubicacion_visible }}</p>
+                    <a href="{{ route('lotes.ubicacion', $lote) }}" class="btn btn-sm"><i class="ti ti-map-pin me-2" aria-hidden="true"></i>Consultar ubicación</a>
+                    @if($lote->imagenurl)<img class="img-fluid rounded mt-4 lote-photo" src="{{ $lote->imagenurl }}" alt="Foto del lote {{ $lote->nombre }}">@endif
+                </div>
+            </section>
         </div>
-        <div class="col-lg-6">
-            <div class="lote-op-panel">
-                <div class="lote-op-panel__head">
-                    <div class="lote-op-panel__head-icon"><i class="fas fa-chart-pie"></i></div>
-                    <div>
-                        <h3 class="lote-op-panel__title">Resumen operativo</h3>
-                        <p class="lote-op-panel__subtitle">Actividad reciente en campo</p>
-                    </div>
+        <div class="col-lg-4">
+            <section class="card h-100">
+                <div class="card-header"><h2 class="card-title">Resumen de actividad</h2></div>
+                <div class="list-group list-group-flush">
+                    @foreach(['Actividades completadas' => $estadisticas['actividades_completadas'], 'Actividades pendientes' => $estadisticas['actividades_pendientes'], 'Aplicaciones de insumos' => $estadisticas['total_insumos'], 'Cosechas registradas' => $estadisticas['total_cosechas'], 'Producción acumulada' => number_format($estadisticas['produccion_total'], 0).' kg', 'Días desde la siembra' => $estadisticas['dias_desde_siembra'] ?? '—'] as $label => $value)
+                        <div class="list-group-item d-flex justify-content-between gap-3"><span class="text-secondary">{{ $label }}</span><strong>{{ $value }}</strong></div>
+                    @endforeach
                 </div>
-                <div class="lote-op-grid">
-                    <div class="lote-op-stat">
-                        <div class="lote-op-stat__icon lote-op-stat__icon--green"><i class="fas fa-check-circle"></i></div>
-                        <div class="lote-op-stat__val">{{ $estadisticas['actividades_completadas'] }}</div>
-                        <div class="lote-op-stat__lbl">Completadas</div>
-                    </div>
-                    <div class="lote-op-stat">
-                        <div class="lote-op-stat__icon lote-op-stat__icon--amber"><i class="fas fa-clock"></i></div>
-                        <div class="lote-op-stat__val">{{ $estadisticas['actividades_pendientes'] }}</div>
-                        <div class="lote-op-stat__lbl">Pendientes</div>
-                    </div>
-                    <div class="lote-op-stat">
-                        <div class="lote-op-stat__icon lote-op-stat__icon--blue"><i class="fas fa-flask"></i></div>
-                        <div class="lote-op-stat__val">{{ $estadisticas['total_insumos'] }}</div>
-                        <div class="lote-op-stat__lbl">Aplicaciones</div>
-                    </div>
-                    <div class="lote-op-stat">
-                        <div class="lote-op-stat__icon lote-op-stat__icon--teal"><i class="fas fa-leaf"></i></div>
-                        <div class="lote-op-stat__val">{{ number_format($estadisticas['produccion_total'], 0) }}</div>
-                        <div class="lote-op-stat__lbl">Kg producidos</div>
-                    </div>
-                </div>
-                <a href="{{ route('lotes.trazabilidad', $lote) }}" class="lote-op-panel__cta">
-                    <i class="fas fa-project-diagram"></i>
-                    Ver trazabilidad completa
-                    <i class="fas fa-arrow-right lote-op-panel__cta-arrow"></i>
-                </a>
-            </div>
+                <div class="card-footer"><a href="{{ route('lotes.trazabilidad', $lote) }}" class="btn btn-primary w-100"><i class="ti ti-route me-2" aria-hidden="true"></i>Ver trazabilidad del lote</a></div>
+            </section>
         </div>
     </div>
-
-    @include('lotes.partials.detalle-actions')
+    @include('lotes.tabler.actions')
 @endsection

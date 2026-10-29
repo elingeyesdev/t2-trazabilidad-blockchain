@@ -66,4 +66,29 @@ Las fechas sin hora (`fechasiembra`, `fecha_planificada`) se serializan como `YY
 }
 ```
 
-La app móvil del repositorio ya acepta listas directas o `data`, pero debe seguir `links.next` para recorrer la paginación. Esta documentación describe el contrato backend; no constituye una verificación end-to-end de Flutter.
+Flutter debe leer `data` y seguir `links.next` para recorrer la paginación. Esta documentación describe el contrato backend; no constituye una verificación end-to-end de Flutter.
+
+## Comprobación de integración
+
+Con Laravel ejecutándose en `http://127.0.0.1:8001`, este ejemplo consulta la API desde PowerShell. Usar las credenciales demo solo en desarrollo local:
+
+```powershell
+$base = 'http://127.0.0.1:8001/api'
+$login = Invoke-RestMethod "$base/login" -Method Post -ContentType 'application/json' -Body '{"email":"admin@agrofusion.com","password":"12345"}'
+$headers = @{ Accept = 'application/json'; Authorization = "Bearer $($login.token)" }
+try {
+    $lotes = Invoke-RestMethod "$base/lotes?per_page=15" -Headers $headers
+    $lotes.data
+    if ($lotes.data.Count -gt 0) {
+        $id = $lotes.data[0].loteid
+        Invoke-RestMethod "$base/lotes/$id" -Headers $headers
+        Invoke-RestMethod "$base/lotes/$id/actividades?estado=pendiente" -Headers $headers
+    }
+} finally {
+    Invoke-RestMethod "$base/logout" -Method Post -Headers $headers
+}
+```
+
+En un dispositivo físico, configurar la URL con la IP local del equipo servidor; `127.0.0.1` apunta al propio dispositivo. El servidor debe escuchar en una interfaz accesible para ese dispositivo.
+
+Las pruebas backend se ejecutan con `php artisan test --filter='ApiConsultaLotesActividadesTest|ApiCampoOwnershipAislamientoTest'`. Comprueban autenticación, permisos, aislamiento de registros, filtros, paginación y coherencia de datos web/API. La visualización y consumo desde Flutter requieren una comprobación adicional en la aplicación móvil.
