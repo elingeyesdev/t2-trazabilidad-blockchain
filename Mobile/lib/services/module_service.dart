@@ -28,6 +28,21 @@ class ModuleService {
       'lotes/$loteId/actividades',
       queryParameters: {'page': '$page'},
     );
+    const invalidHistory = ApiException(
+      'La información recibida no corresponde al historial solicitado.',
+    );
+    final rows = response is Map<String, dynamic> ? response['data'] : response;
+    if (rows is! List ||
+        rows.any((row) {
+          if (row is! Map<String, dynamic> || row['loteid'] != loteId) {
+            return true;
+          }
+          final lot = row['lote'];
+          return lot != null &&
+              (lot is! Map<String, dynamic> || lot['loteid'] != loteId);
+        })) {
+      throw invalidHistory;
+    }
     final result = ModulePage.fromJson(
       response,
       idField: AppModule.actividades.idField,
@@ -35,15 +50,8 @@ class ModuleService {
       fallbackTitle: 'Actividad',
       fields: AppModule.actividades.fields,
     );
-    final rows = response is Map<String, dynamic> ? response['data'] : response;
-    if (rows is! List ||
-        rows.any(
-          (row) => row is! Map<String, dynamic> || row['loteid'] != loteId,
-        ) ||
-        result.currentPage != page) {
-      throw const ApiException(
-        'La información recibida no corresponde al historial solicitado.',
-      );
+    if (result.currentPage != page) {
+      throw invalidHistory;
     }
     return result;
   }

@@ -36,6 +36,16 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
   int _page = 1;
   late Future<ModulePage> _request = _load();
 
+  @override
+  void didUpdateWidget(covariant LoteActivityHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.loteId != widget.loteId || oldWidget.user != widget.user) {
+      _page = 1;
+      _request = _load();
+      _request.ignore();
+    }
+  }
+
   Future<ModulePage> _load() => widget.service.loadLoteActivities(
     widget.user,
     widget.loteId,
@@ -129,11 +139,11 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 640),
       child: ListView(
-        key: ValueKey(page.currentPage),
+        key: ValueKey((widget.loteId, page.currentPage)),
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         children: [
           Text(
-            'Trabajo del lote',
+            'Lote #${widget.loteId}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 6),
