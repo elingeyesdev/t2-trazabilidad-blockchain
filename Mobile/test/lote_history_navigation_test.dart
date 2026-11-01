@@ -130,6 +130,22 @@ void main() {
     });
   }
 
+  testWidgets('Permite volver a la ficha desde un historial sin actividades', (
+    tester,
+  ) async {
+    await start(tester, (request) async {
+      if (request.url.path == '/api/me') return json(profile);
+      if (request.url.path == '/api/lotes/7') return json({'data': lot});
+      return json(page([]));
+    });
+    await openFromLote(tester);
+    expect(find.text('No hay actividades para mostrar'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Volver al lote'));
+    await tester.pumpAndSettle();
+    expect(find.text('Información del lote'), findsOneWidget);
+    expect(find.text('Maíz del Norte'), findsOneWidget);
+  });
+
   testWidgets('Recorre las páginas del historial usando la API configurada', (
     tester,
   ) async {

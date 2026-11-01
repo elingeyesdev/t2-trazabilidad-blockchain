@@ -136,63 +136,82 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
     },
   );
 
-  Widget _activities(ModulePage page) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 640),
-      child: ListView(
-        key: ValueKey((widget.loteId, page.currentPage)),
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-        children: [
-          Text(
-            'Lote #${widget.loteId}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            widget.loteName ?? 'Lote #${widget.loteId}',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 12),
-          const Text('Más recientes primero, según su fecha de inicio.'),
-          const SizedBox(height: 24),
-          if (page.records.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text(
-                'Este lote todavía no tiene actividades registradas.',
-              ),
+  Widget _activities(ModulePage page) {
+    if (page.records.isEmpty) {
+      final firstPage = page.currentPage == 1;
+      return Semantics(
+        liveRegion: true,
+        child: AppEmptyState(
+          icon: Icons.event_note_outlined,
+          title: firstPage
+              ? 'No hay actividades para mostrar'
+              : 'Esta página no tiene actividades',
+          message:
+              '${widget.loteName ?? 'Lote'} · #${widget.loteId}\n\n'
+              '${firstPage ? 'Cuando haya actividades disponibles para consultar, aparecerán aquí.' : 'Vuelve a la primera página para consultar el historial actualizado.'}',
+          action: FilledButton.icon(
+            onPressed: () => _showPage(1),
+            icon: Icon(
+              firstPage ? Icons.refresh_rounded : Icons.first_page_rounded,
             ),
-          for (final activity in page.records)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ActivityHistoryCard(activity: activity),
+            label: Text(
+              firstPage ? 'Actualizar historial' : 'Volver a la primera página',
             ),
-          if (page.lastPage > 1) ...[
+          ),
+        ),
+      );
+    }
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: ListView(
+          key: ValueKey((widget.loteId, page.currentPage)),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          children: [
+            Text(
+              'Lote #${widget.loteId}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.loteName ?? 'Lote #${widget.loteId}',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 12),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 16,
-              runSpacing: 12,
-              children: [
-                OutlinedButton(
-                  onPressed: page.currentPage > 1
-                      ? () => _showPage(page.currentPage - 1)
-                      : null,
-                  child: const Text('Anterior'),
-                ),
-                Text('Página ${page.currentPage} de ${page.lastPage}'),
-                FilledButton(
-                  onPressed: page.currentPage < page.lastPage
-                      ? () => _showPage(page.currentPage + 1)
-                      : null,
-                  child: const Text('Siguiente'),
-                ),
-              ],
-            ),
+            const Text('Más recientes primero, según su fecha de inicio.'),
+            const SizedBox(height: 24),
+            for (final activity in page.records)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ActivityHistoryCard(activity: activity),
+              ),
+            if (page.lastPage > 1) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 12,
+                children: [
+                  OutlinedButton(
+                    onPressed: page.currentPage > 1
+                        ? () => _showPage(page.currentPage - 1)
+                        : null,
+                    child: const Text('Anterior'),
+                  ),
+                  Text('Página ${page.currentPage} de ${page.lastPage}'),
+                  FilledButton(
+                    onPressed: page.currentPage < page.lastPage
+                        ? () => _showPage(page.currentPage + 1)
+                        : null,
+                    child: const Text('Siguiente'),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
