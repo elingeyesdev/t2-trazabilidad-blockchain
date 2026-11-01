@@ -162,6 +162,40 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 ],
               ),
             ),
+            if (_isLote) ...[
+              const SizedBox(height: 20),
+              Card(
+                margin: EdgeInsets.zero,
+                elevation: 0,
+                color: AppTheme.sage,
+                clipBehavior: Clip.antiAlias,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  leading: const Icon(
+                    Icons.history_rounded,
+                    color: AppTheme.forest,
+                  ),
+                  title: Text(
+                    'Historial de actividades',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  subtitle: const Text(
+                    'Consulta el trabajo registrado en este lote.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).pushNamed(
+                    '${AppModule.lotes.route}/${record.id}/historial',
+                    arguments: record.title,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 28),
             Text(
               _isLote ? 'Información del lote' : 'Información de la actividad',

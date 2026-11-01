@@ -12,6 +12,7 @@ import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
+import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/module_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
@@ -187,6 +188,32 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'lotes',
+          final rawId,
+          'historial',
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => LoteActivityHistoryScreen(
+                key: ValueKey(_auth.user),
+                loteId: id,
+                loteName: settings.arguments is String
+                    ? settings.arguments as String
+                    : null,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.lotes,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', final endpoint, final rawId]) {
           final module = switch (endpoint) {

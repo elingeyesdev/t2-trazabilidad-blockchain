@@ -168,4 +168,137 @@ void main() {
     );
     expect(await storage.readToken(), '1|modulos');
   });
+
+  test('Lee las listas y los detalles del formato actual de Laravel', () async {
+    for (final module in [AppModule.lotes, AppModule.actividades]) {
+      final row = {module.idField: 7, module.titleField!: 'Registro de campo'};
+      final modules = service(
+        (request) async => http.Response(
+          jsonEncode(
+            request.url.path.endsWith('/7')
+                ? {'data': row}
+                : {
+                    'data': [row],
+                    'meta': {'current_page': 2, 'last_page': 3},
+                    'links': {'next': 'https://otro.test/ignorar'},
+                  },
+          ),
+          200,
+        ),
+      );
+      final user = allowedUser(module);
+      final list = await modules.load(module, user, page: 2);
+      expect(list.currentPage, 2);
+      expect(list.lastPage, 3);
+      expect(list.records.single.title, 'Registro de campo');
+      final detail = await modules.loadDetail(module, user, 7);
+      expect(detail.id, 7);
+      expect(detail.title, list.records.single.title);
+    }
+  });
+
+  test('Rechaza envoltorios y metadatos incompletos de Laravel', () async {
+    for (final payload in [
+      {'data': [], 'meta': null},
+      {
+        'data': [],
+        'meta': {'current_page': 0, 'last_page': 1},
+      },
+      {
+        'data': [],
+        'meta': {'current_page': 2, 'last_page': 1},
+      },
+      {
+        'data': [],
+        'meta': {'current_page': 1},
+      },
+      {
+        'data': [],
+        'meta': {'current_page': '1', 'last_page': 1},
+      },
+    ]) {
+      final modules = service(
+        (_) async => http.Response(jsonEncode(payload), 200),
+      );
+      await expectLater(
+        modules.load(AppModule.lotes, allowedUser(AppModule.lotes)),
+        throwsA(isA<ApiException>()),
+      );
+    }
+    for (final value in [
+      null,
+      [],
+      {'loteid': 8},
+    ]) {
+      final modules = service(
+        (_) async => http.Response(jsonEncode({'data': value}), 200),
+      );
+      await expectLater(
+        modules.loadDetail(AppModule.lotes, allowedUser(AppModule.lotes), 7),
+        throwsA(isA<ApiException>()),
+      );
+    }
+  });
+
+  test(
+    'El historial valida permiso, lote y página antes de consultar',
+    () async {
+      var calls = 0;
+      final modules = service((_) async {
+        calls++;
+        return http.Response('[]', 200);
+      });
+      final user = allowedUser(AppModule.lotes);
+      await expectLater(
+        modules.loadLoteActivities(deniedUser, 7),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.statusCode,
+            'status',
+            403,
+          ),
+        ),
+      );
+      await expectLater(
+        modules.loadLoteActivities(user, 0),
+        throwsA(isA<ApiException>()),
+      );
+      await expectLater(
+        modules.loadLoteActivities(user, 7, page: 0),
+        throwsA(isA<ApiException>()),
+      );
+      expect(calls, 0);
+    },
+  );
+
+  test('No entrega actividades de otro lote ni una página distinta', () async {
+    for (final payload in [
+      {
+        'data': [
+          {'actividadid': 11, 'loteid': 8},
+        ],
+        'meta': {'current_page': 1, 'last_page': 1},
+      },
+      {
+        'data': [
+          {'actividadid': 11},
+        ],
+        'meta': {'current_page': 1, 'last_page': 1},
+      },
+      {
+        'data': [
+          {'actividadid': 11, 'loteid': 7},
+        ],
+        'meta': {'current_page': 2, 'last_page': 2},
+      },
+    ]) {
+      final modules = service(
+        (_) async => http.Response(jsonEncode(payload), 200),
+      );
+      await expectLater(
+        modules.loadLoteActivities(allowedUser(AppModule.lotes), 7),
+        throwsA(isA<ApiException>()),
+      );
+    }
+  });
 }

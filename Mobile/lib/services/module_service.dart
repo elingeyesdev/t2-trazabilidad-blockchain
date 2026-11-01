@@ -9,6 +9,45 @@ class ModuleService {
 
   final ApiClient _api;
 
+  Future<ModulePage> loadLoteActivities(
+    AuthUser user,
+    int loteId, {
+    int page = 1,
+  }) async {
+    if (!AppModule.lotes.canOpen(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar este lote.',
+        statusCode: 403,
+      );
+    }
+    if (loteId <= 0 || page < 1) {
+      throw const ApiException('El historial solicitado no es válido.');
+    }
+    final response = await _api.request(
+      'GET',
+      'lotes/$loteId/actividades',
+      queryParameters: {'page': '$page'},
+    );
+    final result = ModulePage.fromJson(
+      response,
+      idField: AppModule.actividades.idField,
+      titleField: AppModule.actividades.titleField,
+      fallbackTitle: 'Actividad',
+      fields: AppModule.actividades.fields,
+    );
+    final rows = response is Map<String, dynamic> ? response['data'] : response;
+    if (rows is! List ||
+        rows.any(
+          (row) => row is! Map<String, dynamic> || row['loteid'] != loteId,
+        ) ||
+        result.currentPage != page) {
+      throw const ApiException(
+        'La información recibida no corresponde al historial solicitado.',
+      );
+    }
+    return result;
+  }
+
   Future<ModuleRecord> loadDetail(
     AppModule module,
     AuthUser user,
