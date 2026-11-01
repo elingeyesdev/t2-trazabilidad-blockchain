@@ -142,6 +142,7 @@ void main() {
       expect(find.text('Lote #7'), findsOneWidget);
       expect(find.text('Riego del Norte'), findsOneWidget);
       expect(find.text('Revisión del Sur'), findsNothing);
+      await tester.scrollUntilVisible(find.text('Siguiente'), 200);
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
       expect(find.text('Abono del Norte'), findsOneWidget);
@@ -189,6 +190,7 @@ void main() {
       });
       await tester.pumpWidget(history(ModuleService(api), 7, 'Parcela Norte'));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Siguiente'), 200);
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
       expect(
@@ -203,6 +205,7 @@ void main() {
       await tester.tap(find.text('Reintentar'));
       await tester.pumpAndSettle();
       expect(find.text('Abono del Norte'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Página 2 de 2'), 200);
       expect(find.text('Página 2 de 2'), findsOneWidget);
       expect(calls, 3);
     });
@@ -223,6 +226,7 @@ void main() {
       final service = ModuleService(api);
       await tester.pumpWidget(history(service, 7, 'Parcela Norte'));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Siguiente'), 200);
       await tester.tap(find.text('Siguiente'));
       await tester.pump();
       expect(find.text('Cargando historial...'), findsOneWidget);

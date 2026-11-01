@@ -6,6 +6,7 @@ import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/activity_history_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
@@ -164,40 +165,7 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
           for (final activity in page.records)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppTheme.line),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.event_note_rounded,
-                      color: AppTheme.forest,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            activity.title,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Inicio: ${activity.fieldInfo?.details['Inicio'] ?? 'Sin registrar'}',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              child: ActivityHistoryCard(activity: activity),
             ),
           if (page.lastPage > 1) ...[
             const SizedBox(height: 12),

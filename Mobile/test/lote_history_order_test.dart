@@ -116,6 +116,7 @@ void main() {
         tester.getTopLeft(find.text('Riego reciente')).dy,
         lessThan(tester.getTopLeft(find.text('Preparación del terreno')).dy),
       );
+      await tester.scrollUntilVisible(find.text('Siguiente'), 200);
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
       expect(find.text('Inicio: 31/12/2025'), findsOneWidget);
@@ -123,6 +124,7 @@ void main() {
       await tester.tap(find.byTooltip('Actualizar historial'));
       await tester.pumpAndSettle();
       expect(find.text('Inicio: 31/12/2025'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Anterior'), 200);
       await tester.tap(find.text('Anterior'));
       await tester.pumpAndSettle();
       expect(find.text('Inicio: 31/10/2026'), findsOneWidget);

@@ -158,10 +158,12 @@ void main() {
       );
     });
     await openFromLote(tester);
+    await tester.scrollUntilVisible(find.text('Siguiente'), 200);
     await tester.tap(find.text('Siguiente'));
     await tester.pumpAndSettle();
     expect(find.text('Riego del lote'), findsOneWidget);
     expect(find.text('Preparación del terreno'), findsNothing);
+    await tester.scrollUntilVisible(find.text('Anterior'), 200);
     await tester.tap(find.text('Anterior'));
     await tester.pumpAndSettle();
     expect(find.text('Preparación del terreno'), findsOneWidget);
