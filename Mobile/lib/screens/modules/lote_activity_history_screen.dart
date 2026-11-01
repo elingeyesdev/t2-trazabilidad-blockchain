@@ -152,7 +152,7 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 12),
-          const Text('Consulta las actividades registradas para este lote.'),
+          const Text('Más recientes primero, según su fecha de inicio.'),
           const SizedBox(height: 24),
           if (page.records.isEmpty)
             const Padding(
@@ -180,9 +180,19 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
                     ),
                     const SizedBox(width: 14),
                     Expanded(
-                      child: Text(
-                        activity.title,
-                        style: Theme.of(context).textTheme.titleMedium,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            activity.title,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Inicio: ${activity.fieldInfo?.details['Inicio'] ?? 'Sin registrar'}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
                       ),
                     ),
                   ],

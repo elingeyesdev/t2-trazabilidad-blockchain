@@ -26,7 +26,11 @@ class ModuleService {
     final response = await _api.request(
       'GET',
       'lotes/$loteId/actividades',
-      queryParameters: {'page': '$page'},
+      queryParameters: {
+        'page': '$page',
+        'sort': 'fechainicio',
+        'direction': 'desc',
+      },
     );
     const invalidHistory = ApiException(
       'La información recibida no corresponde al historial solicitado.',

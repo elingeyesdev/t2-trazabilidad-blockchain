@@ -100,7 +100,11 @@ void main() {
           return json({'data': lot});
         }
         expect(request.url.path, '/api/lotes/7/actividades');
-        expect(request.url.queryParameters, {'page': '1'});
+        expect(request.url.queryParameters, {
+          'page': '1',
+          'sort': 'fechainicio',
+          'direction': 'desc',
+        });
         historyCalls++;
         return json(page([activity]));
       });
