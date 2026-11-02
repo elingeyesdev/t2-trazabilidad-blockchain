@@ -97,6 +97,79 @@ void main() {
     });
   }
 
+  testWidgets(
+    'Un minorista activo recibe una explicación sin solicitar permisos adicionales',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: HomeScreen(
+            user: const AuthUser(
+              id: 1,
+              name: 'Ana',
+              email: 'ana@example.test',
+              roles: ['minorista'],
+              permissions: {'punto_venta.view'},
+            ),
+            onLogout: () {},
+          ),
+        ),
+      );
+      expect(
+        find.text('Las funciones de tu perfil están en la web'),
+        findsOneWidget,
+      );
+      expect(find.text('Tu cuenta aún no tiene accesos'), findsNothing);
+      expect(find.text('Mi perfil'), findsOneWidget);
+      await tester.tap(find.text('Trabajo'));
+      await tester.pumpAndSettle();
+      for (final module in AppModule.values) {
+        expect(find.text(module.label), findsNothing);
+      }
+    },
+  );
+
+  testWidgets(
+    'Un mayorista no ve asignaciones agrícolas aunque use ese permiso en la web',
+    (tester) async {
+      const user = AuthUser(
+        id: 1,
+        name: 'Ana',
+        email: 'ana@example.test',
+        roles: ['jefe_mayorista'],
+        permissions: {
+          'asignaciones.view',
+          'inventario.view',
+          'documentos.view',
+        },
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: HomeScreen(user: user, onLogout: () {}),
+        ),
+      );
+      await tester.tap(find.text('Trabajo'));
+      await tester.pumpAndSettle();
+      expect(find.text(AppModule.asignaciones.label), findsNothing);
+      expect(find.text(AppModule.almacenes.label), findsOneWidget);
+      expect(find.text(AppModule.documentos.label), findsOneWidget);
+      expect(AppModule.asignaciones.canOpen(user), isFalse);
+      expect(
+        AppModule.asignaciones.canOpen(
+          const AuthUser(
+            id: 2,
+            name: 'Luis',
+            email: 'luis@example.test',
+            roles: ['mayorista', 'transportista'],
+            permissions: {'asignaciones.view'},
+          ),
+        ),
+        isTrue,
+      );
+    },
+  );
+
   testWidgets('Trabajo prioriza campo y oculta los grupos sin acceso', (
     tester,
   ) async {
