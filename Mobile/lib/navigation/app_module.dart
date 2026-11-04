@@ -161,5 +161,15 @@ enum AppModule {
     AppModule.usuarios => 'Consulta las cuentas de los usuarios.',
   };
 
-  bool canOpen(AuthUser user) => user.permissions.contains(permission);
+  bool canOpen(AuthUser user) {
+    if (!user.permissions.contains(permission)) return false;
+    if (this != AppModule.asignaciones ||
+        user.roles.any(const {'admin', 'transportista'}.contains)) {
+      return true;
+    }
+    // Esta consulta corresponde al trayecto agrícola, no a la distribución comercial.
+    return !user.roles.any(
+      const {'mayorista', 'jefe_mayorista', 'minorista'}.contains,
+    );
+  }
 }

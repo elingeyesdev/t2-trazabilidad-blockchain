@@ -139,11 +139,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 24),
                     if (modules.isEmpty)
-                      const AppEmptyState(
+                      AppEmptyState(
                         icon: Icons.person_outline_rounded,
-                        title: 'Tu cuenta aún no tiene accesos',
-                        message:
-                            'Pide al responsable que habilite las opciones que necesitas. Tu perfil sigue disponible abajo.',
+                        title: widget.user.permissions.isEmpty
+                            ? 'Tu cuenta aún no tiene accesos'
+                            : 'Las funciones de tu perfil están en la web',
+                        message: widget.user.permissions.isEmpty
+                            ? 'Pide al responsable que habilite las opciones que necesitas. Tu perfil sigue disponible abajo.'
+                            : 'Tu cuenta está activa. Por ahora, sus funciones se consultan desde la web. Puedes revisar tu perfil aquí.',
                       )
                     else if (_tab == 0)
                       ..._home(modules)
