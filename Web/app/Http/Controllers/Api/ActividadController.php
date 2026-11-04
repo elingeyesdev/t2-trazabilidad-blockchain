@@ -38,9 +38,15 @@ class ActividadController extends Controller
         ActividadPermisos::aplicarScopeVisibles($query->getQuery(), $request->user());
         $query = $this->aplicarFiltros($query->getQuery(), $filters);
 
+        $sort = $filters['sort'] ?? 'actividadid';
+        $direction = $filters['direction'] ?? 'desc';
+        $query->orderBy($sort, $direction);
+        if ($sort !== 'actividadid') {
+            $query->orderBy('actividadid', $direction);
+        }
+
         return ActividadConsultaResource::collection(
-            $query->orderBy($filters['sort'] ?? 'actividadid', $filters['direction'] ?? 'desc')
-                ->paginate($filters['per_page'] ?? 15)
+            $query->paginate($filters['per_page'] ?? 15)
                 ->withQueryString()
         );
     }

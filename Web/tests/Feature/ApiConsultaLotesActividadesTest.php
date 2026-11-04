@@ -191,6 +191,44 @@ class ApiConsultaLotesActividadesTest extends TestCase
         $this->getJson('/api/lotes?direction=sideways')->assertUnprocessable();
     }
 
+    public function test_historial_por_lote_conserva_el_orden_por_fecha_entre_paginas_y_en_empates(): void
+    {
+        $jefe = $this->crearUsuario('jefe_agricultor', 'orden_historial');
+        $lote = $this->crearLote($jefe);
+        $ids = [];
+        foreach ([
+            '2026-10-31 10:00:00',
+            '2026-10-01 09:00:00',
+            '2026-11-01 08:00:00',
+            '2026-10-31 10:00:00',
+        ] as $index => $inicio) {
+            $actividad = $this->crearActividad($lote, $jefe, 'Trabajo '.$index);
+            $actividad->update(['fechainicio' => $inicio]);
+            $ids[] = $actividad->actividadid;
+        }
+
+        Sanctum::actingAs($jefe);
+        foreach ([
+            'desc' => [$ids[2], $ids[3], $ids[0], $ids[1]],
+            'asc' => [$ids[1], $ids[0], $ids[3], $ids[2]],
+        ] as $direction => $esperados) {
+            $recibidos = [];
+            for ($page = 1; $page <= 2; $page++) {
+                $respuesta = $this->getJson('/api/lotes/'.$lote->loteid.'/actividades?'.http_build_query([
+                    'sort' => 'fechainicio',
+                    'direction' => $direction,
+                    'per_page' => 2,
+                    'page' => $page,
+                ]))->assertOk()
+                    ->assertJsonPath('meta.current_page', $page)
+                    ->assertJsonPath('meta.last_page', 2);
+
+                $recibidos = array_merge($recibidos, array_column($respuesta->json('data'), 'actividadid'));
+            }
+            $this->assertSame($esperados, $recibidos);
+        }
+    }
+
     public function test_lote_sin_actividades_o_historial_devuelve_colecciones_vacias(): void
     {
         $jefe = $this->crearUsuario('jefe_agricultor', 'vacio');

@@ -15,12 +15,12 @@ class ModulePage {
     var current = 1;
     var last = 1;
     if (json is Map<String, dynamic>) {
-      if (json case {
-        'data': List data,
+      final metadata = json.containsKey('meta') ? json['meta'] : json;
+      if (metadata case {
         'current_page': int page,
         'last_page': int end,
-      } when page >= 1 && end >= page) {
-        rows = data;
+      } when json['data'] is List && page >= 1 && end >= page) {
+        rows = json['data'];
         current = page;
         last = end;
       } else {
@@ -71,13 +71,16 @@ class ModuleRecord {
     required String fallbackTitle,
     required Map<String, String> fields,
   }) {
-    if (json is! Map<String, dynamic> ||
-        json[idField] is! int ||
-        json[idField] <= 0) {
+    final row = json is Map<String, dynamic> && json.containsKey('data')
+        ? json['data']
+        : json;
+    if (row is! Map<String, dynamic> ||
+        row[idField] is! int ||
+        row[idField] <= 0) {
       throw _invalid;
     }
     String? text(String key) {
-      final value = json[key];
+      final value = row[key];
       if (value == null) return null;
       if (value is! String && value is! num && value is! bool) throw _invalid;
       final result = value.toString().trim();
@@ -85,18 +88,18 @@ class ModuleRecord {
     }
 
     return ModuleRecord(
-      id: json[idField] as int,
+      id: row[idField] as int,
       title:
           (titleField == null ? null : text(titleField)) ??
-          '$fallbackTitle #${json[idField]}',
+          '$fallbackTitle #${row[idField]}',
       details: Map.unmodifiable({
-        'Identificador': json[idField].toString(),
+        'Identificador': row[idField].toString(),
         for (final field in fields.entries)
           field.value: text(field.key) ?? 'Sin registrar',
       }),
       fieldInfo: switch (idField) {
-        'loteid' => FieldRecordInfo.lote(json),
-        'actividadid' => FieldRecordInfo.actividad(json),
+        'loteid' => FieldRecordInfo.lote(row),
+        'actividadid' => FieldRecordInfo.actividad(row),
         _ => null,
       },
     );
