@@ -6,6 +6,7 @@ import '../../models/registration_result.dart';
 import '../../navigation/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_header.dart';
+import '../../widgets/form_validation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.controller});
@@ -42,10 +43,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (widget.controller.isSubmitting) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(_formKey)) return;
     FocusScope.of(context).unfocus();
     final success = await widget.controller.login(_email.text, _password.text);
-    if (!mounted || !success) return;
+    if (!mounted) return;
+    if (!success) {
+      revealFormErrors(_formKey);
+      return;
+    }
     _password.clear();
     TextInput.finishAutofillContext();
   }
@@ -67,8 +72,14 @@ class _LoginScreenState extends State<LoginScreen> {
             MediaQuery.textScalerOf(context).scale(16) <= 24;
         final emailError = _fieldError('email');
         final passwordError = _fieldError('password');
-        final message = emailError == null && passwordError == null
-            ? widget.controller.error?.message
+        final error = widget.controller.error;
+        final message =
+            error != null &&
+                (error.validationErrors.isEmpty ||
+                    error.validationErrors.keys.any(
+                      (field) => field != 'email' && field != 'password',
+                    ))
+            ? error.message
             : null;
 
         return Scaffold(
@@ -118,6 +129,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                           TextFormField(
                             controller: _email,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            forceErrorText: emailError,
                             enabled: !busy,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
@@ -131,17 +145,17 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: 'Correo electrónico',
                               prefixIcon: const Icon(Icons.mail_outline),
                               hintText: 'nombre@correo.com',
-                              errorText: emailError,
                             ),
-                            validator: (value) =>
-                                value == null || value.trim().isEmpty
-                                ? 'Ingresa tu correo electrónico.'
-                                : null,
-                            onChanged: (_) => widget.controller.clearError(),
+                            validator: validateEmail,
+                            onChanged: (_) =>
+                                widget.controller.clearError(field: 'email'),
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
                             controller: _password,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            forceErrorText: passwordError,
                             enabled: !busy,
                             obscureText: _obscurePassword,
                             autocorrect: false,
@@ -151,7 +165,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'Contraseña',
                               prefixIcon: const Icon(Icons.lock_outline),
-                              errorText: passwordError,
                               suffixIcon: IconButton(
                                 tooltip: _obscurePassword
                                     ? 'Mostrar contraseña'
@@ -172,7 +185,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             validator: (value) => value == null || value.isEmpty
                                 ? 'Ingresa tu contraseña.'
                                 : null,
-                            onChanged: (_) => widget.controller.clearError(),
+                            onChanged: (_) =>
+                                widget.controller.clearError(field: 'password'),
                             onFieldSubmitted: (_) => _submit(),
                           ),
                           if (message != null) ...[

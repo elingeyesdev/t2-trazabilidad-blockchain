@@ -5,6 +5,7 @@ import '../../controllers/auth_controller.dart';
 import '../../models/api_exception.dart';
 import '../../models/profile_photo.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/form_validation.dart';
 
 class ProfileEditForm extends StatefulWidget {
   const ProfileEditForm({
@@ -91,7 +92,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
 
   Future<void> _save() async {
     final auth = widget.controller;
-    if (auth.isSubmitting || _needsReload || !_form.currentState!.validate()) {
+    if (auth.isSubmitting || _needsReload || !validateForm(_form)) {
       return;
     }
     final user = auth.user;
@@ -113,6 +114,8 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     if (!mounted) return;
     if (saved) {
       widget.onSaved();
+    } else {
+      revealFormErrors(_form);
     }
   }
 
@@ -122,6 +125,15 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     final user = auth.user;
     final busy = auth.isSubmitting;
     final error = auth.error;
+    final message =
+        _notice ??
+        (error != null &&
+                (error.validationErrors.isEmpty ||
+                    error.validationErrors.keys.any(
+                      (field) => field != 'nombreusuario' && field != 'imagen',
+                    ))
+            ? error.message
+            : null);
     String? fieldError(String field) =>
         error?.validationErrors[field]?.join('\n');
     return SingleChildScrollView(
@@ -144,19 +156,24 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                 if (user?.canUpdateUsername == true)
                   TextFormField(
                     controller: _username,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    forceErrorText: fieldError('nombreusuario'),
                     enabled: !busy && !_needsReload,
                     decoration: InputDecoration(
                       labelText: 'Nombre de usuario',
                       prefixText: '@',
                       helperText: 'Solo puedes cambiarlo una vez.',
                       helperMaxLines: 2,
-                      errorText: fieldError('nombreusuario'),
                       errorMaxLines: 3,
                     ),
                     autocorrect: false,
                     validator: (value) => value == null || value.trim().isEmpty
                         ? 'Ingresa un nombre de usuario.'
                         : null,
+                    onChanged: (_) {
+                      if (_notice != null) setState(() => _notice = null);
+                      auth.clearError(field: 'nombreusuario');
+                    },
                   )
                 else
                   Text(
@@ -213,7 +230,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                       ),
                     ),
                 ],
-                if (_notice ?? error?.message case final message?)
+                if (message != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 20),
                     child: Semantics(liveRegion: true, child: Text(message)),

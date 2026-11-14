@@ -5,6 +5,7 @@ import '../../controllers/auth_controller.dart';
 import '../../models/registration_result.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_header.dart';
+import '../../widgets/form_validation.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key, required this.controller});
@@ -46,7 +47,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
-    if (widget.controller.isSubmitting || !_formKey.currentState!.validate()) {
+    if (widget.controller.isSubmitting || !validateForm(_formKey)) {
       return;
     }
     FocusScope.of(context).unfocus();
@@ -58,7 +59,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       phone: _fields['telefono']!.text,
       password: _fields['password']!.text,
     );
-    if (!mounted || result == null) return;
+    if (!mounted) return;
+    if (result == null) {
+      revealFormErrors(_formKey);
+      return;
+    }
     _fields['password']!.clear();
     _fields['password_confirmation']!.clear();
     TextInput.finishAutofillContext(shouldSave: false);
@@ -84,6 +89,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: TextFormField(
         key: ValueKey('register.$name'),
         controller: _fields[name],
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        forceErrorText: messages == null || messages.isEmpty
+            ? null
+            : messages.join('\n'),
         enabled: !busy,
         keyboardType: keyboard,
         autofillHints: autofillHints,
@@ -101,9 +110,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           labelText: label,
           helperText: helperText,
           errorMaxLines: 3,
-          errorText: messages == null || messages.isEmpty
-              ? null
-              : messages.join('\n'),
           suffixIcon: secret
               ? IconButton(
                   tooltip:
@@ -129,12 +135,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
             validator ??
             (value) {
               if (optional) return null;
-              final empty =
-                  value == null ||
-                  (secret ? value.isEmpty : value.trim().isEmpty);
-              return empty ? 'Completa este campo.' : null;
+              if (name == 'email') return validateEmail(value);
+              final input = secret ? value ?? '' : value?.trim() ?? '';
+              if (input.isEmpty) {
+                return switch (name) {
+                  'nombre' => 'Ingresa tu nombre.',
+                  'apellido' => 'Ingresa tu apellido.',
+                  'nombreusuario' => 'Ingresa un nombre de usuario.',
+                  _ => 'Ingresa tu contraseña.',
+                };
+              }
+              if (name == 'password' && input.runes.length < 6) {
+                return 'Usa una contraseña de al menos 6 caracteres.';
+              }
+              return null;
             },
-        onChanged: (_) => widget.controller.clearError(),
+        onChanged: (_) => widget.controller.clearError(field: name),
       ),
     );
   }

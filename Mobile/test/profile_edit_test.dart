@@ -102,6 +102,10 @@ void main() {
     await tester.enterText(find.byType(TextFormField), '');
     await save(tester);
     expect(find.text('Ingresa un nombre de usuario.'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField), 'ana.nueva');
+    await tester.pumpAndSettle();
+    expect(find.text('Ingresa un nombre de usuario.'), findsNothing);
+    expect(find.text('No hay cambios para guardar.'), findsNothing);
     expect(writes, 0);
   });
 
@@ -207,6 +211,7 @@ void main() {
               'message': 'Revisa los datos',
               'errors': {
                 'nombreusuario': ['Nombre no disponible'],
+                'imagen': ['Selecciona una fotografía válida.'],
               },
             }, 422),
     );
@@ -218,7 +223,48 @@ void main() {
       'ana.ocupada',
     );
     expect(saved, 0);
+    await tester.enterText(find.byType(TextFormField), 'ana.corregida');
+    await tester.pumpAndSettle();
+    expect(find.text('Nombre no disponible'), findsNothing);
+    expect(find.text('Selecciona una fotografía válida.'), findsOneWidget);
   });
+
+  for (final selected in [true, false]) {
+    testWidgets(
+      selected
+          ? 'Corregir la fotografía conserva el error pendiente del nombre'
+          : 'Cancelar el selector conserva los errores pendientes del perfil',
+      (tester) async {
+        await startForm(
+          tester,
+          (request) async => request.method == 'GET'
+              ? jsonResponse(profile)
+              : jsonResponse({
+                  'message': 'Revisa los datos',
+                  'errors': {
+                    'nombreusuario': ['Nombre no disponible'],
+                    'imagen': ['Selecciona una fotografía válida.'],
+                  },
+                }, 422),
+          selectFile: () async => selected ? photoFile() : null,
+        );
+        await tester.enterText(find.byType(TextFormField), 'ana.ocupada');
+        await save(tester);
+        await tester.ensureVisible(find.text('Seleccionar foto'));
+        await tester.tap(find.text('Seleccionar foto'));
+        await tester.pumpAndSettle();
+        expect(find.text('Nombre no disponible'), findsOneWidget);
+        expect(
+          find.text('Selecciona una fotografía válida.'),
+          selected ? findsNothing : findsOneWidget,
+        );
+        expect(
+          find.text('Quitar selección'),
+          selected ? findsOneWidget : findsNothing,
+        );
+      },
+    );
+  }
 
   testWidgets('Un aviso anterior no oculta el error de una fotografía nueva', (
     tester,
