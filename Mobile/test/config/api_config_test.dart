@@ -1,7 +1,36 @@
 import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  if (const bool.hasEnvironment('API_BASE_URL')) {
+    test('Respeta la dirección indicada mediante API_BASE_URL', () {
+      const configured = String.fromEnvironment('API_BASE_URL');
+      expect(
+        ApiConfig.fromEnvironment().endpoint('me'),
+        Uri.parse('$configured/me'),
+      );
+    });
+  } else {
+    final localEndpoints = {
+      TargetPlatform.android: kIsWeb
+          ? 'http://127.0.0.1:8001/api/me'
+          : 'http://10.0.2.2:8001/api/me',
+      TargetPlatform.windows: 'http://127.0.0.1:8001/api/me',
+    };
+    for (final entry in localEndpoints.entries) {
+      test('Selecciona la API local para ${entry.key.name}', () {
+        debugDefaultTargetPlatformOverride = entry.key;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+        expect(
+          ApiConfig.fromEnvironment().endpoint('me'),
+          Uri.parse(entry.value),
+        );
+      });
+    }
+  }
+
   test(
     'Conserva el prefijo de la API y codifica los parámetros de consulta',
     () {

@@ -17,7 +17,7 @@ class RecordStatusBadge extends StatelessWidget {
               status == 'Planificación'
           ? AppTheme.ochre
           : AppTheme.sage,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
     ),
     child: Text(
       status,

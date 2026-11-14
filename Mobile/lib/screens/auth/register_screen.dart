@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../controllers/auth_controller.dart';
 import '../../models/registration_result.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/brand_header.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key, required this.controller});
@@ -98,7 +100,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         decoration: InputDecoration(
           labelText: label,
           helperText: helperText,
-          border: const OutlineInputBorder(),
           errorMaxLines: 3,
           errorText: messages == null || messages.isEmpty
               ? null
@@ -148,10 +149,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.schedule_outlined,
-                size: 56,
-                color: theme.colorScheme.primary,
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: AppTheme.sage,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mark_email_read_outlined,
+                  size: 48,
+                  color: AppTheme.forest,
+                ),
               ),
               const SizedBox(height: 20),
               Text(
@@ -172,6 +180,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 28),
+              const Divider(color: AppTheme.line),
+              const SizedBox(height: 16),
               FilledButton(
                 onPressed: _leave,
                 child: const Text('Volver al inicio de sesión'),
@@ -225,10 +235,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
+                                  const BrandWordmark(),
+                                  const SizedBox(height: 32),
+                                  Text(
+                                    'Todo empieza en el campo.',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.headlineSmall,
+                                  ),
+                                  const SizedBox(height: 8),
                                   const Text(
-                                    'Solicita una cuenta de agricultor. Tu registro requiere la aprobación de un administrador.',
+                                    'Crea tu cuenta de agricultor para consultar tus lotes y seguir el trabajo de cada cosecha.',
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.sage,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline_rounded,
+                                          size: 20,
+                                          color: AppTheme.forest,
+                                        ),
+                                        SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            'Tu registro requiere la aprobación de un administrador.',
+                                            style: TextStyle(
+                                              color: AppTheme.forest,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                   const SizedBox(height: 24),
+                                  _section('01', 'Datos personales'),
                                   _field(
                                     'nombre',
                                     'Nombre',
@@ -246,6 +294,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     ],
                                   ),
                                   _field(
+                                    'telefono',
+                                    'Teléfono (opcional)',
+                                    optional: true,
+                                    keyboard: TextInputType.phone,
+                                    autofillHints: const [
+                                      AutofillHints.telephoneNumber,
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _section('02', 'Datos de acceso'),
+                                  _field(
                                     'email',
                                     'Correo electrónico',
                                     keyboard: TextInputType.emailAddress,
@@ -256,15 +315,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     'Nombre de usuario',
                                     autofillHints: const [
                                       AutofillHints.newUsername,
-                                    ],
-                                  ),
-                                  _field(
-                                    'telefono',
-                                    'Teléfono (opcional)',
-                                    optional: true,
-                                    keyboard: TextInputType.phone,
-                                    autofillHints: const [
-                                      AutofillHints.telephoneNumber,
                                     ],
                                   ),
                                   _field(
@@ -315,15 +365,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           )
                                         : const Icon(Icons.person_add_outlined),
                                     label: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
+                                      padding: EdgeInsets.zero,
                                       child: Text(
                                         busy
                                             ? 'Enviando solicitud...'
                                             : 'Enviar solicitud',
                                       ),
                                     ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: busy ? null : _leave,
+                                    child: const Text('Ya tengo una cuenta'),
                                   ),
                                 ],
                               ),
@@ -338,4 +391,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       },
     );
   }
+
+  Widget _section(String number, String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Row(
+      children: [
+        Text(
+          number,
+          style: const TextStyle(
+            color: AppTheme.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ),
+      ],
+    ),
+  );
 }

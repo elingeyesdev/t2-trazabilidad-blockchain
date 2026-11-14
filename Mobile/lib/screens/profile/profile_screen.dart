@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/auth_controller.dart';
 import '../../models/auth_user.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_loading.dart';
+import '../../widgets/information_section.dart';
 import 'profile_edit_form.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -86,11 +88,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _profile(BuildContext context, AuthUser user) {
     final theme = Theme.of(context);
-    Widget information(IconData icon, String label, String? value) => ListTile(
-      leading: Icon(icon),
-      title: Text(label),
-      subtitle: SelectableText(value ?? 'Sin registrar'),
-    );
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -100,69 +97,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(child: _ProfileAvatar(url: user.avatarUrl)),
-                const SizedBox(height: 16),
-                Text(
-                  user.fullName,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 24),
-                Card(
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: AppTheme.forest,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      information(
-                        Icons.alternate_email,
-                        'Nombre de usuario',
-                        user.username == null ? null : '@${user.username}',
+                      Row(
+                        children: [
+                          _ProfileAvatar(url: user.avatarUrl),
+                          const Spacer(),
+                          const Icon(
+                            Icons.eco_outlined,
+                            color: AppTheme.ochre,
+                            size: 32,
+                          ),
+                        ],
                       ),
-                      information(
-                        Icons.mail_outline,
-                        'Correo electrónico',
-                        user.email,
+                      const SizedBox(height: 20),
+                      Text(
+                        user.fullName,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                        ),
                       ),
-                      information(Icons.phone_outlined, 'Teléfono', user.phone),
-                      information(
-                        Icons.badge_outlined,
-                        'CI/NIT',
-                        user.identityDocument,
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        user.username == null
+                            ? 'Sin registrar'
+                            : '@${user.username}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
                       ),
-                      information(
-                        Icons.shield_outlined,
-                        'Roles',
-                        user.roles.isEmpty
-                            ? 'Sin roles asignados'
-                            : user.roles.map(_roleLabel).join(' · '),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.badge_outlined,
+                              color: AppTheme.ochre,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                user.roles.isEmpty
+                                    ? 'Sin roles asignados'
+                                    : user.roles.map(_roleLabel).join(' · '),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      information(
-                        Icons.calendar_today_outlined,
-                        'Miembro desde',
-                        _date(user.registeredAt),
-                      ),
-                      information(
-                        Icons.update,
-                        'Última actualización',
-                        _date(user.updatedAt, withTime: true),
-                      ),
-                      information(
-                        Icons.login,
-                        'Último acceso',
-                        _date(user.lastLoginAt, withTime: true),
-                      ),
+                      if (user.canUpdateUsername || user.canUpdatePhoto) ...[
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.ochre,
+                            foregroundColor: AppTheme.forest,
+                          ),
+                          onPressed: () {
+                            widget.controller.clearError();
+                            setState(() => _editing = true);
+                          },
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text('Editar perfil'),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                if (user.canUpdateUsername || user.canUpdatePhoto) ...[
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: () {
-                      widget.controller.clearError();
-                      setState(() => _editing = true);
-                    },
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Editar perfil'),
+                const SizedBox(height: 24),
+                InformationSection(
+                  title: 'Datos de contacto',
+                  icon: Icons.person_outline_rounded,
+                  fields: {
+                    'Correo electrónico': user.email,
+                    'Teléfono': user.phone ?? 'Sin registrar',
+                    'CI/NIT': user.identityDocument ?? 'Sin registrar',
+                  },
+                ),
+                const SizedBox(height: 16),
+                InformationSection(
+                  title: 'Actividad de la cuenta',
+                  icon: Icons.history_rounded,
+                  fields: {
+                    'Miembro desde':
+                        _date(user.registeredAt) ?? 'Sin registrar',
+                    'Última actualización':
+                        _date(user.updatedAt, withTime: true) ??
+                        'Sin registrar',
+                    'Último acceso':
+                        _date(user.lastLoginAt, withTime: true) ??
+                        'Sin registrar',
+                  },
+                ),
+                const SizedBox(height: 24),
+                TextButton.icon(
+                  onPressed: widget.controller.isSubmitting
+                      ? null
+                      : widget.controller.logout,
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
                   ),
-                ],
+                  icon: const Icon(Icons.logout_rounded, size: 20),
+                  label: const Text('Cerrar sesión'),
+                ),
               ],
             ),
           ),
@@ -200,8 +258,8 @@ class _ProfileAvatar extends StatelessWidget {
   final String? url;
 
   Widget _fallback(BuildContext context) => ColoredBox(
-    color: Theme.of(context).colorScheme.secondaryContainer,
-    child: const Icon(Icons.person_outline, size: 52),
+    color: AppTheme.sage,
+    child: const Icon(Icons.person_outline, size: 40, color: AppTheme.forest),
   );
 
   @override
@@ -241,7 +299,10 @@ class _ProfileAvatar extends StatelessWidget {
     return Semantics(
       label: 'Foto de perfil',
       image: true,
-      child: ClipOval(child: SizedBox.square(dimension: 96, child: image)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox.square(dimension: 80, child: image),
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/auth_controller.dart';
 import '../../models/api_exception.dart';
 import '../../models/profile_photo.dart';
+import '../../theme/app_theme.dart';
 
 class ProfileEditForm extends StatefulWidget {
   const ProfileEditForm({
@@ -137,6 +138,8 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   'Editar perfil',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
+                const SizedBox(height: 8),
+                const Text('Personaliza cómo apareces en AgroFusion.'),
                 const SizedBox(height: 24),
                 if (user?.canUpdateUsername == true)
                   TextFormField(
@@ -149,7 +152,6 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                       helperMaxLines: 2,
                       errorText: fieldError('nombreusuario'),
                       errorMaxLines: 3,
-                      border: const OutlineInputBorder(),
                     ),
                     autocorrect: false,
                     validator: (value) => value == null || value.trim().isEmpty
@@ -162,13 +164,28 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   ),
                 if (user?.canUpdatePhoto == true) ...[
                   const SizedBox(height: 24),
+                  const Divider(color: AppTheme.line),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Fotografía',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Una imagen para reconocer tu cuenta.'),
+                  const SizedBox(height: 16),
                   if (_photo case final photo?) ...[
-                    Image.memory(
-                      photo.bytes,
-                      height: 160,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.broken_image_outlined, size: 64),
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.memory(
+                          photo.bytes,
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              const Icon(Icons.broken_image_outlined, size: 64),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextButton(
@@ -183,7 +200,11 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('Seleccionar foto'),
                   ),
-                  const Text('JPG, PNG, WEBP o GIF, hasta 2 MB.'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'JPG, PNG, WEBP o GIF, hasta 2 MB.',
+                    textAlign: TextAlign.center,
+                  ),
                   if (fieldError('imagen') case final message?)
                     Text(
                       message,

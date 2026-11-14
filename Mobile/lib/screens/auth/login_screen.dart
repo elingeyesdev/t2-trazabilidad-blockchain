@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../../controllers/auth_controller.dart';
 import '../../models/registration_result.dart';
 import '../../navigation/app_routes.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/brand_header.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.controller});
@@ -60,6 +62,9 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (context, _) {
         final busy = widget.controller.isSubmitting;
         final theme = Theme.of(context);
+        final showBrandPanel =
+            MediaQuery.sizeOf(context).height >= 740 &&
+            MediaQuery.textScalerOf(context).scale(16) <= 24;
         final emailError = _fieldError('email');
         final passwordError = _fieldError('password');
         final message = emailError == null && passwordError == null
@@ -80,24 +85,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Icon(
-                            Icons.eco_outlined,
-                            size: 56,
-                            color: theme.colorScheme.primary,
-                          ),
-                          const SizedBox(height: 12),
+                          if (showBrandPanel)
+                            _brandPanel()
+                          else
+                            const BrandWordmark(),
+                          SizedBox(height: showBrandPanel ? 32 : 24),
                           Text(
-                            'AgroFusion',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.headlineMedium,
+                            'Inicia sesión',
+                            style: theme.textTheme.headlineSmall,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Text(
-                            'Inicia sesión con tu cuenta',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.titleMedium,
+                            'Tu campo y tu trabajo, en un mismo lugar.',
+                            style: theme.textTheme.bodyMedium,
                           ),
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 24),
                           if (widget.controller.logoutResult
                               case final result?) ...[
                             Semantics(
@@ -128,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'Correo electrónico',
                               prefixIcon: const Icon(Icons.mail_outline),
-                              border: const OutlineInputBorder(),
+                              hintText: 'nombre@correo.com',
                               errorText: emailError,
                             ),
                             validator: (value) =>
@@ -137,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : null,
                             onChanged: (_) => widget.controller.clearError(),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           TextFormField(
                             controller: _password,
                             enabled: !busy,
@@ -149,7 +151,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'Contraseña',
                               prefixIcon: const Icon(Icons.lock_outline),
-                              border: const OutlineInputBorder(),
                               errorText: passwordError,
                               suffixIcon: IconButton(
                                 tooltip: _obscurePassword
@@ -197,7 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           FilledButton(
                             onPressed: busy ? null : _submit,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: EdgeInsets.zero,
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -211,17 +212,34 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     const SizedBox(width: 12),
                                   ],
-                                  Text(
-                                    busy ? 'Ingresando...' : 'Iniciar sesión',
+                                  Flexible(
+                                    child: Text(
+                                      busy ? 'Ingresando...' : 'Iniciar sesión',
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ),
+                                  if (!busy) ...[
+                                    const SizedBox(width: 12),
+                                    const Icon(
+                                      Icons.arrow_forward_rounded,
+                                      size: 20,
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            onPressed: busy ? null : _openRegistration,
-                            child: const Text('Crear cuenta'),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text('¿Aún no tienes cuenta?'),
+                              TextButton(
+                                onPressed: busy ? null : _openRegistration,
+                                child: const Text('Crear cuenta'),
+                              ),
+                            ],
                           ),
                           TextButton.icon(
                             onPressed: busy
@@ -229,7 +247,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : () => Navigator.of(
                                     context,
                                   ).pushNamed(AppRoutes.connection),
-                            icon: const Icon(Icons.wifi_tethering),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.muted,
+                            ),
+                            icon: const Icon(Icons.wifi_outlined, size: 18),
                             label: const Text('Comprobar conexión'),
                           ),
                         ],
@@ -244,4 +265,44 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     );
   }
+
+  Widget _brandPanel() => ClipRRect(
+    borderRadius: BorderRadius.circular(24),
+    child: ColoredBox(
+      color: AppTheme.forest,
+      child: Stack(
+        children: [
+          const Positioned(
+            right: -30,
+            bottom: -48,
+            width: 170,
+            height: 180,
+            child: ExcludeSemantics(child: CustomPaint(painter: FieldLines())),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const BrandWordmark(inverse: true),
+                const SizedBox(height: 32),
+                const Text(
+                  'El origen de\ncada cosecha.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 32,
+                    height: 1.12,
+                    letterSpacing: -.8,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(width: 32, height: 3, color: AppTheme.ochre),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

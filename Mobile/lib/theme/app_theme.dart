@@ -78,6 +78,16 @@ abstract final class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 52),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -90,6 +100,16 @@ abstract final class AppTheme {
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.all(16),
+        labelStyle: const TextStyle(fontSize: 16, color: muted),
+        floatingLabelStyle: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+        hintStyle: const TextStyle(fontSize: 16, color: muted),
+        helperStyle: const TextStyle(fontSize: 13, height: 1.4, color: muted),
+        errorStyle: TextStyle(fontSize: 13, height: 1.4, color: scheme.error),
+        prefixIconColor: forest,
+        suffixIconColor: muted,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: line),
@@ -98,18 +118,46 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: line),
         ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: forest, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.error, width: 2),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: line),
+        ),
+        errorMaxLines: 3,
+        helperMaxLines: 3,
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: sage,
-        height: 76,
+        elevation: 0,
+        indicatorColor: Colors.transparent,
+        indicatorShape: const RoundedRectangleBorder(),
+        height: 72,
+        labelPadding: const EdgeInsets.only(top: 6),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            size: 24,
+            color: states.contains(WidgetState.selected) ? forest : muted,
+          ),
+        ),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontSize: 12,
+            letterSpacing: .1,
             color: states.contains(WidgetState.selected) ? forest : muted,
             fontWeight: states.contains(WidgetState.selected)
-                ? FontWeight.w700
+                ? FontWeight.w600
                 : FontWeight.w500,
           ),
         ),

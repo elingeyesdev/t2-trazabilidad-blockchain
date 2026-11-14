@@ -17,6 +17,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
+  final _workSearch = TextEditingController();
+
+  @override
+  void dispose() {
+    _workSearch.dispose();
+    super.dispose();
+  }
+
   static const _groups = {
     'Trabajo de campo': [
       AppModule.actividades,
@@ -41,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _open(AppModule module) => Navigator.of(context).pushNamed(module.route);
 
   void _selectTab(int tab) {
+    FocusScope.of(context).unfocus();
     if (tab == 2) {
       Navigator.of(context).pushNamed(AppRoutes.profile);
     } else {
@@ -128,16 +137,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '${days[today.weekday - 1]}, ${today.day} de ${months[today.month - 1]}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Hola, ${widget.user.name}',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 24),
+                    if (_tab == 0) ...[
+                      Text(
+                        '${days[today.weekday - 1]}, ${today.day} de ${months[today.month - 1]}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Hola, ${widget.user.name}',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     if (modules.isEmpty)
                       AppEmptyState(
                         icon: Icons.person_outline_rounded,
@@ -152,37 +163,75 @@ class _HomeScreenState extends State<HomeScreen> {
                       ..._home(modules)
                     else
                       ..._work(groups),
-                    const SizedBox(height: 24),
-                    _account(),
+                    if (_tab == 0) ...[const SizedBox(height: 24), _account()],
                   ],
                 ),
               ),
             ),
           ),
         ),
-        bottomNavigationBar: DecoratedBox(
+        bottomNavigationBar: Container(
           decoration: const BoxDecoration(
+            color: Colors.white,
             border: Border(top: BorderSide(color: AppTheme.line)),
           ),
-          child: NavigationBar(
-            selectedIndex: _tab,
-            onDestinationSelected: _selectTab,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home_rounded),
-                label: 'Inicio',
+          padding: const EdgeInsets.only(top: 1),
+          child: Stack(
+            children: [
+              NavigationBar(
+                selectedIndex: _tab,
+                onDestinationSelected: _selectTab,
+                animationDuration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home_rounded),
+                    label: 'Inicio',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.grid_view_outlined),
+                    selectedIcon: Icon(Icons.grid_view_rounded),
+                    label: 'Trabajo',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline_rounded),
+                    selectedIcon: Icon(Icons.person_rounded),
+                    label: 'Mi perfil',
+                  ),
+                ],
               ),
-              NavigationDestination(
-                icon: Icon(Icons.grid_view_outlined),
-                selectedIcon: Icon(Icons.grid_view_rounded),
-                label: 'Trabajo',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline_rounded),
-                selectedIcon: Icon(Icons.person_rounded),
-                label: 'Mi perfil',
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: ExcludeSemantics(
+                    child: SafeArea(
+                      top: false,
+                      bottom: false,
+                      child: AnimatedAlign(
+                        alignment: AlignmentDirectional(_tab - 1.0, -1),
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 200),
+                        curve: Curves.easeOutCubic,
+                        child: const FractionallySizedBox(
+                          widthFactor: 1 / 3,
+                          child: Center(
+                            child: SizedBox(
+                              width: 36,
+                              height: 3,
+                              child: ColoredBox(color: AppTheme.forest),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -387,53 +436,137 @@ class _HomeScreenState extends State<HomeScreen> {
     _ => 'Consultar información',
   };
 
-  List<Widget> _work(Map<String, List<AppModule>> groups) => [
-    Text('Tus accesos', style: Theme.of(context).textTheme.titleLarge),
-    const SizedBox(height: 6),
-    const Text('Encuentra aquí las herramientas de tu trabajo.'),
-    const SizedBox(height: 24),
-    for (final group in groups.entries) ...[
-      Text(group.key, style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 12),
-      Material(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: AppTheme.line),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            for (var i = 0; i < group.value.length; i++) ...[
-              if (i > 0)
-                const Divider(
-                  height: 1,
-                  indent: 64,
-                  endIndent: 16,
-                  color: AppTheme.line,
-                ),
-              ListTile(
-                minTileHeight: 84,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                leading: Icon(group.value[i].icon, color: AppTheme.forest),
-                title: Text(
-                  group.value[i].label,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                subtitle: Text(group.value[i].description),
-                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-                onTap: () => _open(group.value[i]),
-              ),
-            ],
-          ],
-        ),
+  List<Widget> _work(Map<String, List<AppModule>> groups) {
+    final query = _workSearch.text.trim().toLowerCase();
+    final visible = {
+      for (final group in groups.entries)
+        group.key: group.value
+            .where(
+              (module) => '${module.label} ${module.description} ${group.key}'
+                  .toLowerCase()
+                  .contains(query),
+            )
+            .toList(),
+    }..removeWhere((_, modules) => modules.isEmpty);
+    final count = groups.values.fold(0, (sum, modules) => sum + modules.length);
+    return [
+      Text('Tus accesos', style: Theme.of(context).textTheme.headlineSmall),
+      const SizedBox(height: 8),
+      Text(
+        '$count ${count == 1 ? 'herramienta disponible' : 'herramientas disponibles'} para tu cuenta.',
       ),
       const SizedBox(height: 24),
-    ],
-  ];
+      TextField(
+        controller: _workSearch,
+        onChanged: (_) => setState(() {}),
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => FocusScope.of(context).unfocus(),
+        decoration: InputDecoration(
+          hintText: 'Buscar herramienta',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Limpiar herramientas',
+                  onPressed: () => setState(() => _workSearch.clear()),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+        ),
+      ),
+      const SizedBox(height: 32),
+      if (visible.isEmpty)
+        const AppEmptyState(
+          icon: Icons.search_off_rounded,
+          title: 'No encontramos herramientas',
+          message: 'Prueba con otro nombre o limpia la búsqueda.',
+        ),
+      for (final (index, group) in visible.entries.indexed) ...[
+        Row(
+          children: [
+            Text(
+              (index + 1).toString().padLeft(2, '0'),
+              style: const TextStyle(
+                color: AppTheme.forest,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                group.key,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            Text(
+              '${group.value.length}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Material(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: AppTheme.line),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < group.value.length; i++) ...[
+                if (i > 0)
+                  const Divider(
+                    height: 1,
+                    indent: 84,
+                    endIndent: 16,
+                    color: AppTheme.line,
+                  ),
+                ListTile(
+                  minTileHeight: 84,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  leading: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.sage,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      group.value[i].icon,
+                      color: AppTheme.forest,
+                      size: 22,
+                    ),
+                  ),
+                  title: Text(
+                    group.value[i].label,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      group.value[i].description,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: AppTheme.muted,
+                  ),
+                  onTap: () => _open(group.value[i]),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    ];
+  }
 
   Widget _account() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
