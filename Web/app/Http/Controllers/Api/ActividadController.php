@@ -152,45 +152,44 @@ class ActividadController extends Controller
 
     public function store(Request $request)
     {
-        abort_unless(
-            UsuarioRol::gestionaCampo($request->user()) || UsuarioRol::esAdminGlobal($request->user()),
-            403,
-            'Solo el jefe agrícola puede crear o asignar actividades.'
-        );
+        $request->headers->set('Accept', 'application/json');
+        abort_unless(UsuarioRol::gestionaCampo($request->user()) && UsuarioRol::puedeOperar($request->user()), 403, 'Solo el jefe agrícola puede asignar actividades.');
+        $request->validate([
+            'loteid' => 'required|integer|exists:lote,loteid',
+            'usuarioid' => 'required|integer|exists:usuario,usuarioid',
+            'fechafin' => 'missing',
+            'completar' => 'missing',
+            'usuarioid_ejecutor' => 'missing',
+            'orden_secuencia' => 'missing',
+            'evidencia_foto_path' => 'missing',
+            'detalle_json' => 'missing',
+        ], ['missing' => 'El campo :attribute no puede establecerse al asignar una actividad.']);
+        $lote = Lote::findOrFail($request->integer('loteid'));
+        abort_unless(LoteAcceso::puedeGestionar($request->user(), $lote), 403, 'No tienes acceso a este lote.');
+        $this->validarResponsable($request);
+        $actividad = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $lote) {
+            Lote::query()->whereKey($lote->loteid)->lockForUpdate()->firstOrFail();
 
-        $data = $request->validate([
-            'loteid' => 'required|exists:lote,loteid',
-            'usuarioid' => 'nullable|exists:usuario,usuarioid',
-            'descripcion' => 'required|string|max:200',
-            'fechainicio' => 'nullable|date',
-            'fecha_planificada' => 'nullable|date',
-            'fechafin' => 'nullable|date',
-            'tipoactividadid' => 'required|exists:tipoactividad,tipoactividadid',
-            'prioridadid' => 'required|exists:prioridad,prioridadid',
-            'observaciones' => 'nullable|string|max:250',
-        ]);
-
-        $user = $request->user();
-        $lote = Lote::query()->findOrFail((int) $data['loteid']);
-
-        $permitido = Lote::query()
-            ->where('loteid', $lote->loteid)
-            ->tap(fn ($q) => LoteAcceso::aplicarScopeOperativoActividad($q, $user))
-            ->exists();
-
-        abort_unless($permitido, 403, 'No tienes acceso a este lote.');
-
-        $data['usuarioid'] = (int) ($data['usuarioid'] ?? $user->usuarioid);
-        if (empty($data['fechainicio'])) {
-            $data['fechainicio'] = now();
-        }
-        $data['fechafin'] = $data['fechafin'] ?? null;
-
-        $actividad = Actividad::create($data);
-
-        return response()->json($actividad, 201);
+            return app(\App\Http\Controllers\Web\ActividadController::class)->store($request, true);
+        });
+        return (new ActividadConsultaResource($actividad->load($this->relacionesActividad())))
+            ->response()->setStatusCode(201);
     }
 
+    private function validarResponsable(Request $request): void
+    {
+        $actor = $request->user();
+        $id = $request->integer('usuarioid');
+        $usuario = \App\Models\Usuario::find($id);
+        $permitido = $usuario && $usuario->activo && UsuarioRol::puedeOperar($actor)
+            && (($id === (int) $actor->usuarioid && UsuarioRol::gestionaCampo($actor))
+                || (UsuarioRol::esJefeAgricultor($actor)
+                    && UsuarioRol::esResponsableActividadPermitido($usuario)
+                    && in_array($id, UsuarioRol::idsEmpleadosOperativosDeJefeAgricultor($actor), true)));
+        if (! $permitido) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['usuarioid' => 'Seleccione un trabajador activo de su equipo.']);
+        }
+    }
     public function update(Request $request, $actividad)
     {
         $actividad = $actividad instanceof Actividad
@@ -209,7 +208,7 @@ class ActividadController extends Controller
             'descripcion' => 'sometimes|string|max:200',
             'fechainicio' => 'nullable|date',
             'fecha_planificada' => 'nullable|date',
-            'fechafin' => 'nullable|date',
+            'fechafin' => 'nullable|date|after_or_equal:fechainicio',
             'tipoactividadid' => 'sometimes|exists:tipoactividad,tipoactividadid',
             'prioridadid' => 'sometimes|exists:prioridad,prioridadid',
             'observaciones' => 'nullable|string|max:250',
@@ -217,6 +216,13 @@ class ActividadController extends Controller
 
         $user = $request->user();
 
+        if (array_key_exists('loteid', $data) && (int) $data['loteid'] !== (int) $actividad->loteid) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['loteid' => 'No se puede trasladar una actividad a otro lote.']);
+        }
+        if (array_key_exists('usuarioid', $data)) {
+            abort_unless(UsuarioRol::gestionaCampo($user) && LoteAcceso::puedeGestionar($user, $actividad->lote), 403, 'No puede reasignar esta actividad.');
+            $this->validarResponsable($request);
+        }
         if (isset($data['loteid'])) {
             $lote = Lote::query()->findOrFail((int) $data['loteid']);
             $permitido = Lote::query()
@@ -241,7 +247,7 @@ class ActividadController extends Controller
 
         $actividad->update($data);
 
-        return response()->json($actividad);
+        return new ActividadConsultaResource($actividad->fresh()->load($this->relacionesActividad()));
     }
 
     public function destroy(Request $request, $actividad)

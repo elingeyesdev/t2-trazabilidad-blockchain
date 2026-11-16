@@ -18,7 +18,7 @@ class LoteDefaults
             $data['unidadsuperficieid'] = $haId;
         }
 
-        if (empty($data['codigo_trazabilidad'])) {
+        if ($isNew && empty($data['codigo_trazabilidad'])) {
             $data['codigo_trazabilidad'] = 'TRAZ-'.now()->format('Ymd').'-'.strtoupper(substr(uniqid(), -6));
         }
 
