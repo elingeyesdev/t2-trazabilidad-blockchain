@@ -357,10 +357,7 @@ class ActividadController extends Controller
     {
         $this->autorizarLoteParaActividad($request, $lote);
 
-        $validator = Validator::make($request->all(), [
-            'evidencia_foto' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
-            'observaciones' => 'nullable|string|max:250',
-        ], [
+        $validator = Validator::make($request->all(), \App\Services\ActividadCierreService::reglas(), [
             'evidencia_foto.required' => 'Debe subir una foto del trabajo realizado en campo.',
             'evidencia_foto.image' => 'El archivo debe ser una imagen.',
             'evidencia_foto.max' => 'La imagen no puede superar 5 MB.',
@@ -382,7 +379,8 @@ class ActividadController extends Controller
                 $lote,
                 $request->user(),
                 $request->file('evidencia_foto'),
-                $request->input('observaciones')
+                $request->input('resultado'),
+                $request->input('consumos')
             );
         } catch (ValidationException $e) {
             return redirect()
@@ -399,6 +397,9 @@ class ActividadController extends Controller
     public function storeSiembra(Request $request, Lote $lote)
     {
         $this->autorizarLoteParaActividad($request, $lote);
+        if ($request->boolean('completar')) {
+            return $this->storeCompletarSiembra($request, $lote);
+        }
 
         $tipoSiembra = $this->tipoActividadSiembra();
         $bloqueo = $this->trazabilidad->mensajeActividadNoPermitida($lote, $tipoSiembra->nombre);
@@ -469,6 +470,7 @@ class ActividadController extends Controller
 
     public function store(Request $request, bool $devolverModelo = false)
     {
+        abort_if($request->boolean('completar'), 403, 'El trabajador asignado debe cerrar su tarea con resultado y fotografía.');
         abort_unless(
             UsuarioRol::gestionaCampo($request->user()) || $request->user()?->hasRole('admin'),
             403,
@@ -690,6 +692,10 @@ class ActividadController extends Controller
 
     public function update(Request $request, Actividad $actividad)
     {
+        if ($actividad->fechafin !== null) {
+            return back()->with('error', 'El cierre confirmado de esta actividad no puede modificarse.');
+        }
+        $request->validate(['fechafin' => 'nullable|prohibited']);
         $this->autorizarActividadAsignada($request, $actividad);
 
         $data = $request->validate([
@@ -735,6 +741,7 @@ class ActividadController extends Controller
 
     public function destroy(Actividad $actividad)
     {
+        abort_if($actividad->fechafin !== null, 409, 'No se puede eliminar una actividad con cierre confirmado.');
         $actividad->delete();
 
         return redirect()->route('actividades.index')->with('success', 'Actividad eliminada.');
@@ -759,101 +766,22 @@ class ActividadController extends Controller
      */
     public function marcarRealizada(Request $request, Actividad $actividad)
     {
-        $this->autorizarMarcarActividadCompletada($request, $actividad);
-
-        if ($actividad->fechafin !== null) {
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', 'Esta actividad ya está completada.');
-        }
-
-        $bloqueoOrden = app(\App\Support\ActividadSecuenciaService::class)->mensajeBloqueoOrden($actividad);
-        if ($bloqueoOrden !== null) {
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', $bloqueoOrden);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'evidencia_foto' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
-        ], [
-            'evidencia_foto.required' => 'Debe subir una foto que demuestre que la actividad fue realizada.',
-            'evidencia_foto.image' => 'El archivo debe ser una imagen.',
-            'evidencia_foto.max' => 'La imagen no puede superar 5 MB.',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->redirectDespuesDeMarcar($request, $actividad)
-                ->withErrors($validator)
-                ->withInput();
-        }
-
         try {
-            DB::transaction(function () use ($request, $actividad) {
-                /** @var Actividad $locked */
-                $locked = Actividad::query()
-                    ->whereKey($actividad->actividadid)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                if ($locked->fechafin !== null) {
-                    throw new \InvalidArgumentException('Esta actividad ya está completada.');
-                }
-
-                app(\App\Support\ActividadSecuenciaService::class)->asegurarEnTurnoParaCompletar($locked);
-
-                $locked->evidencia_foto_path = EvidenciaFoto::guardar(
-                    $request->file('evidencia_foto'),
-                    'actividades_evidencia'
-                );
-                $locked->fechafin = now();
-                $completador = $request->user();
-                if ($completador) {
-                    $locked->usuarioid_ejecutor = (int) $completador->usuarioid;
-                }
-                $locked->save();
-
-                if ($locked->detalle_json) {
-                    $detalle = json_decode($locked->detalle_json, true);
-                    if (is_array($detalle)) {
-                        $this->actividadInsumos->aplicarStockSiCorresponde($locked, $detalle);
-                    }
-                }
-
-                $this->loteEstadoPorActividad->aplicarDesdeActividad($locked);
-
-                $locked->loadMissing(['lote', 'tipoActividad']);
-                $tipoNombre = mb_strtolower(trim($locked->tipoActividad->nombre ?? ''));
-                if (str_contains($tipoNombre, 'siembra') && $locked->lote && ! $locked->lote->fechasiembra) {
-                    $locked->lote->fechasiembra = now()->toDateString();
-                    $locked->lote->fechamodificacion = now();
-                    $locked->lote->save();
-                }
-
-                $this->notificaciones->descartarActividadAsignada((int) $locked->actividadid);
-            });
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $msg = collect($e->errors())->flatten()->first() ?? 'No puede completar esta actividad aún.';
-
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', $msg);
-        } catch (\InvalidArgumentException $e) {
+            $actividad = app(\App\Services\ActividadCierreService::class)->cerrar($request, $actividad);
+        } catch (ValidationException $e) {
+            return $this->redirectDespuesDeMarcar($request, $actividad)->withErrors($e->errors())->withInput();
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            if ($e->getStatusCode() !== 409) {
+                throw $e;
+            }
             return $this->redirectDespuesDeMarcar($request, $actividad, 'error', $e->getMessage());
-        } catch (\Exception $e) {
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', 'Error: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Fallo de cierre web', ['actividadid' => $actividad->actividadid, 'exception' => $e]);
+            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', 'No se pudo cerrar la actividad. No se confirmaron cambios.');
         }
 
-        $actividad->refresh();
-        $estadoAplicado = $actividad->lote
-            ? ($actividad->lote->estadoTipo->nombre ?? null)
-            : null;
-        $mensajeEstado = $estadoAplicado
-            ? " El lote «{$actividad->lote->nombre}» cambió a «{$estadoAplicado}»."
-            : '';
-
-        return $this->redirectDespuesDeMarcar(
-            $request,
-            $actividad,
-            'success',
-            "Actividad marcada como realizada.{$mensajeEstado}"
-        );
+        return $this->redirectDespuesDeMarcar($request, $actividad, 'success', 'Actividad marcada como realizada.');
     }
-
     private function redirectDespuesDeMarcar(Request $request, Actividad $actividad, ?string $flashKey = null, ?string $message = null)
     {
         $actividad->loadMissing('lote');

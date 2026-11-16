@@ -2106,12 +2106,14 @@ class LoteTrazabilidadService
     {
         $detalle = json_decode((string) ($actividad->detalle_json ?? ''), true);
         $detalle = is_array($detalle) ? $detalle : [];
+        $resultado = trim((string) ($detalle['cierre']['resultado'] ?? ''));
+        $prefijo = $resultado !== '' ? 'Resultado: '.$resultado.' · ' : '';
         $modo = (string) ($detalle['modo'] ?? '');
 
         if ($modo === 'riego') {
             $label = trim((string) ($detalle['riego']['label'] ?? ''));
 
-            return $label !== '' ? 'Tipo de riego: '.$label : '';
+            return $prefijo.($label !== '' ? 'Tipo de riego: '.$label : '');
         }
 
         if ($modo === 'insumos') {
@@ -2124,15 +2126,16 @@ class LoteTrazabilidadService
                 $cant = (float) ($fila['cantidad'] ?? 0);
                 $unidad = trim((string) ($fila['unidad'] ?? 'ud'));
                 if ($nombre !== '' && $cant > 0) {
-                    $partes[] = $nombre.': '.number_format($cant, 2, '.', '').' '.$unidad;
+                    $cantidad = $resultado !== '' ? (string) $fila['cantidad'] : number_format($cant, 2, '.', '');
+                    $partes[] = $nombre.': '.$cantidad.' '.$unidad.(isset($fila['almacenid']) ? ' (Almacén #'.$fila['almacenid'].')' : '');
                 }
             }
             if ($partes !== []) {
-                return 'Insumo aplicado: '.implode(' · ', $partes);
+                return $prefijo.'Insumo aplicado: '.implode(' · ', $partes);
             }
         }
 
-        return trim((string) ($actividad->descripcion ?? ''));
+        return $prefijo.trim((string) ($actividad->descripcion ?? ''));
     }
 
     /**
@@ -2593,6 +2596,8 @@ class LoteTrazabilidadService
                 }
                 $insumoModel = isset($fila['insumoid']) ? Insumo::query()->with('tipo')->find((int) $fila['insumoid']) : null;
                 $insumos[] = [
+                    'insumoid' => (int) ($fila['insumoid'] ?? 0),
+                    'almacenid' => (int) ($fila['almacenid'] ?? $insumoModel?->almacenid ?? 0),
                     'nombre' => (string) ($fila['nombre'] ?? $insumoModel?->nombre ?? 'Insumo'),
                     'cantidad' => (float) ($fila['cantidad'] ?? 0),
                     'unidad' => (string) ($fila['unidad'] ?? 'ud'),

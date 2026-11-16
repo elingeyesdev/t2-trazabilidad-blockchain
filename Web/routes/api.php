@@ -143,6 +143,10 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     $recursoProtegido('lote-insumos', LoteInsumoController::class, 'lotes');
 
     // ACTIVIDADES: lectura y escritura protegidas por acción y ownership del controlador.
+    Route::post('actividades/{actividad}/cerrar', [\App\Http\Controllers\Api\ActividadCierreController::class, 'cerrar'])
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read'])->name('actividades.cerrar');
+    Route::get('actividades/{actividad}/evidencia', [\App\Http\Controllers\Api\ActividadCierreController::class, 'evidencia'])
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read'])->name('actividades.evidencia');
     Route::get('actividades', [ActividadController::class, 'index'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
     Route::post('actividades', [ActividadController::class, 'store'])

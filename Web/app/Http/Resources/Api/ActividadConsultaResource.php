@@ -12,6 +12,7 @@ class ActividadConsultaResource extends JsonResource
     public function toArray(Request $request): array
     {
         $pendiente = $this->fechafin === null;
+        $detalle = json_decode($this->detalle_json ?? '', true) ?: [];
 
         return [
             'actividadid' => (int) $this->actividadid,
@@ -25,8 +26,14 @@ class ActividadConsultaResource extends JsonResource
             'tipoactividadid' => (int) $this->tipoactividadid,
             'prioridadid' => (int) $this->prioridadid,
             'observaciones' => $this->observaciones,
+            'resultado' => $detalle['cierre']['resultado'] ?? null,
+            'consumos' => array_map(fn ($fila) => array_intersect_key($fila, array_flip([
+                'insumoid', 'almacenid', 'cantidad', 'nombre', 'unidadmedidaid', 'unidad',
+            ])), $detalle['stock_aplicado'] ?? false ? ($detalle['insumos'] ?? []) : []),
             'evidencia_foto_path' => $this->evidencia_foto_path,
-            'evidencia_foto_url' => EvidenciaFoto::urlDesdePath($this->evidencia_foto_path),
+            'evidencia_foto_url' => str_starts_with($this->evidencia_foto_path ?? '', 'actividades_privadas/')
+                ? route('api.actividades.evidencia', ['actividad' => $this->actividadid])
+                : EvidenciaFoto::urlDesdePath($this->evidencia_foto_path),
             'tiene_evidencia' => filled($this->evidencia_foto_path),
             'pendiente' => $pendiente,
             'completada' => ! $pendiente,

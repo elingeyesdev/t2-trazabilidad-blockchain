@@ -201,6 +201,7 @@ class ActividadController extends Controller
             403,
             'No tienes acceso a esta actividad.'
         );
+        abort_if($actividad->fechafin !== null, 409, 'El cierre confirmado de esta actividad no puede modificarse.');
 
         $data = $request->validate([
             'loteid' => 'sometimes|exists:lote,loteid',
@@ -208,7 +209,7 @@ class ActividadController extends Controller
             'descripcion' => 'sometimes|string|max:200',
             'fechainicio' => 'nullable|date',
             'fecha_planificada' => 'nullable|date',
-            'fechafin' => 'nullable|date|after_or_equal:fechainicio',
+            'fechafin' => 'missing',
             'tipoactividadid' => 'sometimes|exists:tipoactividad,tipoactividadid',
             'prioridadid' => 'sometimes|exists:prioridad,prioridadid',
             'observaciones' => 'nullable|string|max:250',
@@ -265,6 +266,7 @@ class ActividadController extends Controller
             403,
             'No tienes permiso para eliminar esta actividad.'
         );
+        abort_if($actividad->fechafin !== null, 409, 'No se puede eliminar una actividad con cierre confirmado.');
 
         $actividad->delete();
 

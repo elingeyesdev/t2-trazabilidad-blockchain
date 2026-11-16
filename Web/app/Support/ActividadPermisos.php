@@ -94,4 +94,15 @@ final class ActividadPermisos
 
         return false;
     }
+
+    /** Authorizes both a new close and recovery of its confirmed result. */
+    public static function puedeEjecutarCierre(?Usuario $user, Actividad $actividad): bool
+    {
+        return $user !== null && UsuarioRol::puedeOperar($user)
+            && UsuarioRol::debeAcotarPorAsignacion($user)
+            && $user->can('lotes.view')
+            && ((int) $actividad->usuarioid === (int) $user->usuarioid
+                || (int) $actividad->usuarioid_ejecutor === (int) $user->usuarioid)
+            && $actividad->lote !== null && LoteAcceso::puedeVer($user, $actividad->lote);
+    }
 }

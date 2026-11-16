@@ -17,6 +17,10 @@ class EvidenciaFoto
             return null;
         }
 
+        if (preg_match('#^actividades_privadas/([0-9]+)/#', $path, $matches)) {
+            return route('actividades.evidencia', ['actividad' => $matches[1]]);
+        }
+
         return asset('storage/'.ltrim($path, '/'));
     }
 

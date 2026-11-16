@@ -54,9 +54,22 @@
             <p class="mb-1"><strong>Observaciones:</strong></p>
             <p class="text-muted">{{ $actividad->observaciones }}</p>
         @endif
+        @php($detalleCierre = json_decode($actividad->detalle_json ?? '', true) ?: [])
+        @if($completada && !empty($detalleCierre['cierre']['resultado']))
+            <p><strong>Resultado:</strong> {{ $detalleCierre['cierre']['resultado'] }}</p>
+            <p><strong>Ejecutado por:</strong> {{ trim(($actividad->ejecutor->nombre ?? '').' '.($actividad->ejecutor->apellido ?? '')) }}</p>
+            @if(!empty($detalleCierre['stock_aplicado']))
+                <div class="table-responsive"><table class="table table-sm">
+                    <thead><tr><th>Insumo</th><th>Almacén</th><th>Cantidad</th><th>Unidad</th></tr></thead>
+                    <tbody>@foreach($detalleCierre['insumos'] ?? [] as $fila)
+                        <tr><td>{{ $fila['nombre'] }}</td><td>{{ $fila['almacenid'] }}</td><td>{{ $fila['cantidad'] }}</td><td>{{ $fila['unidad'] }}</td></tr>
+                    @endforeach</tbody>
+                </table></div>
+            @endif
+        @endif
 
         @if($completada && $actividad->evidencia_foto_path)
-            @php $evidenciaUrl = asset('storage/'.$actividad->evidencia_foto_path); @endphp
+            @php $evidenciaUrl = \App\Support\EvidenciaFoto::urlDesdePath($actividad->evidencia_foto_path); @endphp
             <div class="mt-3">
                 <p class="mb-2"><strong><i class="fas fa-camera mr-1"></i> Evidencia fotográfica</strong></p>
                 <a href="{{ $evidenciaUrl }}" target="_blank" rel="noopener" class="d-inline-block">
