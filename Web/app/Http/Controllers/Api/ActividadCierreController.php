@@ -37,11 +37,11 @@ class ActividadCierreController extends Controller
     {
         abort_unless(ActividadPermisos::puedeAcceder($request->user(), $actividad)
             && $actividad->lote && LoteAcceso::puedeVer($request->user(), $actividad->lote), 404);
-        $path = $actividad->evidencia_foto_path;
-        abort_unless(is_string($path) && ! str_contains($path, '..'), 404);
-        $privada = str_starts_with($path, 'actividades_privadas/'.$actividad->actividadid.'/');
-        abort_unless($privada || str_starts_with($path, 'actividades_evidencia/'), 404);
-        $disk = Storage::disk($privada ? 'local' : 'public');
+        abort_if($actividad->fechafin === null, 404);
+        $archivo = \App\Support\ActividadConsulta::archivo($actividad);
+        abort_unless($archivo, 404);
+        $disk = Storage::disk($archivo['disk']);
+        $path = $archivo['path'];
         abort_unless($disk->exists($path), 404);
 
         return $disk->response($path, null, ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);

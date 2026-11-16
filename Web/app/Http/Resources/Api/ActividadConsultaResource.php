@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources\Api;
 
-use App\Support\EvidenciaFoto;
+use App\Support\ActividadConsulta;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,7 +12,7 @@ class ActividadConsultaResource extends JsonResource
     public function toArray(Request $request): array
     {
         $pendiente = $this->fechafin === null;
-        $detalle = json_decode($this->detalle_json ?? '', true) ?: [];
+        $consulta = ActividadConsulta::presentar($this->resource, true);
 
         return [
             'actividadid' => (int) $this->actividadid,
@@ -26,21 +26,16 @@ class ActividadConsultaResource extends JsonResource
             'tipoactividadid' => (int) $this->tipoactividadid,
             'prioridadid' => (int) $this->prioridadid,
             'observaciones' => $this->observaciones,
-            'resultado' => $detalle['cierre']['resultado'] ?? null,
-            'consumos' => array_map(fn ($fila) => array_intersect_key($fila, array_flip([
-                'insumoid', 'almacenid', 'cantidad', 'nombre', 'unidadmedidaid', 'unidad',
-            ])), $detalle['stock_aplicado'] ?? false ? ($detalle['insumos'] ?? []) : []),
-            'evidencia_foto_path' => $this->evidencia_foto_path,
-            'evidencia_foto_url' => str_starts_with($this->evidencia_foto_path ?? '', 'actividades_privadas/')
-                ? route('api.actividades.evidencia', ['actividad' => $this->actividadid])
-                : EvidenciaFoto::urlDesdePath($this->evidencia_foto_path),
-            'tiene_evidencia' => filled($this->evidencia_foto_path),
+            ...$consulta,
+            // Keep the legacy key without disclosing a private storage locator.
+            'evidencia_foto_path' => null,
             'pendiente' => $pendiente,
             'completada' => ! $pendiente,
             'estado_tarea' => $pendiente ? 'pendiente' : 'completada',
             'responsable' => $this->whenLoaded('usuario', fn () => $this->presentarUsuario($this->usuario)),
             'usuario' => $this->whenLoaded('usuario', fn () => $this->presentarUsuario($this->usuario)),
             'ejecutor' => $this->whenLoaded('ejecutor', fn () => $this->presentarUsuario($this->ejecutor)),
+            'responsable_cierre' => $pendiente ? null : $this->whenLoaded('ejecutor', fn () => $this->presentarUsuario($this->ejecutor)),
             'tipo_actividad' => $this->whenLoaded('tipoActividad', fn () => $this->tipoActividad ? [
                 'tipoactividadid' => (int) $this->tipoActividad->tipoactividadid,
                 'nombre' => $this->tipoActividad->nombre,

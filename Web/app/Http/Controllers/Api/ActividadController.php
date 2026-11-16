@@ -69,6 +69,7 @@ class ActividadController extends Controller
         $query = Actividad::query()->with($this->relacionesActividad());
         ActividadPermisos::aplicarScopeVisibles($query, $request->user());
         $actividad = $query->findOrFail($actividad);
+        abort_unless($actividad->lote && LoteAcceso::puedeVer($request->user(), $actividad->lote), 404);
 
         return new ActividadConsultaResource($actividad);
     }
@@ -147,6 +148,7 @@ class ActividadController extends Controller
             'ejecutor:usuarioid,nombre,apellido',
             'tipoActividad:tipoactividadid,nombre',
             'prioridad:prioridadid,nombre',
+            'consumos.insumo.unidadMedida',
         ];
     }
 

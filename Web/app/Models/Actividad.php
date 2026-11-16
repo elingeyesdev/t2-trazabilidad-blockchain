@@ -54,4 +54,5 @@ class Actividad extends Model
     public function ejecutor()   { return $this->belongsTo(Usuario::class,'usuarioid_ejecutor','usuarioid'); }
     public function tipoActividad(){return $this->belongsTo(TipoActividad::class,'tipoactividadid','tipoactividadid');}
     public function prioridad()  { return $this->belongsTo(Prioridad::class,'prioridadid','prioridadid'); }
+    public function consumos() { return $this->hasMany(LoteInsumo::class, 'actividadid', 'actividadid'); }
 }

@@ -2147,40 +2147,13 @@ class LoteTrazabilidadService
         if ($actividad->fechafin === null) {
             return $vacio;
         }
-
-        $esRiego = str_contains($tipoNombre, 'riego') || str_contains($tipoNombre, 'regad');
-        $esAplicacionInsumo = $this->esActividadConInsumoAplicado($tipoNombre, $actividad);
-
-        $foto = EvidenciaFoto::urlDesdePath($actividad->evidencia_foto_path ?? null);
-        if ($foto === null && $esAplicacionInsumo) {
-            $foto = $this->evidenciaFotoHermanaActividad($actividad, $lote, $tipoNombre);
+        $archivo = ActividadConsulta::archivo($actividad);
+        if (! $archivo || ! \Illuminate\Support\Facades\Storage::disk($archivo['disk'])->exists($archivo['path'])) {
+            return $vacio;
         }
 
-        $insumo = null;
-        if ($esAplicacionInsumo) {
-            $insumo = $this->imagenInsumoDesdeDetalleActividad($actividad)
-                ?? $this->imagenInsumoDesdeLoteInsumoPorActividad($actividad, $lote)
-                ?? $this->imagenInsumoDesdeActividadAutomatica($actividad, $lote)
-                ?? $this->imagenInsumoDesdeActividadHermana($actividad, $lote, $tipoNombre)
-                ?? $this->imagenInsumoDesdeLoteInsumoRelacionado($actividad, $lote, $tipoNombre);
-        }
-
-        if ($insumo !== null && $foto !== null) {
-            return ['url' => $insumo, 'foto_url' => $foto, 'icono' => null, 'tipo' => 'insumo_foto'];
-        }
-        if ($insumo !== null) {
-            return ['url' => $insumo, 'foto_url' => null, 'icono' => null, 'tipo' => 'insumo'];
-        }
-        if ($foto !== null) {
-            return ['url' => $foto, 'foto_url' => null, 'icono' => null, 'tipo' => 'foto'];
-        }
-        if ($esRiego) {
-            return ['url' => null, 'foto_url' => null, 'icono' => 'tint', 'tipo' => 'icono'];
-        }
-
-        return $vacio;
+        return ['url' => route('actividades.evidencia', $actividad->actividadid), 'foto_url' => null, 'icono' => null, 'tipo' => 'foto'];
     }
-
     private function esActividadConInsumoAplicado(string $tipoNombre, Actividad $actividad): bool
     {
         if ($this->esActividadAutomaticaInsumo($actividad)) {
@@ -2319,23 +2292,14 @@ class LoteTrazabilidadService
 
     private function evidenciaFotoSiembraHistorial(Lote $lote, ?Actividad $siembra): ?string
     {
-        if ($siembra !== null) {
-            $foto = EvidenciaFoto::urlDesdePath($siembra->evidencia_foto_path ?? null);
-            if ($foto !== null) {
-                return $foto;
-            }
+        if (! $siembra || $siembra->fechafin === null) {
+            return null;
         }
+        $archivo = ActividadConsulta::archivo($siembra);
 
-        foreach ($this->actividadesSiembraDelLote($lote) as $actividadSiembra) {
-            $foto = EvidenciaFoto::urlDesdePath($actividadSiembra->evidencia_foto_path ?? null);
-            if ($foto !== null) {
-                return $foto;
-            }
-        }
-
-        return EvidenciaFoto::urlDesdeImagenUrl($lote->imagenurl ?? null);
+        return $archivo && \Illuminate\Support\Facades\Storage::disk($archivo['disk'])->exists($archivo['path'])
+            ? route('actividades.evidencia', $siembra->actividadid) : null;
     }
-
     private function evidenciaFotoHermanaActividad(Actividad $actividad, Lote $lote, string $tipoNombre): ?string
     {
         $fechaRef = $this->parseFechaApp($actividad->fechafin ?? $actividad->fechainicio);

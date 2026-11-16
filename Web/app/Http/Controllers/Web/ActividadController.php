@@ -635,30 +635,11 @@ class ActividadController extends Controller
     public function show(Request $request, Actividad $actividad)
     {
         $this->autorizarActividadAsignada($request, $actividad);
-        $actividad->load(['lote', 'tipoActividad', 'usuario']);
+        $actividad->load(['lote', 'tipoActividad', 'usuario', 'ejecutor', 'prioridad', 'consumos.insumo.unidadMedida']);
+        abort_unless($actividad->lote && \App\Support\LoteAcceso::puedeVer($request->user(), $actividad->lote), 403);
+        $consulta = \App\Support\ActividadConsulta::presentar($actividad);
 
-        if ($actividad->lote && $actividad->fechafin === null) {
-            $tipo = mb_strtolower(trim($actividad->tipoActividad->nombre ?? ''));
-            if (str_contains($tipo, 'siembra')
-                && (int) $actividad->usuarioid === (int) $request->user()?->usuarioid) {
-                return redirect()->route('lotes.siembra.completar', $actividad->lote);
-            }
-
-            return redirect()
-                ->route('lotes.trazabilidad', $actividad->lote)
-                ->withFragment('historial-eventos');
-        }
-
-        if ($actividad->lote) {
-            return redirect()
-                ->route('lotes.trazabilidad', $actividad->lote)
-                ->withFragment('historial-eventos');
-        }
-
-        $actividad->load(['usuario', 'tipoActividad', 'prioridad']);
-        $puedeMarcarCompletada = ActividadPermisos::puedeMarcarCompletada($request->user(), $actividad);
-
-        return view('actividades.show', compact('actividad', 'puedeMarcarCompletada'));
+        return view('actividades.show', compact('actividad', 'consulta'));
     }
 
     public function edit(Request $request, Actividad $actividad)
