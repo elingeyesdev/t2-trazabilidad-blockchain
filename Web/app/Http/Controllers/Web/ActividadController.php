@@ -87,47 +87,36 @@ class ActividadController extends Controller
      */
     public function calendario(Request $request)
     {
-        $baseQuery = $this->queryActividadesVisibles($request)->whereNotNull('fechainicio');
+        if (! $request->expectsJson() && ! $request->hasAny(['start', 'end'])) {
+            return view('actividades.calendario');
+        }
+        $data = $request->validate([
+            'start' => 'required|date_format:Y-m-d',
+            'end' => 'required|date_format:Y-m-d|after:start',
+        ]);
+        $inicio = Carbon::createFromFormat('!Y-m-d', $data['start']);
+        $fin = Carbon::createFromFormat('!Y-m-d', $data['end']);
+        if ($inicio->diffInDays($fin) > 62) {
+            throw ValidationException::withMessages(['end' => 'El intervalo no puede superar 62 días.']);
+        }
+        $query = Actividad::query();
+        ActividadPermisos::aplicarScopeVisibles($query, $request->user());
+        $query->whereHas('lote', fn ($q) => \App\Support\LoteAcceso::aplicarScopeVisibles($q, $request->user()));
+        $sinFecha = (clone $query)->whereNull('fecha_planificada')->whereNull('fechainicio')->count();
+        $query->where(function ($q) use ($data, $inicio, $fin) {
+            $q->where(function ($plan) use ($data) {
+                $plan->where('fecha_planificada', '>=', $data['start'])->where('fecha_planificada', '<', $data['end']);
+            })->orWhere(function ($real) use ($inicio, $fin) {
+                $real->whereNull('fecha_planificada')->where('fechainicio', '>=', $inicio)->where('fechainicio', '<', $fin);
+            });
+        });
+        $eventos = $query->with(['lote:loteid,nombre', 'usuario:usuarioid,nombre,apellido', 'tipoActividad:tipoactividadid,nombre'])
+            ->orderBy('fecha_planificada')->orderBy('fechainicio')->orderBy('actividadid')->get()
+            ->map(fn ($actividad) => $this->formatEventoCalendario($actividad))->values();
 
-        $stats = [
-            'total' => (clone $baseQuery)->count(),
-            'mes' => (clone $baseQuery)
-                ->whereMonth('fechainicio', now()->month)
-                ->whereYear('fechainicio', now()->year)
-                ->count(),
-            'hoy' => (clone $baseQuery)->whereDate('fechainicio', now()->toDateString())->count(),
-            'pendientes' => (clone $baseQuery)->whereNull('fechafin')->count(),
-            'completadas' => (clone $baseQuery)->whereNotNull('fechafin')->count(),
-        ];
-
-        $actividades = (clone $baseQuery)
-            ->with(['lote.cultivo', 'usuario', 'tipoActividad'])
-            ->orderBy('fechainicio')
-            ->get();
-
-        $eventos = $actividades->map(fn ($act) => $this->formatEventoCalendario($act))->values();
-
-        $user = $request->user();
-        $lotes = $this->queryLotesParaActividad($request)->get();
-        $usuarios = $this->usuariosResponsablesActividad($request);
-        $puedeDesignarResponsable = $this->puedeDesignarResponsableActividad($user);
-        $esJefeAgricultorDesignando = $user && UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user);
-        $responsableSelectorParams = $this->paramsSelectorResponsableActividad($user);
-
-        $tiposActividad = TipoActividad::orderBy('nombre')->get();
-
-        return view('actividades.calendario', compact(
-            'stats',
-            'eventos',
-            'lotes',
-            'usuarios',
-            'tiposActividad',
-            'puedeDesignarResponsable',
-            'esJefeAgricultorDesignando',
-            'responsableSelectorParams',
-        ));
+        return response()->json(['eventos' => $eventos, 'sin_fecha' => $sinFecha])
+            ->header('Cache-Control', 'private, no-store');
     }
-
     public function create(Request $request)
     {
         abort_unless(
@@ -972,42 +961,23 @@ class ActividadController extends Controller
 
     private function formatEventoCalendario(Actividad $act): array
     {
-        $tipo = $act->tipoActividad->nombre ?? 'Actividad';
-        $lote = $act->lote->nombre ?? 'Sin lote';
         $pendiente = $act->fechafin === null;
-        $inicio = Carbon::parse($act->fechainicio);
-        $plan = $act->fecha_planificada
-            ? Carbon::parse($act->fecha_planificada)
-            : $inicio;
-        $hora = $inicio->format('H:i');
+        $fecha = $act->fecha_planificada ?? $act->fechainicio;
 
         return [
             'id' => (string) $act->actividadid,
-            'title' => $tipo.' — '.$lote,
-            'start' => $plan->format('Y-m-d'),
+            'title' => $act->descripcion ?: ($act->tipoActividad?->nombre ?? 'Actividad'),
+            'start' => $fecha->format('Y-m-d'),
             'allDay' => true,
+            'url' => route('actividades.show', $act),
+            'classNames' => [$pendiente ? 'actividad-pendiente' : 'actividad-completada'],
             'extendedProps' => [
-                'id' => $act->actividadid,
-                'tipo' => $tipo,
-                'tipoSlug' => Str::slug($tipo, '-', 'es'),
-                'lote' => $lote,
-                'loteid' => $act->loteid,
-                'responsable' => trim(($act->usuario->nombre ?? '').' '.($act->usuario->apellido ?? '')),
-                'usuarioid' => $act->usuarioid,
-                'hora' => $hora,
-                'horaTimestamp' => $inicio->timestamp,
-                'fechainicioFmt' => $inicio->format('d/m/Y H:i'),
-                'fechaPlanificadaFmt' => $act->fecha_planificada
-                    ? Carbon::parse($act->fecha_planificada)->format('d/m/Y')
-                    : null,
-                'fechafin' => $pendiente ? null : Carbon::parse($act->fechafin)->format('d/m/Y H:i'),
-                'pendiente' => $pendiente,
-                'observaciones' => $act->observaciones ?: $act->descripcion,
+                'responsable' => trim(($act->usuario?->nombre ?? '').' '.($act->usuario?->apellido ?? '')) ?: 'Sin asignar',
+                'lote' => $act->lote?->nombre,
+                'estado' => $pendiente ? 'Pendiente' : 'Completada',
             ],
-            'classNames' => $pendiente ? ['event-pendiente'] : ['event-completada'],
         ];
     }
-
     private function validReturnUrl(mixed $return): ?string
     {
         if (! is_string($return) || trim($return) === '') {
