@@ -770,8 +770,9 @@
     </style>
 
     @stack('styles')
+    @vite('resources/css/agrofusion-ui.css')
 </head>
-<body>
+<body class="ag-ui ag-auth">
 
 <div class="auth-bg" aria-hidden="true"></div>
 

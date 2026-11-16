@@ -14,7 +14,7 @@
         if (!forzar && modalLoginNotifVisible()) {
             return;
         }
-        document.body.classList.remove('login-notif-modal-open', 'modal-open');
+        document.body.classList.remove('login-notif-modal-open', 'modal-open', 'ag-tareas-flotante-open');
         document.querySelectorAll('.login-notif-scrim').forEach(function (el) {
             el.classList.remove('is-visible');
         });

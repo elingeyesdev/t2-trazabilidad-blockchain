@@ -16,7 +16,6 @@
     <div class="container-fluid px-0">
         <div class="rpt-hub__intro">
             <div>
-                <h2><i class="fas fa-chart-bar mr-2 text-muted"></i>Centro de reportes</h2>
                 <p>Métricas operativas de envíos, inventario y distribución. Elija un reporte para filtrar, visualizar y exportar.</p>
             </div>
         </div>
