@@ -6,6 +6,7 @@ import '../../models/api_exception.dart';
 import '../../models/profile_photo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
+import '../../widgets/camera_permission_notice.dart';
 import '../../widgets/form_validation.dart';
 
 class ProfileEditForm extends StatefulWidget {
@@ -17,6 +18,7 @@ class ProfileEditForm extends StatefulWidget {
     required this.onReload,
     this.onResult,
     this.selectFile,
+    this.capturePhoto,
   });
 
   final AuthController controller;
@@ -25,6 +27,7 @@ class ProfileEditForm extends StatefulWidget {
   final VoidCallback onReload;
   final ValueChanged<String>? onResult;
   final Future<XFile?> Function()? selectFile;
+  final Future<XFile?> Function()? capturePhoto;
 
   @override
   State<ProfileEditForm> createState() => _ProfileEditFormState();
@@ -37,6 +40,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
   );
   ProfilePhoto? _photo;
   String? _notice;
+  String? _cameraPermissionMessage;
   bool get _needsReload => widget.controller.profileUpdateNeedsRefresh;
 
   @override
@@ -52,6 +56,14 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
   void dispose() {
     _username.dispose();
     super.dispose();
+  }
+
+  Future<ProfilePhoto?> _readPhoto(XFile? file) async {
+    if (file == null) return null;
+    if (await file.length() > ProfilePhoto.maxBytes) {
+      throw const ApiException('Selecciona una imagen de hasta 2 MB.');
+    }
+    return ProfilePhoto(await file.readAsBytes(), name: file.name);
   }
 
   Future<void> _selectPhoto() async {
@@ -79,16 +91,43 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   ),
                 ],
               ));
-      if (file == null) return null;
-      if (await file.length() > ProfilePhoto.maxBytes) {
-        throw const ApiException('Selecciona una imagen de hasta 2 MB.');
-      }
-      return ProfilePhoto(await file.readAsBytes(), name: file.name);
+      return _readPhoto(file);
     });
     if (mounted && photo != null) {
       setState(() {
         _photo = photo;
         _notice = null;
+        _cameraPermissionMessage = null;
+      });
+    }
+  }
+
+  Future<void> _capturePhoto() async {
+    setState(() => _notice = null);
+    String? deniedMessage;
+    final photo = await widget.controller.selectProfilePhoto(() async {
+      try {
+        final capture = widget.capturePhoto;
+        if (capture == null) {
+          throw const CameraPermissionException();
+        }
+        return await _readPhoto(await capture());
+      } catch (error) {
+        if (CameraPermissionException.isPermissionError(error)) {
+          deniedMessage = CameraPermissionException.messageFor(error);
+          return null;
+        }
+        rethrow;
+      }
+    });
+    if (!mounted) return;
+    if (deniedMessage != null) {
+      setState(() => _cameraPermissionMessage = deniedMessage);
+    } else if (photo != null) {
+      setState(() {
+        _photo = photo;
+        _notice = null;
+        _cameraPermissionMessage = null;
       });
     }
   }
@@ -267,10 +306,26 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                     ),
                   ],
                   OutlinedButton.icon(
+                    onPressed: busy || _needsReload ? null : _capturePhoto,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Tomar foto'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
                     onPressed: busy || _needsReload ? null : _selectPhoto,
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('Seleccionar foto'),
                   ),
+                  if (_cameraPermissionMessage case final cameraMessage?) ...[
+                    const SizedBox(height: 16),
+                    CameraPermissionNotice(
+                      message: cameraMessage,
+                      alternativeLabel: 'Elegir imagen del dispositivo',
+                      onUseAlternative: busy || _needsReload
+                          ? null
+                          : _selectPhoto,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   const Text(
                     'JPG, PNG, WEBP o GIF, hasta 2 MB.',
