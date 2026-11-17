@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import 'action_confirmation.dart';
+import 'form_validation.dart';
 
 class DeviceLocation {
   const DeviceLocation({
@@ -202,6 +203,7 @@ class _LocationInputFieldState extends State<LocationInputField> {
   @override
   Widget build(BuildContext context) {
     final busy = _locating || !widget.enabled;
+    final scrollPadding = formScrollPadding(context);
     final showCoords =
         _showManualCoordinates ||
         widget.latitudeError != null ||
@@ -216,6 +218,7 @@ class _LocationInputFieldState extends State<LocationInputField> {
           key: const ValueKey('location.ubicacion'),
           controller: widget.controller,
           focusNode: _locationFocus,
+          scrollPadding: scrollPadding,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           forceErrorText: widget.locationError,
           enabled: widget.enabled,
@@ -347,6 +350,7 @@ class _LocationInputFieldState extends State<LocationInputField> {
                     child: TextFormField(
                       key: const ValueKey('location.latitud'),
                       controller: _latController,
+                      scrollPadding: scrollPadding,
                       autovalidateMode: AutovalidateMode.onUserInteraction,
                       forceErrorText: widget.latitudeError,
                       enabled: widget.enabled,
@@ -367,6 +371,7 @@ class _LocationInputFieldState extends State<LocationInputField> {
                     child: TextFormField(
                       key: const ValueKey('location.longitud'),
                       controller: _lngController,
+                      scrollPadding: scrollPadding,
                       autovalidateMode: AutovalidateMode.onUserInteraction,
                       forceErrorText: widget.longitudeError,
                       enabled: widget.enabled,

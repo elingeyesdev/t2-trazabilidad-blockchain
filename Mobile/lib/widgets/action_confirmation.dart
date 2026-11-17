@@ -113,6 +113,7 @@ Future<bool> confirmImportantAction(
   IconData? icon,
   bool destructive = false,
 }) async {
+  FocusManager.instance.primaryFocus?.unfocus();
   final result = await showDialog<bool>(
     context: context,
     builder: (dialogContext) {
@@ -120,6 +121,7 @@ Future<bool> confirmImportantAction(
       final accent = destructive ? theme.colorScheme.error : AppTheme.forest;
       return AlertDialog(
         scrollable: true,
+        insetPadding: const EdgeInsets.all(16),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -180,32 +182,31 @@ Future<bool> confirmImportantAction(
                   ),
                 ),
               ],
+              const SizedBox(height: 20),
+              OverflowBar(
+                alignment: MainAxisAlignment.end,
+                spacing: 8,
+                overflowSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: Text(cancelLabel),
+                  ),
+                  FilledButton(
+                    style: destructive
+                        ? FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.error,
+                            foregroundColor: theme.colorScheme.onError,
+                          )
+                        : null,
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: Text(confirmLabel),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
-        actions: [
-          OverflowBar(
-            alignment: MainAxisAlignment.end,
-            spacing: 8,
-            overflowSpacing: 8,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(cancelLabel),
-              ),
-              FilledButton(
-                style: destructive
-                    ? FilledButton.styleFrom(
-                        backgroundColor: theme.colorScheme.error,
-                        foregroundColor: theme.colorScheme.onError,
-                      )
-                    : null,
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(confirmLabel),
-              ),
-            ],
-          ),
-        ],
       );
     },
   );

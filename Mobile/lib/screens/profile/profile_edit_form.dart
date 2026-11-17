@@ -230,7 +230,8 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     String? fieldError(String field) =>
         error?.validationErrors[field]?.join('\n');
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: formContentPadding(context),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
@@ -249,6 +250,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                 if (user?.canUpdateUsername == true)
                   TextFormField(
                     controller: _username,
+                    scrollPadding: formScrollPadding(context),
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     forceErrorText: fieldError('nombreusuario'),
                     enabled: !busy && !_needsReload,

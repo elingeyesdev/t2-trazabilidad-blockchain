@@ -17,6 +17,23 @@ bool validateForm(GlobalKey<FormState> key) {
   return valid;
 }
 
+EdgeInsets formScrollPadding(BuildContext context) {
+  final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+  return EdgeInsets.fromLTRB(20, 20, 20, keyboard + 120);
+}
+
+EdgeInsets formContentPadding(BuildContext context, {double base = 24}) {
+  final width = MediaQuery.sizeOf(context).width;
+  final horizontal = width < 360 ? 16.0 : base;
+  final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+  return EdgeInsets.fromLTRB(
+    horizontal,
+    base,
+    horizontal,
+    base + (keyboard > 0 ? 16 : 0),
+  );
+}
+
 void revealFormErrors(GlobalKey<FormState> key) {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     final errors = key.currentState?.validateGranularly();

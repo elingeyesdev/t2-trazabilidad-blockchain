@@ -68,9 +68,13 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (context, _) {
         final busy = widget.controller.isSubmitting;
         final theme = Theme.of(context);
+        final availableHeight =
+            MediaQuery.sizeOf(context).height -
+            MediaQuery.viewInsetsOf(context).bottom;
         final showBrandPanel =
-            MediaQuery.sizeOf(context).height >= 740 &&
+            availableHeight >= 740 &&
             MediaQuery.textScalerOf(context).scale(16) <= 24;
+        final scrollPadding = formScrollPadding(context);
         final emailError = _fieldError('email');
         final passwordError = _fieldError('password');
         final error = widget.controller.error;
@@ -87,7 +91,9 @@ class _LoginScreenState extends State<LoginScreen> {
           body: SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: formContentPadding(context),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 440),
                   child: AutofillGroup(
@@ -124,6 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                           TextFormField(
                             controller: _email,
+                            scrollPadding: scrollPadding,
                             autovalidateMode:
                                 AutovalidateMode.onUserInteraction,
                             forceErrorText: emailError,
@@ -148,6 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 16),
                           TextFormField(
                             controller: _password,
+                            scrollPadding: scrollPadding,
                             autovalidateMode:
                                 AutovalidateMode.onUserInteraction,
                             forceErrorText: passwordError,

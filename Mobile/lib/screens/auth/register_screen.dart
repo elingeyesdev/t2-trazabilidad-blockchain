@@ -90,6 +90,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: TextFormField(
         key: ValueKey('register.$name'),
         controller: _fields[name],
+        scrollPadding: formScrollPadding(context),
         autovalidateMode: AutovalidateMode.onUserInteraction,
         forceErrorText: messages == null || messages.isEmpty
             ? null
@@ -242,7 +243,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ? _confirmation(result)
                   : Center(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: formContentPadding(context),
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 440),
                           child: AutofillGroup(
