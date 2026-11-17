@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/record_status_badge.dart';
 import '../../widgets/information_section.dart';
+import 'lote_form_screen.dart';
 import 'module_access_denied.dart';
 
 class ModuleDetailScreen extends StatefulWidget {
@@ -21,6 +24,8 @@ class ModuleDetailScreen extends StatefulWidget {
     required this.user,
     required this.service,
     required this.onRefreshPermissions,
+    this.initialNotice,
+    this.onLoteUpdated,
   });
 
   final AppModule module;
@@ -28,6 +33,8 @@ class ModuleDetailScreen extends StatefulWidget {
   final AuthUser user;
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
+  final String? initialNotice;
+  final VoidCallback? onLoteUpdated;
 
   @override
   State<ModuleDetailScreen> createState() => _ModuleDetailScreenState();
@@ -35,6 +42,7 @@ class ModuleDetailScreen extends StatefulWidget {
 
 class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   late Future<ModuleRecord> _request = _load();
+  late String? _notice = widget.initialNotice;
   bool get _isLote => widget.module == AppModule.lotes;
 
   Future<ModuleRecord> _load() =>
@@ -44,6 +52,23 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     _request = _load();
     _request.ignore();
   });
+
+  Future<void> _editLote(ModuleRecord record) async {
+    final result = await Navigator.of(context).pushNamed(
+      '${AppModule.lotes.route}/${record.id}/editar',
+      arguments: record.loteData,
+    );
+    if (!mounted) return;
+    if (result is LoteFormResult) {
+      widget.onLoteUpdated?.call();
+      setState(() {
+        _notice =
+            'Los cambios de "${result.record.title}" se guardaron correctamente.';
+        _request = _load();
+        _request.ignore();
+      });
+    }
+  }
 
   void _backToList() {
     final navigator = Navigator.of(context);
@@ -173,8 +198,24 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   context,
                 ).textTheme.headlineSmall?.copyWith(fontSize: 32, height: 1.15),
               ),
+              if (_notice case final notice?) ...[
+                const SizedBox(height: 20),
+                AppNotice(
+                  tone: AppNoticeTone.success,
+                  message: notice,
+                ),
+              ],
               const SizedBox(height: 28),
               if (_isLote) ...[
+                if (LotePermissions.canEdit(widget.user) &&
+                    record.loteData?.isClosed != true) ...[
+                  FilledButton.icon(
+                    onPressed: () => _editLote(record),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Editar lote'),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Material(
                   color: AppTheme.forest,
                   borderRadius: BorderRadius.circular(16),

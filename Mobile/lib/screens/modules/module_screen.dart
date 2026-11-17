@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
@@ -10,6 +12,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/record_status_badge.dart';
+import 'lote_form_screen.dart';
 import 'module_access_denied.dart';
 
 class ModuleScreen extends StatefulWidget {
@@ -19,12 +22,14 @@ class ModuleScreen extends StatefulWidget {
     required this.user,
     required this.service,
     required this.onRefreshPermissions,
+    this.loteUpdates,
   });
 
   final AppModule module;
   final AuthUser user;
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
+  final ValueListenable<int>? loteUpdates;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
@@ -43,10 +48,51 @@ class _ModuleScreenState extends State<ModuleScreen> {
       widget.module == AppModule.lotes ||
       widget.module == AppModule.actividades;
 
+  bool get _canCreateLote =>
+      widget.module == AppModule.lotes &&
+      LotePermissions.canCreate(widget.user);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.loteUpdates?.addListener(_onLoteUpdated);
+  }
+
+  @override
+  void didUpdateWidget(covariant ModuleScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.loteUpdates != widget.loteUpdates) {
+      oldWidget.loteUpdates?.removeListener(_onLoteUpdated);
+      widget.loteUpdates?.addListener(_onLoteUpdated);
+    }
+  }
+
   @override
   void dispose() {
+    widget.loteUpdates?.removeListener(_onLoteUpdated);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onLoteUpdated() {
+    if (!mounted || widget.module != AppModule.lotes) return;
+    _load(_page);
+  }
+
+  Future<void> _createLote() async {
+    FocusScope.of(context).unfocus();
+    final result = await Navigator.of(
+      context,
+    ).pushNamed('${AppModule.lotes.route}/nuevo');
+    if (!mounted) return;
+    if (result is LoteFormResult) {
+      _load(1);
+      await Navigator.of(context).pushNamed(
+        '${AppModule.lotes.route}/${result.record.id}',
+        arguments:
+            'El lote "${result.record.title}" se registró correctamente.',
+      );
+    }
   }
 
   void _clearSearch() {
@@ -172,6 +218,16 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ],
             ),
             body: SafeArea(child: _content(snapshot)),
+            floatingActionButton: _canCreateLote && !loading && !snapshot.hasError
+                ? FloatingActionButton.extended(
+                    heroTag: null,
+                    backgroundColor: AppTheme.forest,
+                    foregroundColor: Colors.white,
+                    onPressed: _createLote,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Nuevo lote'),
+                  )
+                : null,
           ),
         );
       },
@@ -236,7 +292,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
               : ListView.builder(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    8,
+                    24,
+                    _canCreateLote ? 88 : 16,
+                  ),
                   itemCount: records.length,
                   itemBuilder: (context, index) => _recordCard(records[index]),
                 ),

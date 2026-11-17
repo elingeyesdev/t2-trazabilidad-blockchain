@@ -1,5 +1,6 @@
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
+import '../models/lote_models.dart';
 import '../models/module_page.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
@@ -132,5 +133,115 @@ class ModuleService {
       fallbackTitle: module.label,
       fields: module.fields,
     );
+  }
+
+  static final Map<String, String> _loteDetailFields = {
+    ...AppModule.lotes.fields,
+    'fechasiembra': 'Fecha de siembra',
+    'codigo_trazabilidad': 'Código de trazabilidad',
+    'fechacreacion': 'Fecha de creación',
+  };
+
+  Future<List<SeedOption>> loadSeedOptions(AuthUser user) async {
+    if (!LotePermissions.canCreate(user) &&
+        !LotePermissions.canEdit(user) &&
+        !user.permissions.contains(AppModule.insumos.permission)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las semillas disponibles.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', AppModule.insumos.endpoint);
+    return SeedOption.listFromJson(response);
+  }
+
+  Future<ModuleRecord> createLote(
+    AuthUser user, {
+    required String name,
+    required int seedId,
+    required double surface,
+    String? location,
+    double? latitude,
+    double? longitude,
+    double? plannedSeedAmount,
+  }) async {
+    if (!LotePermissions.canCreate(user)) {
+      throw const ApiException(
+        'No tienes permiso para crear lotes.',
+        statusCode: 403,
+      );
+    }
+    if ((latitude == null) != (longitude == null)) {
+      throw const ApiException(
+        'Revisa los datos enviados.',
+        statusCode: 422,
+        validationErrors: {
+          'latitud': ['Indique ambas coordenadas o deje ambas vacías.'],
+          'longitud': ['Indique ambas coordenadas o deje ambas vacías.'],
+        },
+      );
+    }
+    final cleanLocation = location?.trim();
+    final body = <String, Object?>{
+      'nombre': name.trim(),
+      'insumosemillaid': seedId,
+      'superficie': surface,
+      if (cleanLocation != null && cleanLocation.isNotEmpty)
+        'ubicacion': cleanLocation,
+      if (latitude != null && longitude != null) ...{
+        'latitud': latitude,
+        'longitud': longitude,
+      },
+      'cantidad_semilla_planificada': ?plannedSeedAmount,
+    };
+    final response = await _api.request(
+      'POST',
+      AppModule.lotes.endpoint,
+      body: body,
+    );
+    return ModuleRecord.fromJson(
+      response,
+      idField: AppModule.lotes.idField,
+      titleField: AppModule.lotes.titleField,
+      fallbackTitle: 'Lote',
+      fields: _loteDetailFields,
+    );
+  }
+
+  Future<ModuleRecord> updateLote(
+    AuthUser user,
+    int loteId, {
+    required Map<String, Object?> changes,
+  }) async {
+    if (!LotePermissions.canEdit(user)) {
+      throw const ApiException(
+        'No tienes permiso para editar este lote.',
+        statusCode: 403,
+      );
+    }
+    if (loteId <= 0) {
+      throw const ApiException('El lote solicitado no es válido.');
+    }
+    if (changes.isEmpty) {
+      throw const ApiException('No hay cambios para guardar.');
+    }
+    final response = await _api.request(
+      'PATCH',
+      '${AppModule.lotes.endpoint}/$loteId',
+      body: changes,
+    );
+    final record = ModuleRecord.fromJson(
+      response,
+      idField: AppModule.lotes.idField,
+      titleField: AppModule.lotes.titleField,
+      fallbackTitle: 'Lote',
+      fields: _loteDetailFields,
+    );
+    if (record.id != loteId) {
+      throw const ApiException(
+        'La información recibida no corresponde al lote editado.',
+      );
+    }
+    return record;
   }
 }

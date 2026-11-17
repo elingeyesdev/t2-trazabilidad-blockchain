@@ -1,5 +1,6 @@
 import 'api_exception.dart';
 import 'field_record_info.dart';
+import 'lote_models.dart';
 
 class ModulePage {
   const ModulePage(this.records, {this.currentPage = 1, this.lastPage = 1});
@@ -62,6 +63,7 @@ class ModuleRecord {
     required this.title,
     required this.details,
     this.fieldInfo,
+    this.loteData,
   });
 
   factory ModuleRecord.fromJson(
@@ -102,6 +104,7 @@ class ModuleRecord {
         'actividadid' => FieldRecordInfo.actividad(row),
         _ => null,
       },
+      loteData: idField == 'loteid' ? LoteEditableData.fromJson(row) : null,
     );
   }
 
@@ -113,4 +116,5 @@ class ModuleRecord {
   final String title;
   final Map<String, String> details;
   final FieldRecordInfo? fieldInfo;
+  final LoteEditableData? loteData;
 }

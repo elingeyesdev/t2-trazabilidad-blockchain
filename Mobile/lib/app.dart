@@ -4,15 +4,17 @@ import 'package:flutter/material.dart';
 
 import 'config/api_config.dart';
 import 'controllers/auth_controller.dart';
+import 'models/lote_models.dart';
 import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/modules/lote_activity_history_screen.dart';
+import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
-import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/module_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
@@ -23,16 +25,19 @@ import 'services/session_storage.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_error_state.dart';
 import 'widgets/app_loading.dart';
+import 'widgets/location_input_field.dart';
 
 class AgroFusionApp extends StatefulWidget {
   const AgroFusionApp({
     super.key,
     this.apiClient,
     this.sessionStorage = const SessionStorage(),
+    this.requestLocation,
   });
 
   final ApiClient? apiClient;
   final SessionStorage sessionStorage;
+  final Future<DeviceLocation?> Function()? requestLocation;
 
   @override
   State<AgroFusionApp> createState() => _AgroFusionAppState();
@@ -49,6 +54,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   late final AuthController _auth = AuthController(
     AuthService(_api, widget.sessionStorage),
   );
+  final ValueNotifier<int> _loteUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -67,6 +73,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _loteUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -175,6 +182,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
               user: _auth.user!,
               service: ModuleService(_api),
               onRefreshPermissions: _auth.restoreSession,
+              loteUpdates: module == AppModule.lotes ? _loteUpdates : null,
             ),
             requiresAuthentication: true,
             module: module,
@@ -188,6 +196,49 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'lotes', 'nuevo']) {
+          return MaterialPageRoute<LoteFormResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => LoteFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                requestLocation: widget.requestLocation,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.lotes,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'lotes',
+          final rawId,
+          'editar',
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<LoteFormResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => LoteFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                loteId: id,
+                initialData: settings.arguments is LoteEditableData
+                    ? settings.arguments as LoteEditableData
+                    : null,
+                requestLocation: widget.requestLocation,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.lotes,
+            ),
+          );
         }
         if (uri.pathSegments case [
           'modules',
@@ -233,6 +284,12 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 user: _auth.user!,
                 service: ModuleService(_api),
                 onRefreshPermissions: _auth.restoreSession,
+                initialNotice: settings.arguments is String
+                    ? settings.arguments as String
+                    : null,
+                onLoteUpdated: module == AppModule.lotes
+                    ? () => _loteUpdates.value++
+                    : null,
               ),
               requiresAuthentication: true,
               module: module,
