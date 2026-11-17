@@ -95,11 +95,13 @@ class AuthController extends ChangeNotifier {
     }
     final revision = _sessionRevision;
     _operation = _AuthOperation.pickingPhoto;
-    _error = null;
     notifyListeners();
     ProfilePhoto? photo;
     try {
       photo = await select();
+      if (photo != null && _canApplyResult(revision)) {
+        clearError(field: 'imagen');
+      }
     } on ApiException catch (error) {
       if (_canApplyResult(revision)) _error = error;
     } catch (_) {
@@ -302,13 +304,26 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  void clearError() {
+  void clearError({String? field}) {
     if (_isDisposed ||
         requiresLogoutRetry ||
         (_error == null && _logoutResult == null)) {
       return;
     }
-    _error = null;
+    final error = _error;
+    if (field != null && error != null && error.validationErrors.isNotEmpty) {
+      if (!error.validationErrors.containsKey(field)) return;
+      final remaining = Map.of(error.validationErrors)..remove(field);
+      _error = remaining.isEmpty
+          ? null
+          : ApiException(
+              error.message,
+              statusCode: error.statusCode,
+              validationErrors: remaining,
+            );
+    } else {
+      _error = null;
+    }
     _logoutResult = null;
     notifyListeners();
   }

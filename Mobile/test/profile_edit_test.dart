@@ -29,6 +29,8 @@ void main() {
   const storage = SessionStorage();
   var saved = 0;
   var reloaded = 0;
+  var cancelled = 0;
+  String? resultMessage;
   http.Response jsonResponse(Object? body, [int status = 200]) => http.Response(
     jsonEncode(body),
     status,
@@ -57,8 +59,9 @@ void main() {
             builder: (_, _) => ProfileEditForm(
               controller: auth,
               selectFile: selectFile,
-              onCancel: () {},
+              onCancel: () => cancelled++,
               onSaved: () => saved++,
+              onResult: (detail) => resultMessage = detail,
               onReload: () => reloaded++,
             ),
           ),
@@ -69,11 +72,17 @@ void main() {
     return auth;
   }
 
-  Future<void> save(WidgetTester tester) async {
+  Future<void> save(WidgetTester tester, {bool confirm = true}) async {
     await tester.ensureVisible(find.text('Guardar cambios'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Guardar cambios'));
     await tester.pumpAndSettle();
+    if (find.text('Confirmar cambios').evaluate().isNotEmpty) {
+      await tester.tap(
+        find.text(confirm ? 'Confirmar cambios' : 'Cancelar').last,
+      );
+      await tester.pumpAndSettle();
+    }
   }
 
   XFile photoFile() => XFile.fromData(
@@ -87,6 +96,8 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     saved = 0;
     reloaded = 0;
+    cancelled = 0;
+    resultMessage = null;
   });
 
   testWidgets('No envía el nombre sin cambios ni permite un nombre vacío', (
@@ -102,6 +113,10 @@ void main() {
     await tester.enterText(find.byType(TextFormField), '');
     await save(tester);
     expect(find.text('Ingresa un nombre de usuario.'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField), 'ana.nueva');
+    await tester.pumpAndSettle();
+    expect(find.text('Ingresa un nombre de usuario.'), findsNothing);
+    expect(find.text('No hay cambios para guardar.'), findsNothing);
     expect(writes, 0);
   });
 
@@ -207,6 +222,7 @@ void main() {
               'message': 'Revisa los datos',
               'errors': {
                 'nombreusuario': ['Nombre no disponible'],
+                'imagen': ['Selecciona una fotografía válida.'],
               },
             }, 422),
     );
@@ -218,7 +234,48 @@ void main() {
       'ana.ocupada',
     );
     expect(saved, 0);
+    await tester.enterText(find.byType(TextFormField), 'ana.corregida');
+    await tester.pumpAndSettle();
+    expect(find.text('Nombre no disponible'), findsNothing);
+    expect(find.text('Selecciona una fotografía válida.'), findsOneWidget);
   });
+
+  for (final selected in [true, false]) {
+    testWidgets(
+      selected
+          ? 'Corregir la fotografía conserva el error pendiente del nombre'
+          : 'Cancelar el selector conserva los errores pendientes del perfil',
+      (tester) async {
+        await startForm(
+          tester,
+          (request) async => request.method == 'GET'
+              ? jsonResponse(profile)
+              : jsonResponse({
+                  'message': 'Revisa los datos',
+                  'errors': {
+                    'nombreusuario': ['Nombre no disponible'],
+                    'imagen': ['Selecciona una fotografía válida.'],
+                  },
+                }, 422),
+          selectFile: () async => selected ? photoFile() : null,
+        );
+        await tester.enterText(find.byType(TextFormField), 'ana.ocupada');
+        await save(tester);
+        await tester.ensureVisible(find.text('Seleccionar foto'));
+        await tester.tap(find.text('Seleccionar foto'));
+        await tester.pumpAndSettle();
+        expect(find.text('Nombre no disponible'), findsOneWidget);
+        expect(
+          find.text('Selecciona una fotografía válida.'),
+          selected ? findsNothing : findsOneWidget,
+        );
+        expect(
+          find.text('Quitar selección'),
+          selected ? findsOneWidget : findsNothing,
+        );
+      },
+    );
+  }
 
   testWidgets('Un aviso anterior no oculta el error de una fotografía nueva', (
     tester,
@@ -314,6 +371,85 @@ void main() {
       );
       expect(find.text('Quitar selección'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Solicita confirmación antes de guardar y permite cancelar sin enviar cambios',
+    (tester) async {
+      var writes = 0;
+      await startForm(tester, (request) async {
+        if (request.method == 'GET') return jsonResponse(profile);
+        writes++;
+        return jsonResponse({
+          ...profile,
+          'nombreusuario': 'ana.nueva',
+          'profile_capabilities': {
+            'update_username': false,
+            'update_photo': true,
+          },
+        });
+      });
+      await tester.enterText(find.byType(TextFormField), 'ana.nueva');
+      await tester.ensureVisible(find.text('Guardar cambios'));
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Guardar cambios del perfil?'), findsOneWidget);
+      expect(find.text('Nuevo usuario: @ana.nueva'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar').last);
+      await tester.pumpAndSettle();
+      expect(writes, 0);
+      expect(saved, 0);
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField))
+            .controller!
+            .text,
+        'ana.nueva',
+      );
+
+      await save(tester);
+      expect(writes, 1);
+      expect(saved, 1);
+      expect(
+        resultMessage,
+        'Tu nombre de usuario quedó registrado como @ana.nueva.',
+      );
+    },
+  );
+
+  testWidgets(
+    'Confirma antes de descartar cambios sin guardar y sale directo si no hay cambios',
+    (tester) async {
+      await startForm(tester, (_) async => jsonResponse(profile));
+      await tester.ensureVisible(find.text('Cancelar'));
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(cancelled, 1);
+
+      await tester.enterText(find.byType(TextFormField), 'ana.pendiente');
+      await tester.ensureVisible(find.text('Cancelar'));
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Descartar cambios?'), findsOneWidget);
+
+      await tester.tap(find.text('Seguir editando'));
+      await tester.pumpAndSettle();
+      expect(cancelled, 1);
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField))
+            .controller!
+            .text,
+        'ana.pendiente',
+      );
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Descartar cambios'));
+      await tester.pumpAndSettle();
+      expect(cancelled, 2);
     },
   );
 }

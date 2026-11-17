@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:agrofusion_mobile/app.dart';
 import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/navigation/app_routes.dart';
 import 'package:agrofusion_mobile/screens/auth/login_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
 import 'package:agrofusion_mobile/widgets/app_loading.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -32,7 +34,12 @@ void main() {
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Comprobar conexión'));
+    expect(find.text('Comprobar conexión'), findsNothing);
+    unawaited(
+      tester
+          .state<NavigatorState>(find.byType(Navigator))
+          .pushNamed(AppRoutes.connection),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(AppLoading), findsOneWidget);
@@ -62,7 +69,11 @@ void main() {
     await tester.pumpWidget(AgroFusionApp(apiClient: api));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Comprobar conexión'));
+    unawaited(
+      tester
+          .state<NavigatorState>(find.byType(Navigator))
+          .pushNamed(AppRoutes.connection),
+    );
     await tester.pumpAndSettle();
     expect(
       find.text('El servidor no está disponible. Intenta más tarde.'),

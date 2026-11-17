@@ -10,6 +10,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/record_status_badge.dart';
+import '../../widgets/information_section.dart';
 import 'module_access_denied.dart';
 
 class ModuleDetailScreen extends StatefulWidget {
@@ -123,121 +124,218 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     },
   );
 
-  Widget _details(ModuleRecord record) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppTheme.forest,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _details(ModuleRecord record) {
+    final fields = record.fieldInfo?.details ?? record.details;
+    Map<String, String> pick(List<String> keys) => {
+      for (final key in keys)
+        if (fields.containsKey(key)) key: fields[key]!,
+    };
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 12,
                 children: [
-                  Icon(widget.module.icon, size: 32, color: AppTheme.ochre),
-                  const SizedBox(height: 20),
-                  Text(
-                    record.title,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.headlineSmall?.copyWith(color: Colors.white),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    children: [
+                      Icon(
+                        widget.module.icon,
+                        size: 20,
+                        color: AppTheme.forest,
+                      ),
+                      Text(
+                        '${_isLote ? 'Lote' : 'Actividad'} #${record.id}',
+                        style: const TextStyle(
+                          color: AppTheme.forest,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '${_isLote ? 'Lote' : 'Actividad'} #${record.id}',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: .82),
-                    ),
-                  ),
-                  if (record.fieldInfo?.status != null) ...[
-                    const SizedBox(height: 18),
-                    RecordStatusBadge(status: record.fieldInfo!.status!),
-                  ],
+                  if (record.fieldInfo?.status case final status?)
+                    RecordStatusBadge(status: status),
                 ],
               ),
-            ),
-            if (_isLote) ...[
               const SizedBox(height: 20),
-              Card(
-                margin: EdgeInsets.zero,
-                elevation: 0,
-                color: AppTheme.sage,
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  leading: const Icon(
-                    Icons.history_rounded,
-                    color: AppTheme.forest,
-                  ),
-                  title: Text(
-                    'Historial de actividades',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  subtitle: const Text(
-                    'Consulta el trabajo registrado en este lote.',
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.of(context).pushNamed(
-                    '${AppModule.lotes.route}/${record.id}/historial',
-                    arguments: record.title,
-                  ),
-                ),
+              Text(
+                record.title,
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(fontSize: 32, height: 1.15),
               ),
-            ],
-            const SizedBox(height: 28),
-            Text(
-              _isLote ? 'Información del lote' : 'Información de la actividad',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 14),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.line),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final field
-                      in (record.fieldInfo?.details ?? record.details).entries
-                          .where((field) => field.key != 'Identificador'))
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 28),
+              if (_isLote) ...[
+                Material(
+                  color: AppTheme.forest,
+                  borderRadius: BorderRadius.circular(16),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).pushNamed(
+                      '${AppModule.lotes.route}/${record.id}/historial',
+                      arguments: record.title,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
                         children: [
-                          Text(
-                            field.key,
-                            style: Theme.of(context).textTheme.bodyMedium,
+                          const Icon(
+                            Icons.history_rounded,
+                            color: AppTheme.ochre,
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            field.value,
-                            style: Theme.of(context).textTheme.bodyLarge,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Historial de actividades',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(color: Colors.white),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'El trabajo de este lote, paso a paso.',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: AppTheme.ochre,
+                            size: 20,
                           ),
                         ],
                       ),
                     ),
-                ],
-              ),
-            ),
-          ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Información del lote',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                _lotOverview(
+                  pick(['Cultivo', 'Superficie', 'Actividades pendientes']),
+                ),
+                const SizedBox(height: 16),
+                InformationSection(
+                  title: 'Trabajo de campo',
+                  icon: Icons.spa_outlined,
+                  columns: 2,
+                  fields: pick(['Responsable', 'Fecha de siembra']),
+                ),
+                const SizedBox(height: 16),
+                InformationSection(
+                  title: 'Origen y trazabilidad',
+                  icon: Icons.fingerprint_rounded,
+                  fields: pick([
+                    'Ubicación',
+                    'Código de trazabilidad',
+                    'Fecha de creación',
+                  ]),
+                ),
+              ] else ...[
+                InformationSection(
+                  title: 'Información de la actividad',
+                  icon: Icons.assignment_outlined,
+                  columns: 2,
+                  fields: pick([
+                    'Lote',
+                    'Cultivo',
+                    'Responsable',
+                    'Tipo de actividad',
+                    'Prioridad',
+                  ]),
+                ),
+                const SizedBox(height: 16),
+                InformationSection(
+                  title: 'Fechas y seguimiento',
+                  icon: Icons.event_outlined,
+                  columns: 2,
+                  fields: pick(['Fecha planificada', 'Inicio', 'Finalización']),
+                ),
+                const SizedBox(height: 16),
+                InformationSection(
+                  title: 'Notas del campo',
+                  icon: Icons.notes_rounded,
+                  fields: pick(['Observaciones']),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _lotOverview(Map<String, String> fields) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: AppTheme.sage,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final paired =
+            constraints.maxWidth >= 280 &&
+            MediaQuery.textScalerOf(context).scale(16) <= 24;
+        return Wrap(
+          spacing: 24,
+          runSpacing: 20,
+          children: [
+            for (final field in fields.entries)
+              SizedBox(
+                width: paired && field.key != 'Cultivo'
+                    ? (constraints.maxWidth - 24) / 2
+                    : constraints.maxWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: paired && field.key != 'Cultivo' ? 40 : 0,
+                      ),
+                      child: Text(
+                        field.key,
+                        style: const TextStyle(
+                          color: AppTheme.forest,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      field.value,
+                      style: TextStyle(
+                        color: AppTheme.forest,
+                        fontSize: field.key == 'Cultivo' ? 24 : 20,
+                        height: 1.3,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     ),
   );
 }

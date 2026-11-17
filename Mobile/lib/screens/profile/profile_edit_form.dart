@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import '../../controllers/auth_controller.dart';
 import '../../models/api_exception.dart';
 import '../../models/profile_photo.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/action_confirmation.dart';
+import '../../widgets/camera_permission_notice.dart';
+import '../../widgets/form_validation.dart';
 
 class ProfileEditForm extends StatefulWidget {
   const ProfileEditForm({
@@ -12,14 +16,18 @@ class ProfileEditForm extends StatefulWidget {
     required this.onCancel,
     required this.onSaved,
     required this.onReload,
+    this.onResult,
     this.selectFile,
+    this.capturePhoto,
   });
 
   final AuthController controller;
   final VoidCallback onCancel;
   final VoidCallback onSaved;
   final VoidCallback onReload;
+  final ValueChanged<String>? onResult;
   final Future<XFile?> Function()? selectFile;
+  final Future<XFile?> Function()? capturePhoto;
 
   @override
   State<ProfileEditForm> createState() => _ProfileEditFormState();
@@ -32,6 +40,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
   );
   ProfilePhoto? _photo;
   String? _notice;
+  String? _cameraPermissionMessage;
   bool get _needsReload => widget.controller.profileUpdateNeedsRefresh;
 
   @override
@@ -47,6 +56,14 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
   void dispose() {
     _username.dispose();
     super.dispose();
+  }
+
+  Future<ProfilePhoto?> _readPhoto(XFile? file) async {
+    if (file == null) return null;
+    if (await file.length() > ProfilePhoto.maxBytes) {
+      throw const ApiException('Selecciona una imagen de hasta 2 MB.');
+    }
+    return ProfilePhoto(await file.readAsBytes(), name: file.name);
   }
 
   Future<void> _selectPhoto() async {
@@ -74,23 +91,79 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   ),
                 ],
               ));
-      if (file == null) return null;
-      if (await file.length() > ProfilePhoto.maxBytes) {
-        throw const ApiException('Selecciona una imagen de hasta 2 MB.');
-      }
-      return ProfilePhoto(await file.readAsBytes(), name: file.name);
+      return _readPhoto(file);
     });
     if (mounted && photo != null) {
       setState(() {
         _photo = photo;
         _notice = null;
+        _cameraPermissionMessage = null;
       });
     }
   }
 
+  Future<void> _capturePhoto() async {
+    setState(() => _notice = null);
+    String? deniedMessage;
+    final photo = await widget.controller.selectProfilePhoto(() async {
+      try {
+        final capture = widget.capturePhoto;
+        if (capture == null) {
+          throw const CameraPermissionException();
+        }
+        return await _readPhoto(await capture());
+      } catch (error) {
+        if (CameraPermissionException.isPermissionError(error)) {
+          deniedMessage = CameraPermissionException.messageFor(error);
+          return null;
+        }
+        rethrow;
+      }
+    });
+    if (!mounted) return;
+    if (deniedMessage != null) {
+      setState(() => _cameraPermissionMessage = deniedMessage);
+    } else if (photo != null) {
+      setState(() {
+        _photo = photo;
+        _notice = null;
+        _cameraPermissionMessage = null;
+      });
+    }
+  }
+
+  bool get _hasUnsavedChanges {
+    final user = widget.controller.user;
+    if (user == null) return false;
+    final name = _username.text.trim();
+    final usernameChanged =
+        user.canUpdateUsername && name != (user.username ?? '');
+    final photoSelected = user.canUpdatePhoto && _photo != null;
+    return usernameChanged || photoSelected;
+  }
+
+  Future<void> _cancel() async {
+    if (widget.controller.isSubmitting) return;
+    if (_hasUnsavedChanges && !_needsReload) {
+      final discard = await confirmImportantAction(
+        context,
+        icon: Icons.warning_amber_rounded,
+        title: '¿Descartar cambios?',
+        message:
+            'Tienes cambios sin guardar en tu perfil. Si sales ahora, no se aplicarán.',
+        cancelLabel: 'Seguir editando',
+        confirmLabel: 'Descartar cambios',
+        destructive: true,
+      );
+      if (!mounted || !discard) return;
+    }
+    widget.controller.clearError();
+    widget.onCancel();
+  }
+
   Future<void> _save() async {
     final auth = widget.controller;
-    if (auth.isSubmitting || _needsReload || !_form.currentState!.validate()) {
+    if (auth.isSubmitting || _needsReload || !validateForm(_form)) {
       return;
     }
     final user = auth.user;
@@ -104,6 +177,20 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
       setState(() => _notice = 'No hay cambios para guardar.');
       return;
     }
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.verified_user_outlined,
+      title: '¿Guardar cambios del perfil?',
+      message: username != null
+          ? 'Revisa los datos antes de continuar. El nombre de usuario solo se puede modificar una vez.'
+          : 'Se actualizará la fotografía visible en tu cuenta.',
+      details: [
+        if (username != null) 'Nuevo usuario: @$username',
+        if (photo != null) 'Nueva fotografía: ${photo.filename}',
+      ],
+      confirmLabel: 'Confirmar cambios',
+    );
+    if (!mounted || !confirmed) return;
     setState(() => _notice = null);
     final saved = await auth.updateProfile(username: username, photo: photo);
     if (!saved && auth.error?.statusCode == 403) {
@@ -111,7 +198,17 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     }
     if (!mounted) return;
     if (saved) {
+      final detail = switch ((username != null, photo != null)) {
+        (true, true) =>
+          'Se guardaron tu usuario @$username y tu nueva fotografía.',
+        (true, false) =>
+          'Tu nombre de usuario quedó registrado como @$username.',
+        _ => 'Se actualizó tu fotografía de perfil.',
+      };
+      widget.onResult?.call(detail);
       widget.onSaved();
+    } else {
+      revealFormErrors(_form);
     }
   }
 
@@ -121,10 +218,20 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     final user = auth.user;
     final busy = auth.isSubmitting;
     final error = auth.error;
+    final message =
+        _notice ??
+        (error != null &&
+                (error.validationErrors.isEmpty ||
+                    error.validationErrors.keys.any(
+                      (field) => field != 'nombreusuario' && field != 'imagen',
+                    ))
+            ? error.message
+            : null);
     String? fieldError(String field) =>
         error?.validationErrors[field]?.join('\n');
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: formContentPadding(context),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
@@ -137,24 +244,31 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   'Editar perfil',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
+                const SizedBox(height: 8),
+                const Text('Personaliza cómo apareces en AgroFusion.'),
                 const SizedBox(height: 24),
                 if (user?.canUpdateUsername == true)
                   TextFormField(
                     controller: _username,
+                    scrollPadding: formScrollPadding(context),
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    forceErrorText: fieldError('nombreusuario'),
                     enabled: !busy && !_needsReload,
                     decoration: InputDecoration(
                       labelText: 'Nombre de usuario',
                       prefixText: '@',
                       helperText: 'Solo puedes cambiarlo una vez.',
                       helperMaxLines: 2,
-                      errorText: fieldError('nombreusuario'),
                       errorMaxLines: 3,
-                      border: const OutlineInputBorder(),
                     ),
                     autocorrect: false,
                     validator: (value) => value == null || value.trim().isEmpty
                         ? 'Ingresa un nombre de usuario.'
                         : null,
+                    onChanged: (_) {
+                      if (_notice != null) setState(() => _notice = null);
+                      auth.clearError(field: 'nombreusuario');
+                    },
                   )
                 else
                   Text(
@@ -162,13 +276,28 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   ),
                 if (user?.canUpdatePhoto == true) ...[
                   const SizedBox(height: 24),
+                  const Divider(color: AppTheme.line),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Fotografía',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Una imagen para reconocer tu cuenta.'),
+                  const SizedBox(height: 16),
                   if (_photo case final photo?) ...[
-                    Image.memory(
-                      photo.bytes,
-                      height: 160,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.broken_image_outlined, size: 64),
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.memory(
+                          photo.bytes,
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              const Icon(Icons.broken_image_outlined, size: 64),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextButton(
@@ -179,11 +308,31 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                     ),
                   ],
                   OutlinedButton.icon(
+                    onPressed: busy || _needsReload ? null : _capturePhoto,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Tomar foto'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
                     onPressed: busy || _needsReload ? null : _selectPhoto,
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('Seleccionar foto'),
                   ),
-                  const Text('JPG, PNG, WEBP o GIF, hasta 2 MB.'),
+                  if (_cameraPermissionMessage case final cameraMessage?) ...[
+                    const SizedBox(height: 16),
+                    CameraPermissionNotice(
+                      message: cameraMessage,
+                      alternativeLabel: 'Elegir imagen del dispositivo',
+                      onUseAlternative: busy || _needsReload
+                          ? null
+                          : _selectPhoto,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'JPG, PNG, WEBP o GIF, hasta 2 MB.',
+                    textAlign: TextAlign.center,
+                  ),
                   if (fieldError('imagen') case final message?)
                     Text(
                       message,
@@ -192,21 +341,29 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                       ),
                     ),
                 ],
-                if (_notice ?? error?.message case final message?)
+                if (message != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 20),
-                    child: Semantics(liveRegion: true, child: Text(message)),
+                    child: AppNotice(
+                      tone: _notice != null
+                          ? AppNoticeTone.info
+                          : AppNoticeTone.error,
+                      message: message,
+                    ),
                   ),
-                if (_needsReload) ...[
-                  const SizedBox(height: 12),
-                  const Text(
-                    'No se pudo confirmar el guardado. Consulta el perfil para comprobar si el cambio se aplicó antes de volver a guardar.',
+                if (_needsReload)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: AppNotice(
+                      tone: AppNoticeTone.warning,
+                      message:
+                          'No se pudo confirmar el guardado. Consulta el perfil para comprobar si el cambio se aplicó antes de volver a guardar.',
+                      action: TextButton(
+                        onPressed: busy ? null : widget.onReload,
+                        child: const Text('Consultar perfil'),
+                      ),
+                    ),
                   ),
-                  TextButton(
-                    onPressed: busy ? null : widget.onReload,
-                    child: const Text('Consultar perfil'),
-                  ),
-                ],
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: busy || _needsReload ? null : _save,
@@ -215,7 +372,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   ),
                 ),
                 TextButton(
-                  onPressed: busy ? null : widget.onCancel,
+                  onPressed: busy ? null : _cancel,
                   child: const Text('Cancelar'),
                 ),
               ],

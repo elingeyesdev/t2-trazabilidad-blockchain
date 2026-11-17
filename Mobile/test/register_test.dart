@@ -47,14 +47,16 @@ void main() {
   Future<void> fillForm(
     WidgetTester tester, {
     String confirmation = 'clave-de-prueba',
+    String email = 'ana@example.test',
+    String password = 'clave-de-prueba',
   }) async {
     final fields = {
       'nombre': 'Ana',
       'apellido': 'Mamani',
-      'email': 'ana@example.test',
+      'email': email,
       'nombreusuario': 'ana.mamani',
       'telefono': '70000000',
-      'password': 'clave-de-prueba',
+      'password': password,
       'password_confirmation': confirmation,
     };
     for (final field in fields.entries) {
@@ -84,9 +86,53 @@ void main() {
       });
       expect(find.text('Nombre de usuario'), findsOneWidget);
       await submit(tester);
-      expect(find.text('Completa este campo.'), findsWidgets);
+      for (final message in [
+        'Ingresa tu nombre.',
+        'Ingresa tu apellido.',
+        'Ingresa tu correo electrónico.',
+        'Ingresa un nombre de usuario.',
+        'Ingresa tu contraseña.',
+      ]) {
+        expect(find.text(message), findsOneWidget);
+      }
       expect(find.text('Confirma tu contraseña.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('register.nombre')).hitTestable(),
+        findsOneWidget,
+      );
       expect(calls, 0);
+    },
+  );
+
+  testWidgets(
+    'Explica el formato del correo y el mínimo de contraseña antes de enviar',
+    (tester) async {
+      var calls = 0;
+      await openRegistration(tester, (_) async {
+        calls++;
+        return jsonResponse(pending, 201);
+      });
+      await fillForm(
+        tester,
+        email: 'ana@',
+        password: '123',
+        confirmation: '123',
+      );
+      await submit(tester);
+      expect(
+        find.text('Escribe un correo válido, por ejemplo nombre@correo.com.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Usa una contraseña de al menos 6 caracteres.'),
+        findsOneWidget,
+      );
+      expect(calls, 0);
+
+      await fillForm(tester);
+      await submit(tester);
+      expect(find.text('Solicitud enviada'), findsOneWidget);
+      expect(calls, 1);
     },
   );
 
@@ -163,6 +209,7 @@ void main() {
           'message': 'Revisa los datos enviados.',
           'errors': {
             'nombreusuario': ['Ese nombre de usuario ya está en uso.'],
+            'email': ['Ese correo ya está registrado.'],
           },
         }, 422),
       );
@@ -181,6 +228,7 @@ void main() {
       await tester.enterText(username, 'ana.mamani.2');
       await tester.pumpAndSettle();
       expect(find.text('Ese nombre de usuario ya está en uso.'), findsNothing);
+      expect(find.text('Ese correo ya está registrado.'), findsOneWidget);
     },
   );
 
