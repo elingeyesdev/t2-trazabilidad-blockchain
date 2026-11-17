@@ -467,7 +467,7 @@ class ActividadController extends Controller
             ->with('success', 'Siembra asignada. El agricultor responsable podrá marcarla como realizada con una foto.');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, bool $devolverModelo = false)
     {
         abort_unless(
             UsuarioRol::gestionaCampo($request->user()) || $request->user()?->hasRole('admin'),
@@ -494,6 +494,9 @@ class ActividadController extends Controller
 
         $noPermitida = $this->trazabilidad->mensajeActividadNoPermitida($lote, $tipo->nombre ?? null);
         if ($noPermitida !== null) {
+            if ($devolverModelo) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['tipoactividadid' => $noPermitida]);
+            }
             return back()->withInput()->with('error', $noPermitida);
         }
 
@@ -601,6 +604,10 @@ class ActividadController extends Controller
             $lote->fechasiembra = $data['fechainicio'] ?? now();
             $lote->fechamodificacion = now();
             $lote->save();
+        }
+
+        if ($devolverModelo) {
+            return $actividad->fresh();
         }
 
         $mensaje = "Actividad de {$tipo->nombre} registrada para el lote {$lote->nombre}.{$msgEstado}";
