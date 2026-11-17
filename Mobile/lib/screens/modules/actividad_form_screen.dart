@@ -257,9 +257,7 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
       return;
     }
 
-    final selectedTipo = _tipos
-        .where((item) => item.id == tipoId)
-        .firstOrNull;
+    final selectedTipo = _tipos.where((item) => item.id == tipoId).firstOrNull;
     String? detailJson;
     if (selectedTipo != null &&
         selectedTipo.isIrrigation &&
@@ -479,10 +477,7 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
                     for (final tipo in _tipos)
                       DropdownMenuItem<int>(
                         value: tipo.id,
-                        child: Text(
-                          tipo.name,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text(tipo.name, overflow: TextOverflow.ellipsis),
                       ),
                   ],
                   onChanged: _submitting
@@ -524,9 +519,8 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
                             setState(() => _selectedIrrigationKey = value);
                             _clearError(field: 'detalle_actividad_json');
                           },
-                    validator: (value) => value == null
-                        ? 'Selecciona el método de riego.'
-                        : null,
+                    validator: (value) =>
+                        value == null ? 'Selecciona el método de riego.' : null,
                   ),
                 ] else if (detailError != null) ...[
                   const SizedBox(height: 12),

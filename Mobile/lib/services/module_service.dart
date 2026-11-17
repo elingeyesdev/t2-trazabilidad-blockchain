@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+
 import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
@@ -401,6 +403,61 @@ class ModuleService {
     if (record.id != actividadId) {
       throw const ApiException(
         'La información recibida no corresponde a la actividad editada.',
+      );
+    }
+    return record;
+  }
+
+  Future<ModuleRecord> closeActividad(
+    AuthUser user,
+    int actividadId, {
+    required String result,
+    required EvidencePhoto photo,
+    List<Map<String, Object?>> consumos = const [],
+  }) async {
+    if (!user.permissions.contains(AppModule.actividades.permission) ||
+        user.roles.contains('admin') ||
+        user.roles.contains('jefe_agricultor')) {
+      throw const ApiException(
+        'No tienes permiso para cerrar esta actividad.',
+        statusCode: 403,
+      );
+    }
+    if (actividadId <= 0) {
+      throw const ApiException('La actividad solicitada no es válida.');
+    }
+    final fields = <String, String>{'resultado': result.trim()};
+    for (var i = 0; i < consumos.length; i++) {
+      final item = consumos[i];
+      for (final entry in item.entries) {
+        if (entry.value != null) {
+          fields['consumos[$i][${entry.key}]'] = entry.value.toString();
+        }
+      }
+    }
+    final response = await _api.request(
+      'POST',
+      '${AppModule.actividades.endpoint}/$actividadId/cerrar',
+      fields: fields,
+      files: [
+        http.MultipartFile.fromBytes(
+          'evidencia_foto',
+          photo.bytes,
+          filename: photo.filename,
+          contentType: http.MediaType.parse(photo.contentType),
+        ),
+      ],
+    );
+    final record = ModuleRecord.fromJson(
+      response,
+      idField: AppModule.actividades.idField,
+      titleField: AppModule.actividades.titleField,
+      fallbackTitle: 'Actividad',
+      fields: _actividadDetailFields,
+    );
+    if (record.id != actividadId) {
+      throw const ApiException(
+        'La información recibida no corresponde a la actividad cerrada.',
       );
     }
     return record;

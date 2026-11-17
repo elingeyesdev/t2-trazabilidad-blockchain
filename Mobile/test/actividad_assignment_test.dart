@@ -91,11 +91,12 @@ void main() {
     {'prioridadid': 2, 'nombre': 'Alta'},
   ];
 
-  http.Response jsonResponse(Object? value, [int status = 200]) => http.Response(
-    jsonEncode(value),
-    status,
-    headers: {'content-type': 'application/json; charset=utf-8'},
-  );
+  http.Response jsonResponse(Object? value, [int status = 200]) =>
+      http.Response(
+        jsonEncode(value),
+        status,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
 
   Future<void> startApp(
     WidgetTester tester,
@@ -235,24 +236,15 @@ void main() {
       expect(sentBody?['tipoactividadid'], 4);
       expect(sentBody?['prioridadid'], 2);
       expect(sentBody?['fecha_planificada'], '2026-12-01');
-      expect(
-        sentBody?['observaciones'],
-        'Revisar mangueras del sector norte',
-      );
-      expect(
-        sentBody?['detalle_actividad_json'],
-        contains('"key":"goteo"'),
-      );
+      expect(sentBody?['observaciones'], 'Revisar mangueras del sector norte');
+      expect(sentBody?['detalle_actividad_json'], contains('"key":"goteo"'));
 
       expect(find.text('Detalle de actividad'), findsOneWidget);
       expect(find.text('Riego por goteo'), findsOneWidget);
       expect(find.text('Lucía Quispe'), findsOneWidget);
       expect(find.text('01/12/2026'), findsOneWidget);
       expect(find.text('Alta'), findsOneWidget);
-      expect(
-        find.text('Revisar mangueras del sector norte'),
-        findsOneWidget,
-      );
+      expect(find.text('Revisar mangueras del sector norte'), findsOneWidget);
     },
   );
 
@@ -425,10 +417,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(sentPatch, {'observaciones': 'Avance al 80%, falta borde oeste.'});
-      expect(
-        find.text('Avance al 80%, falta borde oeste.'),
-        findsOneWidget,
-      );
+      expect(find.text('Avance al 80%, falta borde oeste.'), findsOneWidget);
       expect(
         find.text('Las observaciones de la actividad se guardaron.'),
         findsOneWidget,

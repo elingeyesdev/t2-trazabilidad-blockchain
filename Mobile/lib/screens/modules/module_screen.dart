@@ -266,9 +266,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     foregroundColor: Colors.white,
                     onPressed: _canCreateLote ? _createLote : _assignActividad,
                     icon: Icon(
-                      _canCreateLote
-                          ? Icons.add_rounded
-                          : Icons.assignment_add,
+                      _canCreateLote ? Icons.add_rounded : Icons.assignment_add,
                     ),
                     label: Text(
                       _canCreateLote ? 'Nuevo lote' : 'Asignar actividad',

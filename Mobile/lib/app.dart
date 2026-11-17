@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import 'config/api_config.dart';
@@ -12,6 +13,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/lote_form_screen.dart';
@@ -35,11 +37,15 @@ class AgroFusionApp extends StatefulWidget {
     this.apiClient,
     this.sessionStorage = const SessionStorage(),
     this.requestLocation,
+    this.capturePhoto,
+    this.selectEvidenceFile,
   });
 
   final ApiClient? apiClient;
   final SessionStorage sessionStorage;
   final Future<DeviceLocation?> Function()? requestLocation;
+  final Future<XFile?> Function()? capturePhoto;
+  final Future<XFile?> Function()? selectEvidenceFile;
 
   @override
   State<AgroFusionApp> createState() => _AgroFusionAppState();
@@ -224,6 +230,34 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             ),
           );
         }
+        if (uri.pathSegments case [
+          'modules',
+          'actividades',
+          final rawId,
+          'cerrar',
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<ActividadCloseResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => ActividadCloseScreen(
+                key: ValueKey(_auth.user),
+                actividadId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                initialData: settings.arguments is ActividadEditableData
+                    ? settings.arguments as ActividadEditableData
+                    : null,
+                capturePhoto: widget.capturePhoto,
+                selectFile: widget.selectEvidenceFile,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.actividades,
+            ),
+          );
+        }
         if (uri.pathSegments case ['modules', 'lotes', 'nuevo']) {
           return MaterialPageRoute<LoteFormResult?>(
             settings: settings,
@@ -240,12 +274,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             ),
           );
         }
-        if (uri.pathSegments case [
-          'modules',
-          'lotes',
-          final rawId,
-          'editar',
-        ]) {
+        if (uri.pathSegments case ['modules', 'lotes', final rawId, 'editar']) {
           final id = int.tryParse(rawId);
           if (id == null || id <= 0) return null;
           return MaterialPageRoute<LoteFormResult?>(

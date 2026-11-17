@@ -401,9 +401,7 @@ class _LoteFormScreenState extends State<LoteFormScreen> {
         );
       }
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pop(LoteFormResult(record: saved, isEdit: _isEdit));
+      Navigator.of(context).pop(LoteFormResult(record: saved, isEdit: _isEdit));
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {

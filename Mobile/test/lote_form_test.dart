@@ -87,11 +87,12 @@ void main() {
     'insumo_semilla': {'insumoid': 12, 'nombre': 'Semilla de Papa'},
   };
 
-  http.Response jsonResponse(Object? value, [int status = 200]) => http.Response(
-    jsonEncode(value),
-    status,
-    headers: {'content-type': 'application/json; charset=utf-8'},
-  );
+  http.Response jsonResponse(Object? value, [int status = 200]) =>
+      http.Response(
+        jsonEncode(value),
+        status,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
 
   Future<void> startApp(
     WidgetTester tester,
@@ -138,8 +139,7 @@ void main() {
             return jsonResponse(lots);
           }
           if (request.url.path == '/api/lotes' && request.method == 'POST') {
-            sentCreateBody =
-                jsonDecode(request.body) as Map<String, dynamic>;
+            sentCreateBody = jsonDecode(request.body) as Map<String, dynamic>;
             final created = {
               'loteid': 25,
               'usuarioid': 1,
@@ -157,10 +157,7 @@ void main() {
               },
               'cultivo': {'cultivoid': 3, 'nombre': 'Papa'},
               'estado_tipo': {'estadolotetipoid': 1, 'nombre': 'Planificación'},
-              'insumo_semilla': {
-                'insumoid': 12,
-                'nombre': 'Semilla de Papa',
-              },
+              'insumo_semilla': {'insumoid': 12, 'nombre': 'Semilla de Papa'},
             };
             lots.add(created);
             return jsonResponse({'data': created}, 201);
@@ -246,8 +243,7 @@ void main() {
             return jsonResponse(savedLot.isEmpty ? [] : [savedLot]);
           }
           if (request.url.path == '/api/lotes' && request.method == 'POST') {
-            sentCreateBody =
-                jsonDecode(request.body) as Map<String, dynamic>;
+            sentCreateBody = jsonDecode(request.body) as Map<String, dynamic>;
             savedLot = {
               'loteid': 31,
               'nombre': sentCreateBody!['nombre'],
@@ -256,10 +252,7 @@ void main() {
               'ubicacion': sentCreateBody!['ubicacion'],
               'cultivo': {'cultivoid': 4, 'nombre': 'Maíz'},
               'estado_tipo': {'estadolotetipoid': 1, 'nombre': 'Planificación'},
-              'insumo_semilla': {
-                'insumoid': 14,
-                'nombre': 'Semilla de Maíz',
-              },
+              'insumo_semilla': {'insumoid': 14, 'nombre': 'Semilla de Maíz'},
             };
             return jsonResponse({'data': savedLot}, 201);
           }
@@ -310,10 +303,7 @@ void main() {
       await tester.tap(find.text('Confirmar registro'));
       await tester.pumpAndSettle();
 
-      expect(
-        sentCreateBody?['ubicacion'],
-        'Comunidad El Carmen, Sector Sur',
-      );
+      expect(sentCreateBody?['ubicacion'], 'Comunidad El Carmen, Sector Sur');
       expect(find.text('Parcela Manual'), findsOneWidget);
       expect(find.text('Comunidad El Carmen, Sector Sur'), findsOneWidget);
     },
@@ -338,10 +328,7 @@ void main() {
         }
         if (request.url.path == '/api/lotes/7' && request.method == 'PATCH') {
           sentPatchBody = jsonDecode(request.body) as Map<String, dynamic>;
-          currentLot = {
-            ...currentLot,
-            ...sentPatchBody!,
-          };
+          currentLot = {...currentLot, ...sentPatchBody!};
           return jsonResponse({'data': currentLot});
         }
         return jsonResponse({}, 404);
@@ -449,10 +436,7 @@ void main() {
       await tester.tap(find.text('Confirmar registro'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('No hay stock suficiente para 10 ha.'),
-        findsOneWidget,
-      );
+      expect(find.text('No hay stock suficiente para 10 ha.'), findsOneWidget);
       expect(
         find.text('La ubicación debe ser más específica.'),
         findsOneWidget,

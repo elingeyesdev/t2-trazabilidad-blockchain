@@ -15,6 +15,7 @@ import '../../widgets/app_loading.dart';
 import '../../widgets/form_validation.dart';
 import '../../widgets/record_status_badge.dart';
 import '../../widgets/information_section.dart';
+import 'actividad_close_screen.dart';
 import 'actividad_form_screen.dart';
 import 'lote_form_screen.dart';
 import 'module_access_denied.dart';
@@ -102,6 +103,25 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       setState(() {
         _notice =
             'Se asignó la actividad "${result.record.title}" a este lote.';
+        _request = _load();
+        _request.ignore();
+      });
+    }
+  }
+
+  Future<void> _closeActivity(ModuleRecord record) async {
+    final result = await Navigator.of(context).pushNamed(
+      '${AppModule.actividades.route}/${record.id}/cerrar',
+      arguments: record.actividadData,
+    );
+    if (!mounted) return;
+    if (result is ActividadCloseResult) {
+      widget.onActividadUpdated?.call();
+      widget.onLoteUpdated?.call();
+      setState(() {
+        _editingObservations = false;
+        _notice =
+            'La actividad "${result.record.title}" fue completada con su fotografía.';
         _request = _load();
         _request.ignore();
       });
@@ -300,10 +320,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
               ),
               if (_notice case final notice?) ...[
                 const SizedBox(height: 20),
-                AppNotice(
-                  tone: AppNoticeTone.success,
-                  message: notice,
-                ),
+                AppNotice(tone: AppNoticeTone.success, message: notice),
               ],
               const SizedBox(height: 28),
               if (_isLote) ...[
@@ -406,6 +423,17 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   ]),
                 ),
               ] else ...[
+                if (ActividadPermissions.canClose(
+                  widget.user,
+                  record.actividadData,
+                )) ...[
+                  FilledButton.icon(
+                    onPressed: () => _closeActivity(record),
+                    icon: const Icon(Icons.task_alt_rounded, size: 18),
+                    label: const Text('Completar y cerrar actividad'),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 InformationSection(
                   title: 'Información de la actividad',
                   icon: Icons.assignment_outlined,
@@ -429,7 +457,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 InformationSection(
                   title: 'Notas del campo',
                   icon: Icons.notes_rounded,
-                  fields: pick(['Observaciones']),
+                  fields: {
+                    ...pick(['Observaciones']),
+                    'Resultado': ?record.actividadData?.resultado,
+                  },
                 ),
                 if (ActividadPermissions.canAddObservations(widget.user)) ...[
                   const SizedBox(height: 16),
@@ -505,9 +536,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                                   onPressed: _savingObservations
                                       ? null
                                       : () => setState(() {
-                                            _editingObservations = false;
-                                            _obsError = null;
-                                          }),
+                                          _editingObservations = false;
+                                          _obsError = null;
+                                        }),
                                   child: const Text('Cancelar'),
                                 ),
                               ],

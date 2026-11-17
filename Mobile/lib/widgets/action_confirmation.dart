@@ -82,10 +82,7 @@ class AppNotice extends StatelessWidget {
                       ],
                       Text(
                         message,
-                        style: TextStyle(
-                          color: foreground,
-                          height: 1.45,
-                        ),
+                        style: TextStyle(color: foreground, height: 1.45),
                       ),
                     ],
                   ),
@@ -141,12 +138,7 @@ Future<bool> confirmImportantAction(
               ),
               const SizedBox(width: 12),
             ],
-            Expanded(
-              child: Text(
-                title,
-                style: theme.textTheme.titleLarge,
-              ),
-            ),
+            Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
           ],
         ),
         content: ConstrainedBox(

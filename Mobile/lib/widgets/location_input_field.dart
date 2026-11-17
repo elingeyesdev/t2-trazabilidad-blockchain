@@ -136,8 +136,12 @@ class _LocationInputFieldState extends State<LocationInputField> {
   }
 
   DeviceLocation? _parseCoordinates() {
-    final lat = double.tryParse(_latController.text.trim().replaceAll(',', '.'));
-    final lng = double.tryParse(_lngController.text.trim().replaceAll(',', '.'));
+    final lat = double.tryParse(
+      _latController.text.trim().replaceAll(',', '.'),
+    );
+    final lng = double.tryParse(
+      _lngController.text.trim().replaceAll(',', '.'),
+    );
     if (lat != null &&
         lng != null &&
         lat >= -90 &&
@@ -272,18 +276,15 @@ class _LocationInputFieldState extends State<LocationInputField> {
                     )
                   : const Icon(Icons.my_location_rounded, size: 18),
               label: Text(
-                _locating
-                    ? 'Obteniendo ubicación...'
-                    : 'Usar ubicación actual',
+                _locating ? 'Obteniendo ubicación...' : 'Usar ubicación actual',
               ),
             ),
             if (widget.allowManualCoordinates)
               TextButton.icon(
                 onPressed: !widget.enabled
                     ? null
-                    : () => setState(
-                        () => _showManualCoordinates = !showCoords,
-                      ),
+                    : () =>
+                          setState(() => _showManualCoordinates = !showCoords),
                 icon: Icon(
                   showCoords
                       ? Icons.expand_less_rounded

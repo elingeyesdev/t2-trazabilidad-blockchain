@@ -3,10 +3,12 @@ import 'auth_user.dart';
 
 abstract final class LotePermissions {
   static bool canCreate(AuthUser user) =>
-      !user.roles.contains('admin') && user.permissions.contains('lotes.create');
+      !user.roles.contains('admin') &&
+      user.permissions.contains('lotes.create');
 
   static bool canEdit(AuthUser user) =>
-      !user.roles.contains('admin') && user.permissions.contains('lotes.update');
+      !user.roles.contains('admin') &&
+      user.permissions.contains('lotes.update');
 }
 
 class SeedOption {
@@ -112,7 +114,9 @@ class LoteEditableData {
       insumoSemillaNombre: insumo is Map<String, dynamic>
           ? _asText(insumo['nombre'])
           : null,
-      cantidadSemillaPlanificada: _asDouble(row['cantidad_semilla_planificada']),
+      cantidadSemillaPlanificada: _asDouble(
+        row['cantidad_semilla_planificada'],
+      ),
       estadoNombre: estado is Map<String, dynamic>
           ? _asText(estado['nombre'])
           : null,
