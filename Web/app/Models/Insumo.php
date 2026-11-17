@@ -87,18 +87,14 @@ class Insumo extends Model
      * @return bool
      * @throws \Exception
      */
-    public function decrementarStock(float $cantidad): bool
+    public function decrementarStock(float|string $cantidad): bool
     {
-        if ($cantidad <= 0) {
+        $cantidad = \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($cantidad));
+        if (\App\Support\InventarioDecimal::unidades($cantidad) === 0) {
             throw new \Exception("La cantidad a decrementar debe ser mayor a 0");
         }
 
-        if ($this->stock < $cantidad) {
-            throw new \Exception("Stock insuficiente. Disponible: {$this->stock} {$this->unidadMedida->abreviatura}");
-        }
-
-        $this->stock -= $cantidad;
-        return $this->save();
+        return $this->modificarStockDecimal($cantidad, false);
     }
 
     /**
@@ -106,14 +102,41 @@ class Insumo extends Model
      * @param float $cantidad
      * @return bool
      */
-    public function incrementarStock(float $cantidad): bool
+    public function incrementarStock(float|string $cantidad): bool
     {
-        if ($cantidad <= 0) {
+        $cantidad = \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($cantidad));
+        if (\App\Support\InventarioDecimal::unidades($cantidad) === 0) {
             throw new \Exception("La cantidad a incrementar debe ser mayor a 0");
         }
 
-        $this->stock += $cantidad;
-        return $this->save();
+        return $this->modificarStockDecimal($cantidad, true);
+    }
+
+    /** Atomic compare-and-set also protects callers holding an outdated Eloquent model. */
+    private function modificarStockDecimal(string $cantidad, bool $incrementar): bool
+    {
+        $delta = \App\Support\InventarioDecimal::unidades($cantidad);
+        for ($intento = 0; $intento < 10; $intento++) {
+            $raw = static::query()->whereKey($this->insumoid)->toBase()->value('stock');
+            if ($raw === null) {
+                throw new \InvalidArgumentException('El insumo ya no está disponible.');
+            }
+            $actual = \App\Support\InventarioDecimal::unidades($raw);
+            if (! $incrementar && $actual < $delta) {
+                throw new \InvalidArgumentException('Stock insuficiente para completar el consumo.');
+            }
+            $nuevo = $incrementar ? $actual + $delta : $actual - $delta;
+            if ($nuevo > 999999999999999999) {
+                throw new \InvalidArgumentException('El stock excede el rango decimal admitido.');
+            }
+            $cambio = static::query()->whereKey($this->insumoid)->where('stock', $raw)
+                ->update(['stock' => \App\Support\InventarioDecimal::texto($nuevo)]);
+            if ($cambio === 1) {
+                $this->refresh();
+                return true;
+            }
+        }
+        throw new \RuntimeException('El inventario cambió concurrentemente. Reintente la operación.');
     }
 
     /**

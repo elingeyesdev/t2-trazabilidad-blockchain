@@ -69,6 +69,7 @@ class ActividadController extends Controller
         $query = Actividad::query()->with($this->relacionesActividad());
         ActividadPermisos::aplicarScopeVisibles($query, $request->user());
         $actividad = $query->findOrFail($actividad);
+        abort_unless($actividad->lote && LoteAcceso::puedeVer($request->user(), $actividad->lote), 404);
 
         return new ActividadConsultaResource($actividad);
     }
@@ -147,6 +148,7 @@ class ActividadController extends Controller
             'ejecutor:usuarioid,nombre,apellido',
             'tipoActividad:tipoactividadid,nombre',
             'prioridad:prioridadid,nombre',
+            'consumos.insumo.unidadMedida',
         ];
     }
 
@@ -201,6 +203,7 @@ class ActividadController extends Controller
             403,
             'No tienes acceso a esta actividad.'
         );
+        abort_if($actividad->fechafin !== null, 409, 'El cierre confirmado de esta actividad no puede modificarse.');
 
         $data = $request->validate([
             'loteid' => 'sometimes|exists:lote,loteid',
@@ -208,7 +211,7 @@ class ActividadController extends Controller
             'descripcion' => 'sometimes|string|max:200',
             'fechainicio' => 'nullable|date',
             'fecha_planificada' => 'nullable|date',
-            'fechafin' => 'nullable|date|after_or_equal:fechainicio',
+            'fechafin' => 'missing',
             'tipoactividadid' => 'sometimes|exists:tipoactividad,tipoactividadid',
             'prioridadid' => 'sometimes|exists:prioridad,prioridadid',
             'observaciones' => 'nullable|string|max:250',
@@ -265,6 +268,7 @@ class ActividadController extends Controller
             403,
             'No tienes permiso para eliminar esta actividad.'
         );
+        abort_if($actividad->fechafin !== null, 409, 'No se puede eliminar una actividad con cierre confirmado.');
 
         $actividad->delete();
 

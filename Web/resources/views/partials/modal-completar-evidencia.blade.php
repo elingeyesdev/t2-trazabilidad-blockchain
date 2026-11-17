@@ -108,6 +108,12 @@
                     <hr class="my-3" id="actividadModalSeparadorFoto" style="display: none;">
 
                     <div id="actividadModalSeccionFoto" style="display: none;">
+                        <div class="form-group">
+                            <label for="actividadResultado">Resultado de la actividad <span class="text-danger">*</span></label>
+                            <textarea id="actividadResultado" name="resultado" required maxlength="250" rows="3" class="form-control">{{ old('resultado') }}</textarea>
+                            @error('resultado')<div class="text-danger small">{{ $message }}</div>@enderror
+                            @error('consumos')<div class="text-danger small">{{ $message }}</div>@enderror
+                        </div>
                         <label class="font-weight-bold d-block mb-2">
                             <i class="fas fa-camera text-success mr-1"></i> Foto de evidencia <span class="text-danger">*</span>
                         </label>
@@ -333,7 +339,7 @@
         if (insumos.length > 0) {
             var insHtml = '<p class="small text-uppercase text-muted font-weight-bold mb-2 mt-2">'
                 + '<i class="fas fa-flask mr-1"></i> Insumos a aplicar</p>';
-            insumos.forEach(function (ins) {
+            insumos.forEach(function (ins, indice) {
                 insHtml += '<div class="actividad-insumo-card">';
                 if (ins.imagen) {
                     insHtml += '<img src="' + escHtml(ins.imagen) + '" alt="">';
@@ -342,7 +348,10 @@
                 }
                 insHtml += '<div><strong>' + escHtml(ins.nombre) + '</strong>'
                     + '<div class="text-success font-weight-bold">'
-                    + fmtNum(ins.cantidad) + ' ' + escHtml(ins.unidad || 'ud')
+                    + '<label class="small" for="consumo-real-' + indice + '">Cantidad utilizada (' + escHtml(ins.unidad || 'ud') + ')</label>'
+                    + '<input type="hidden" name="consumos[' + indice + '][insumoid]" value="' + Number(ins.insumoid) + '">'
+                    + '<input type="hidden" name="consumos[' + indice + '][almacenid]" value="' + Number(ins.almacenid) + '">'
+                    + '<input id="consumo-real-' + indice + '" type="number" required min="0.001" step="0.001" class="form-control form-control-sm" name="consumos[' + indice + '][cantidad]" value="' + escHtml(ins.cantidad) + '">'
                     + '</div></div></div>';
             });
             insumosWrap.innerHTML = insHtml;
@@ -467,7 +476,7 @@
         });
     });
 
-    @if($errors->has('evidencia_foto'))
+    @if($errors->has('evidencia_foto') || $errors->has('resultado') || $errors->has('consumos'))
     if (window.jQuery) {
         window.jQuery(function () {
             window.jQuery('#modalCompletarEvidencia').modal('show');

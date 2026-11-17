@@ -5,6 +5,9 @@
 
     RewriteEngine On
 
+    # Activity evidence must pass through its authenticated controller.
+    RewriteRule ^storage/actividades_evidencia(?:/|$) - [F,L,NC]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
