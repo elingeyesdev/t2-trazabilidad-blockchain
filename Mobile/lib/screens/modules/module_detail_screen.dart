@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/actividad_models.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/lote_models.dart';
@@ -11,8 +12,10 @@ import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
+import '../../widgets/form_validation.dart';
 import '../../widgets/record_status_badge.dart';
 import '../../widgets/information_section.dart';
+import 'actividad_form_screen.dart';
 import 'lote_form_screen.dart';
 import 'module_access_denied.dart';
 
@@ -26,6 +29,7 @@ class ModuleDetailScreen extends StatefulWidget {
     required this.onRefreshPermissions,
     this.initialNotice,
     this.onLoteUpdated,
+    this.onActividadUpdated,
   });
 
   final AppModule module;
@@ -35,6 +39,7 @@ class ModuleDetailScreen extends StatefulWidget {
   final VoidCallback onRefreshPermissions;
   final String? initialNotice;
   final VoidCallback? onLoteUpdated;
+  final VoidCallback? onActividadUpdated;
 
   @override
   State<ModuleDetailScreen> createState() => _ModuleDetailScreenState();
@@ -43,7 +48,18 @@ class ModuleDetailScreen extends StatefulWidget {
 class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   late Future<ModuleRecord> _request = _load();
   late String? _notice = widget.initialNotice;
+  final _obsFormKey = GlobalKey<FormState>();
+  final _obsController = TextEditingController();
+  bool _editingObservations = false;
+  bool _savingObservations = false;
+  ApiException? _obsError;
   bool get _isLote => widget.module == AppModule.lotes;
+
+  @override
+  void dispose() {
+    _obsController.dispose();
+    super.dispose();
+  }
 
   Future<ModuleRecord> _load() =>
       widget.service.loadDetail(widget.module, widget.user, widget.recordId);
@@ -66,6 +82,90 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             'Los cambios de "${result.record.title}" se guardaron correctamente.';
         _request = _load();
         _request.ignore();
+      });
+    }
+  }
+
+  Future<void> _assignActivity(ModuleRecord record) async {
+    final result = await Navigator.of(context).pushNamed(
+      '${AppModule.actividades.route}/nueva',
+      arguments: LoteOption(
+        id: record.id,
+        name: record.title,
+        cropName: record.fieldInfo?.details['Cultivo'],
+      ),
+    );
+    if (!mounted) return;
+    if (result is ActividadFormResult) {
+      widget.onActividadUpdated?.call();
+      widget.onLoteUpdated?.call();
+      setState(() {
+        _notice =
+            'Se asignó la actividad "${result.record.title}" a este lote.';
+        _request = _load();
+        _request.ignore();
+      });
+    }
+  }
+
+  void _startEditingObservations(ModuleRecord record) {
+    setState(() {
+      _obsController.text = record.actividadData?.observations ?? '';
+      _obsError = null;
+      _editingObservations = true;
+    });
+  }
+
+  Future<void> _saveObservations(ModuleRecord record) async {
+    if (_savingObservations || !validateForm(_obsFormKey)) return;
+    final clean = _obsController.text.trim();
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.notes_rounded,
+      title: '¿Guardar observaciones?',
+      message: 'Las notas del campo quedarán visibles en el detalle y la web.',
+      details: [
+        'Actividad: ${record.title}',
+        'Observaciones: ${clean.isEmpty ? 'Sin observaciones' : clean}',
+      ],
+      confirmLabel: 'Confirmar observaciones',
+    );
+    if (!mounted || !confirmed) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _savingObservations = true;
+      _obsError = null;
+    });
+    try {
+      await widget.service.updateActividadObservaciones(
+        widget.user,
+        record.id,
+        observations: clean,
+      );
+      if (!mounted) return;
+      widget.onActividadUpdated?.call();
+      setState(() {
+        _savingObservations = false;
+        _editingObservations = false;
+        _notice = 'Las observaciones de la actividad se guardaron.';
+        _request = _load();
+        _request.ignore();
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingObservations = false;
+        _obsError = error;
+      });
+      revealFormErrors(_obsFormKey);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _savingObservations = false;
+        _obsError = const ApiException(
+          'No se pudieron guardar las observaciones. Revisa tu conexión e intenta de nuevo.',
+        );
       });
     }
   }
@@ -207,12 +307,26 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
               ],
               const SizedBox(height: 28),
               if (_isLote) ...[
-                if (LotePermissions.canEdit(widget.user) &&
-                    record.loteData?.isClosed != true) ...[
-                  FilledButton.icon(
-                    onPressed: () => _editLote(record),
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Editar lote'),
+                if (record.loteData?.isClosed != true &&
+                    (LotePermissions.canEdit(widget.user) ||
+                        ActividadPermissions.canAssign(widget.user))) ...[
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      if (LotePermissions.canEdit(widget.user))
+                        FilledButton.icon(
+                          onPressed: () => _editLote(record),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text('Editar lote'),
+                        ),
+                      if (ActividadPermissions.canAssign(widget.user))
+                        OutlinedButton.icon(
+                          onPressed: () => _assignActivity(record),
+                          icon: const Icon(Icons.assignment_add, size: 18),
+                          label: const Text('Asignar actividad'),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -317,6 +431,102 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   icon: Icons.notes_rounded,
                   fields: pick(['Observaciones']),
                 ),
+                if (ActividadPermissions.canAddObservations(widget.user)) ...[
+                  const SizedBox(height: 16),
+                  if (_editingObservations)
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.line),
+                      ),
+                      child: Form(
+                        key: _obsFormKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Observaciones de campo',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              key: const ValueKey('actividad.observaciones'),
+                              controller: _obsController,
+                              scrollPadding: formScrollPadding(context),
+                              autovalidateMode:
+                                  AutovalidateMode.onUserInteraction,
+                              forceErrorText: _obsError
+                                  ?.validationErrors['observaciones']
+                                  ?.join('\n'),
+                              enabled: !_savingObservations,
+                              maxLines: 3,
+                              maxLength: 250,
+                              textCapitalization: TextCapitalization.sentences,
+                              decoration: const InputDecoration(
+                                labelText: 'Observaciones',
+                                hintText:
+                                    'Describe avances o novedades de la tarea',
+                              ),
+                              onChanged: (_) {
+                                if (_obsError != null) {
+                                  setState(() => _obsError = null);
+                                }
+                              },
+                            ),
+                            if (_obsError != null &&
+                                (_obsError!.validationErrors.isEmpty ||
+                                    _obsError!.validationErrors.keys.any(
+                                      (k) => k != 'observaciones',
+                                    ))) ...[
+                              const SizedBox(height: 12),
+                              AppNotice(
+                                tone: AppNoticeTone.error,
+                                message: _obsError!.message,
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton(
+                                  onPressed: _savingObservations
+                                      ? null
+                                      : () => _saveObservations(record),
+                                  child: Text(
+                                    _savingObservations
+                                        ? 'Guardando...'
+                                        : 'Guardar observaciones',
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _savingObservations
+                                      ? null
+                                      : () => setState(() {
+                                            _editingObservations = false;
+                                            _obsError = null;
+                                          }),
+                                  child: const Text('Cancelar'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: () => _startEditingObservations(record),
+                      icon: const Icon(Icons.edit_note_rounded, size: 20),
+                      label: Text(
+                        (record.actividadData?.observations ?? '').isEmpty
+                            ? 'Añadir observaciones'
+                            : 'Editar observaciones',
+                      ),
+                    ),
+                ],
               ],
             ],
           ),

@@ -1,3 +1,4 @@
+import 'actividad_models.dart';
 import 'api_exception.dart';
 import 'field_record_info.dart';
 import 'lote_models.dart';
@@ -64,6 +65,7 @@ class ModuleRecord {
     required this.details,
     this.fieldInfo,
     this.loteData,
+    this.actividadData,
   });
 
   factory ModuleRecord.fromJson(
@@ -105,6 +107,9 @@ class ModuleRecord {
         _ => null,
       },
       loteData: idField == 'loteid' ? LoteEditableData.fromJson(row) : null,
+      actividadData: idField == 'actividadid'
+          ? ActividadEditableData.fromJson(row)
+          : null,
     );
   }
 
@@ -117,4 +122,5 @@ class ModuleRecord {
   final Map<String, String> details;
   final FieldRecordInfo? fieldInfo;
   final LoteEditableData? loteData;
+  final ActividadEditableData? actividadData;
 }

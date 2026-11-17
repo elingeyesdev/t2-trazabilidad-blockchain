@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/actividad_models.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/lote_models.dart';
@@ -12,6 +13,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/record_status_badge.dart';
+import 'actividad_form_screen.dart';
 import 'lote_form_screen.dart';
 import 'module_access_denied.dart';
 
@@ -23,6 +25,7 @@ class ModuleScreen extends StatefulWidget {
     required this.service,
     required this.onRefreshPermissions,
     this.loteUpdates,
+    this.actividadUpdates,
   });
 
   final AppModule module;
@@ -30,10 +33,13 @@ class ModuleScreen extends StatefulWidget {
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
   final ValueListenable<int>? loteUpdates;
+  final ValueListenable<int>? actividadUpdates;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
 }
+
+enum _ActivityFilter { all, pending, completed }
 
 class _ModuleScreenState extends State<ModuleScreen> {
   late Future<ModulePage> _request = widget.service.load(
@@ -43,6 +49,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   int _page = 1;
   final _searchController = TextEditingController();
   bool _searching = false;
+  _ActivityFilter _activityFilter = _ActivityFilter.all;
 
   bool get _supportsSearch =>
       widget.module == AppModule.lotes ||
@@ -52,10 +59,15 @@ class _ModuleScreenState extends State<ModuleScreen> {
       widget.module == AppModule.lotes &&
       LotePermissions.canCreate(widget.user);
 
+  bool get _canAssignActividad =>
+      widget.module == AppModule.actividades &&
+      ActividadPermissions.canAssign(widget.user);
+
   @override
   void initState() {
     super.initState();
     widget.loteUpdates?.addListener(_onLoteUpdated);
+    widget.actividadUpdates?.addListener(_onActividadUpdated);
   }
 
   @override
@@ -65,17 +77,27 @@ class _ModuleScreenState extends State<ModuleScreen> {
       oldWidget.loteUpdates?.removeListener(_onLoteUpdated);
       widget.loteUpdates?.addListener(_onLoteUpdated);
     }
+    if (oldWidget.actividadUpdates != widget.actividadUpdates) {
+      oldWidget.actividadUpdates?.removeListener(_onActividadUpdated);
+      widget.actividadUpdates?.addListener(_onActividadUpdated);
+    }
   }
 
   @override
   void dispose() {
     widget.loteUpdates?.removeListener(_onLoteUpdated);
+    widget.actividadUpdates?.removeListener(_onActividadUpdated);
     _searchController.dispose();
     super.dispose();
   }
 
   void _onLoteUpdated() {
     if (!mounted || widget.module != AppModule.lotes) return;
+    _load(_page);
+  }
+
+  void _onActividadUpdated() {
+    if (!mounted || widget.module != AppModule.actividades) return;
     _load(_page);
   }
 
@@ -91,6 +113,22 @@ class _ModuleScreenState extends State<ModuleScreen> {
         '${AppModule.lotes.route}/${result.record.id}',
         arguments:
             'El lote "${result.record.title}" se registró correctamente.',
+      );
+    }
+  }
+
+  Future<void> _assignActividad() async {
+    FocusScope.of(context).unfocus();
+    final result = await Navigator.of(
+      context,
+    ).pushNamed('${AppModule.actividades.route}/nueva');
+    if (!mounted) return;
+    if (result is ActividadFormResult) {
+      _load(1);
+      await Navigator.of(context).pushNamed(
+        '${AppModule.actividades.route}/${result.record.id}',
+        arguments:
+            'La actividad "${result.record.title}" fue asignada correctamente.',
       );
     }
   }
@@ -218,14 +256,23 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ],
             ),
             body: SafeArea(child: _content(snapshot)),
-            floatingActionButton: _canCreateLote && !loading && !snapshot.hasError
+            floatingActionButton:
+                (_canCreateLote || _canAssignActividad) &&
+                    !loading &&
+                    !snapshot.hasError
                 ? FloatingActionButton.extended(
                     heroTag: null,
                     backgroundColor: AppTheme.forest,
                     foregroundColor: Colors.white,
-                    onPressed: _createLote,
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Nuevo lote'),
+                    onPressed: _canCreateLote ? _createLote : _assignActividad,
+                    icon: Icon(
+                      _canCreateLote
+                          ? Icons.add_rounded
+                          : Icons.assignment_add,
+                    ),
+                    label: Text(
+                      _canCreateLote ? 'Nuevo lote' : 'Asignar actividad',
+                    ),
                   )
                 : null,
           ),
@@ -257,6 +304,16 @@ class _ModuleScreenState extends State<ModuleScreen> {
       _searchController.text,
     ).split(RegExp(r'\s+')).where((term) => term.isNotEmpty).toList();
     final records = page.records.where((record) {
+      if (widget.module == AppModule.actividades &&
+          _activityFilter != _ActivityFilter.all) {
+        final completed = record.actividadData?.isCompleted ?? false;
+        if (_activityFilter == _ActivityFilter.pending && completed) {
+          return false;
+        }
+        if (_activityFilter == _ActivityFilter.completed && !completed) {
+          return false;
+        }
+      }
       final text = _normalize(
         '${record.title} ${record.details.values.join(' ')} ${record.fieldInfo?.details.values.join(' ') ?? ''}',
       );
@@ -265,6 +322,30 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
     return Column(
       children: [
+        if (widget.module == AppModule.actividades && page.records.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in {
+                    _ActivityFilter.all: 'Todas',
+                    _ActivityFilter.pending: 'Pendientes',
+                    _ActivityFilter.completed: 'Completadas',
+                  }.entries)
+                    ChoiceChip(
+                      label: Text(entry.value),
+                      selected: _activityFilter == entry.key,
+                      onSelected: (_) =>
+                          setState(() => _activityFilter = entry.key),
+                    ),
+                ],
+              ),
+            ),
+          ),
         Expanded(
           child: page.records.isEmpty
               ? AppEmptyState(
@@ -282,11 +363,21 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ? AppEmptyState(
                   icon: Icons.search_off_rounded,
                   title: 'No encontramos coincidencias',
-                  message: 'Prueba con otro nombre o limpia la búsqueda.',
+                  message: _activityFilter != _ActivityFilter.all
+                      ? 'Prueba cambiando el filtro de estado o limpiando la búsqueda.'
+                      : 'Prueba con otro nombre o limpia la búsqueda.',
                   action: OutlinedButton.icon(
-                    onPressed: _clearSearch,
+                    onPressed: () => setState(() {
+                      _activityFilter = _ActivityFilter.all;
+                      _searchController.clear();
+                    }),
                     icon: const Icon(Icons.close_rounded),
-                    label: const Text('Limpiar búsqueda'),
+                    label: Text(
+                      _activityFilter != _ActivityFilter.all &&
+                              _searchController.text.isEmpty
+                          ? 'Mostrar todas'
+                          : 'Limpiar búsqueda',
+                    ),
                   ),
                 )
               : ListView.builder(
@@ -296,7 +387,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     24,
                     8,
                     24,
-                    _canCreateLote ? 88 : 16,
+                    (_canCreateLote || _canAssignActividad) ? 88 : 16,
                   ),
                   itemCount: records.length,
                   itemBuilder: (context, index) => _recordCard(records[index]),

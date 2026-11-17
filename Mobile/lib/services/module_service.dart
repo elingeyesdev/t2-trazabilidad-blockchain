@@ -1,3 +1,4 @@
+import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
 import '../models/lote_models.dart';
@@ -240,6 +241,166 @@ class ModuleService {
     if (record.id != loteId) {
       throw const ApiException(
         'La información recibida no corresponde al lote editado.',
+      );
+    }
+    return record;
+  }
+
+  static final Map<String, String> _actividadDetailFields = {
+    ...AppModule.actividades.fields,
+    'fechafin': 'Finalización',
+    'observaciones': 'Observaciones',
+  };
+
+  Future<List<ActividadTipoOption>> loadActividadTipos(AuthUser user) async {
+    if (!ActividadPermissions.canAssign(user) &&
+        !user.permissions.contains('catalogos.view')) {
+      throw const ApiException(
+        'No tienes permiso para consultar los tipos de actividad.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'tipoactividades');
+    return ActividadTipoOption.listFromJson(response);
+  }
+
+  Future<List<PrioridadOption>> loadPrioridades(AuthUser user) async {
+    if (!ActividadPermissions.canAssign(user) &&
+        !user.permissions.contains('catalogos.view')) {
+      throw const ApiException(
+        'No tienes permiso para consultar las prioridades.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'prioridades');
+    return PrioridadOption.listFromJson(response);
+  }
+
+  Future<List<LoteOption>> loadLoteOptions(AuthUser user) async {
+    if (!AppModule.lotes.canOpen(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los lotes.',
+        statusCode: 403,
+      );
+    }
+    final page = await load(AppModule.lotes, user);
+    return page.records
+        .where((record) => record.loteData?.isClosed != true)
+        .map(
+          (record) => LoteOption(
+            id: record.id,
+            name: record.title,
+            cropName: record.fieldInfo?.details['Cultivo'],
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<ResponsableOption>> loadResponsables(AuthUser user) async {
+    if (!ActividadPermissions.canAssign(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los responsables.',
+        statusCode: 403,
+      );
+    }
+    final byId = <int, ResponsableOption>{
+      user.id: ResponsableOption(
+        id: user.id,
+        name: user.fullName,
+        roleLabel: 'Yo (Jefe agrícola)',
+      ),
+    };
+    try {
+      final response = await _api.request('GET', AppModule.usuarios.endpoint);
+      for (final item in ResponsableOption.listFromUsersJson(response)) {
+        if (item.id == user.id) continue;
+        byId[item.id] = item;
+      }
+    } on ApiException catch (error) {
+      if (error.statusCode == 401) rethrow;
+    }
+    return byId.values.toList();
+  }
+
+  Future<ModuleRecord> createActividad(
+    AuthUser user, {
+    required int loteId,
+    required int responsableId,
+    required int tipoActividadId,
+    int? prioridadId,
+    String? description,
+    String? plannedDate,
+    String? observations,
+    String? detailJson,
+  }) async {
+    if (!ActividadPermissions.canAssign(user)) {
+      throw const ApiException(
+        'Solo el jefe agrícola autorizado puede asignar actividades.',
+        statusCode: 403,
+      );
+    }
+    final cleanDescription = description?.trim();
+    final cleanPlannedDate = plannedDate?.trim();
+    final cleanObservations = observations?.trim();
+    final cleanDetail = detailJson?.trim();
+    final body = <String, Object?>{
+      'loteid': loteId,
+      'usuarioid': responsableId,
+      'tipoactividadid': tipoActividadId,
+      'prioridadid': ?prioridadId,
+      if (cleanDescription != null && cleanDescription.isNotEmpty)
+        'descripcion': cleanDescription,
+      if (cleanPlannedDate != null && cleanPlannedDate.isNotEmpty)
+        'fecha_planificada': cleanPlannedDate,
+      if (cleanObservations != null && cleanObservations.isNotEmpty)
+        'observaciones': cleanObservations,
+      if (cleanDetail != null && cleanDetail.isNotEmpty)
+        'detalle_actividad_json': cleanDetail,
+    };
+    final response = await _api.request(
+      'POST',
+      AppModule.actividades.endpoint,
+      body: body,
+    );
+    return ModuleRecord.fromJson(
+      response,
+      idField: AppModule.actividades.idField,
+      titleField: AppModule.actividades.titleField,
+      fallbackTitle: 'Actividad',
+      fields: _actividadDetailFields,
+    );
+  }
+
+  Future<ModuleRecord> updateActividadObservaciones(
+    AuthUser user,
+    int actividadId, {
+    required String? observations,
+  }) async {
+    if (!ActividadPermissions.canAddObservations(user)) {
+      throw const ApiException(
+        'No tienes permiso para actualizar observaciones.',
+        statusCode: 403,
+      );
+    }
+    if (actividadId <= 0) {
+      throw const ApiException('La actividad solicitada no es válida.');
+    }
+    final clean = observations?.trim();
+    final response = await _api.request(
+      'PATCH',
+      '${AppModule.actividades.endpoint}/$actividadId',
+      body: {'observaciones': (clean == null || clean.isEmpty) ? null : clean},
+    );
+    final record = ModuleRecord.fromJson(
+      response,
+      idField: AppModule.actividades.idField,
+      titleField: AppModule.actividades.titleField,
+      fallbackTitle: 'Actividad',
+      fields: _actividadDetailFields,
+    );
+    if (record.id != actividadId) {
+      throw const ApiException(
+        'La información recibida no corresponde a la actividad editada.',
       );
     }
     return record;
