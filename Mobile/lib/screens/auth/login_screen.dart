@@ -5,6 +5,7 @@ import '../../controllers/auth_controller.dart';
 import '../../models/registration_result.dart';
 import '../../navigation/app_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/action_confirmation.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/form_validation.dart';
 
@@ -113,17 +114,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 24),
                           if (widget.controller.logoutResult
                               case final result?) ...[
-                            Semantics(
-                              liveRegion: true,
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(result.message),
-                              ),
+                            AppNotice(
+                              tone: result.remoteClosed
+                                  ? AppNoticeTone.success
+                                  : AppNoticeTone.warning,
+                              message: result.message,
                             ),
                             const SizedBox(height: 20),
                           ],
@@ -191,21 +186,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           if (message != null) ...[
                             const SizedBox(height: 20),
-                            Semantics(
-                              liveRegion: true,
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.errorContainer,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  message,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onErrorContainer,
-                                  ),
-                                ),
-                              ),
+                            AppNotice(
+                              tone: AppNoticeTone.error,
+                              message: message,
                             ),
                           ],
                           const SizedBox(height: 24),
@@ -254,18 +237,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: const Text('Crear cuenta'),
                               ),
                             ],
-                          ),
-                          TextButton.icon(
-                            onPressed: busy
-                                ? null
-                                : () => Navigator.of(
-                                    context,
-                                  ).pushNamed(AppRoutes.connection),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.muted,
-                            ),
-                            icon: const Icon(Icons.wifi_outlined, size: 18),
-                            label: const Text('Comprobar conexión'),
                           ),
                         ],
                       ),

@@ -5,6 +5,7 @@ import '../../controllers/auth_controller.dart';
 import '../../models/api_exception.dart';
 import '../../models/profile_photo.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/action_confirmation.dart';
 import '../../widgets/form_validation.dart';
 
 class ProfileEditForm extends StatefulWidget {
@@ -14,6 +15,7 @@ class ProfileEditForm extends StatefulWidget {
     required this.onCancel,
     required this.onSaved,
     required this.onReload,
+    this.onResult,
     this.selectFile,
   });
 
@@ -21,6 +23,7 @@ class ProfileEditForm extends StatefulWidget {
   final VoidCallback onCancel;
   final VoidCallback onSaved;
   final VoidCallback onReload;
+  final ValueChanged<String>? onResult;
   final Future<XFile?> Function()? selectFile;
 
   @override
@@ -90,6 +93,35 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     }
   }
 
+  bool get _hasUnsavedChanges {
+    final user = widget.controller.user;
+    if (user == null) return false;
+    final name = _username.text.trim();
+    final usernameChanged =
+        user.canUpdateUsername && name != (user.username ?? '');
+    final photoSelected = user.canUpdatePhoto && _photo != null;
+    return usernameChanged || photoSelected;
+  }
+
+  Future<void> _cancel() async {
+    if (widget.controller.isSubmitting) return;
+    if (_hasUnsavedChanges && !_needsReload) {
+      final discard = await confirmImportantAction(
+        context,
+        icon: Icons.warning_amber_rounded,
+        title: '¿Descartar cambios?',
+        message:
+            'Tienes cambios sin guardar en tu perfil. Si sales ahora, no se aplicarán.',
+        cancelLabel: 'Seguir editando',
+        confirmLabel: 'Descartar cambios',
+        destructive: true,
+      );
+      if (!mounted || !discard) return;
+    }
+    widget.controller.clearError();
+    widget.onCancel();
+  }
+
   Future<void> _save() async {
     final auth = widget.controller;
     if (auth.isSubmitting || _needsReload || !validateForm(_form)) {
@@ -106,6 +138,20 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
       setState(() => _notice = 'No hay cambios para guardar.');
       return;
     }
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.verified_user_outlined,
+      title: '¿Guardar cambios del perfil?',
+      message: username != null
+          ? 'Revisa los datos antes de continuar. El nombre de usuario solo se puede modificar una vez.'
+          : 'Se actualizará la fotografía visible en tu cuenta.',
+      details: [
+        if (username != null) 'Nuevo usuario: @$username',
+        if (photo != null) 'Nueva fotografía: ${photo.filename}',
+      ],
+      confirmLabel: 'Confirmar cambios',
+    );
+    if (!mounted || !confirmed) return;
     setState(() => _notice = null);
     final saved = await auth.updateProfile(username: username, photo: photo);
     if (!saved && auth.error?.statusCode == 403) {
@@ -113,6 +159,14 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     }
     if (!mounted) return;
     if (saved) {
+      final detail = switch ((username != null, photo != null)) {
+        (true, true) =>
+          'Se guardaron tu usuario @$username y tu nueva fotografía.',
+        (true, false) =>
+          'Tu nombre de usuario quedó registrado como @$username.',
+        _ => 'Se actualizó tu fotografía de perfil.',
+      };
+      widget.onResult?.call(detail);
       widget.onSaved();
     } else {
       revealFormErrors(_form);
@@ -233,18 +287,26 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                 if (message != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 20),
-                    child: Semantics(liveRegion: true, child: Text(message)),
+                    child: AppNotice(
+                      tone: _notice != null
+                          ? AppNoticeTone.info
+                          : AppNoticeTone.error,
+                      message: message,
+                    ),
                   ),
-                if (_needsReload) ...[
-                  const SizedBox(height: 12),
-                  const Text(
-                    'No se pudo confirmar el guardado. Consulta el perfil para comprobar si el cambio se aplicó antes de volver a guardar.',
+                if (_needsReload)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: AppNotice(
+                      tone: AppNoticeTone.warning,
+                      message:
+                          'No se pudo confirmar el guardado. Consulta el perfil para comprobar si el cambio se aplicó antes de volver a guardar.',
+                      action: TextButton(
+                        onPressed: busy ? null : widget.onReload,
+                        child: const Text('Consultar perfil'),
+                      ),
+                    ),
                   ),
-                  TextButton(
-                    onPressed: busy ? null : widget.onReload,
-                    child: const Text('Consultar perfil'),
-                  ),
-                ],
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: busy || _needsReload ? null : _save,
@@ -253,7 +315,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                   ),
                 ),
                 TextButton(
-                  onPressed: busy ? null : widget.onCancel,
+                  onPressed: busy ? null : _cancel,
                   child: const Text('Cancelar'),
                 ),
               ],

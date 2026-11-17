@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/auth_controller.dart';
 import '../../models/auth_user.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/information_section.dart';
 import 'profile_edit_form.dart';
@@ -21,6 +22,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _loaded = false;
   bool _editing = false;
+  String? _resultDetail;
 
   @override
   void initState() {
@@ -33,6 +35,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _refresh() async {
     await widget.controller.refreshProfile();
     if (mounted) setState(() => _loaded = true);
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.logout_rounded,
+      title: '¿Cerrar sesión?',
+      message:
+          'Se cerrará tu sesión en este dispositivo y volverás al inicio de sesión.',
+      confirmLabel: 'Confirmar cierre',
+      destructive: true,
+    );
+    if (!mounted || !confirmed) return;
+    await widget.controller.logout();
   }
 
   @override
@@ -67,11 +83,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return ProfileEditForm(
         controller: auth,
         onCancel: () => setState(() => _editing = false),
+        onResult: (detail) => _resultDetail = detail,
         onSaved: () {
-          setState(() => _editing = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Perfil actualizado correctamente.')),
-          );
+          setState(() {
+            _editing = false;
+            _resultDetail ??= 'Los datos de tu perfil ya están al día.';
+          });
         },
         onReload: () {
           setState(() => _editing = false);
@@ -176,7 +193,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           onPressed: () {
                             widget.controller.clearError();
-                            setState(() => _editing = true);
+                            setState(() {
+                              _resultDetail = null;
+                              _editing = true;
+                            });
                           },
                           icon: const Icon(Icons.edit_outlined, size: 18),
                           label: const Text('Editar perfil'),
@@ -185,6 +205,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
+                if (_resultDetail case final detail?) ...[
+                  const SizedBox(height: 20),
+                  AppNotice(
+                    tone: AppNoticeTone.success,
+                    title: 'Perfil actualizado correctamente.',
+                    message: detail,
+                  ),
+                ],
                 const SizedBox(height: 24),
                 InformationSection(
                   title: 'Datos de contacto',
@@ -214,7 +242,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextButton.icon(
                   onPressed: widget.controller.isSubmitting
                       ? null
-                      : widget.controller.logout,
+                      : _confirmLogout,
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.error,
                   ),

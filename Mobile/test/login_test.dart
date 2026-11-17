@@ -92,7 +92,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(LoginScreen), findsNothing);
     expect(find.text('Hola, Ana'), findsOneWidget);
-    expect(find.text('ana@example.test'), findsOneWidget);
+    expect(find.text('ana@example.test'), findsNothing);
     expect(await storage.readToken(), '1|token-valido');
     expect(tester.takeException(), isNull);
   });

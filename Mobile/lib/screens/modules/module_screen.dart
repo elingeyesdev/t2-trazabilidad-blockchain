@@ -209,32 +209,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
     return Column(
       children: [
-        if (!_searching)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppTheme.sage,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(widget.module.icon, color: AppTheme.forest),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    widget.module.description,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: AppTheme.muted),
-                  ),
-                ),
-              ],
-            ),
-          ),
         Expanded(
           child: page.records.isEmpty
               ? AppEmptyState(
@@ -262,7 +236,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
               : ListView.builder(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
                   itemCount: records.length,
                   itemBuilder: (context, index) => _recordCard(records[index]),
                 ),

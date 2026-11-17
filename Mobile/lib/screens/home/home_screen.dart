@@ -163,7 +163,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ..._home(modules)
                     else
                       ..._work(groups),
-                    if (_tab == 0) ...[const SizedBox(height: 24), _account()],
                   ],
                 ),
               ),
@@ -567,44 +566,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     ];
   }
-
-  Widget _account() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const Divider(color: AppTheme.line),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppTheme.sage,
-            foregroundColor: AppTheme.forest,
-            child: Text(
-              widget.user.name.trim().substring(0, 1).toUpperCase(),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              widget.user.email,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: () =>
-              Navigator.of(context).pushNamed(AppRoutes.connection),
-          icon: const Icon(Icons.wifi_outlined, size: 18),
-          label: const Text('Comprobar conexión'),
-        ),
-      ),
-    ],
-  );
 }
 
 class _FieldPainter extends CustomPainter {

@@ -313,10 +313,50 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Guardar cambios'));
     await tester.pumpAndSettle();
+    expect(find.text('¿Guardar cambios del perfil?'), findsOneWidget);
+    await tester.tap(find.text('Confirmar cambios'));
+    await tester.pumpAndSettle();
     expect(find.text('@ana.nueva'), findsOneWidget);
     expect(find.text('Perfil actualizado correctamente.'), findsOneWidget);
+    expect(
+      find.text('Tu nombre de usuario quedó registrado como @ana.nueva.'),
+      findsOneWidget,
+    );
     expect(find.byType(TextFormField), findsNothing);
   });
+
+  testWidgets(
+    'Solicita confirmación antes de cerrar sesión desde el perfil y muestra el resultado',
+    (tester) async {
+      var logouts = 0;
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/logout') {
+          logouts++;
+          return jsonResponse({});
+        }
+        return jsonResponse(profile);
+      });
+      await openProfile(tester);
+      await tester.ensureVisible(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Cerrar sesión?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(logouts, 0);
+      expect(find.byType(ProfileScreen), findsOneWidget);
+
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirmar cierre'));
+      await tester.pumpAndSettle();
+      expect(logouts, 1);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text('Sesión cerrada correctamente.'), findsOneWidget);
+    },
+  );
 
   for (final failCleanup in [false, true]) {
     testWidgets(
@@ -340,6 +380,8 @@ void main() {
         await tester.ensureVisible(find.text('Guardar cambios'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Guardar cambios'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Confirmar cambios'));
         await tester.pumpAndSettle();
         expect(find.byType(ProfileScreen), findsNothing);
         if (failCleanup) {

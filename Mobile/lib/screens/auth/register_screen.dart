@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../controllers/auth_controller.dart';
 import '../../models/registration_result.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/action_confirmation.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/form_validation.dart';
 
@@ -186,9 +187,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 12),
               Text(result.email, textAlign: TextAlign.center),
               const SizedBox(height: 20),
-              Semantics(
-                liveRegion: true,
-                child: Text(result.message, textAlign: TextAlign.center),
+              AppNotice(
+                tone: AppNoticeTone.success,
+                message: result.message,
               ),
               const SizedBox(height: 12),
               const Text(
@@ -356,16 +357,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     },
                                   ),
                                   if (message != null) ...[
-                                    Semantics(
-                                      liveRegion: true,
-                                      child: Text(
-                                        message,
-                                        style: TextStyle(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.error,
-                                        ),
-                                      ),
+                                    AppNotice(
+                                      tone: AppNoticeTone.error,
+                                      message: message,
                                     ),
                                     const SizedBox(height: 20),
                                   ],
