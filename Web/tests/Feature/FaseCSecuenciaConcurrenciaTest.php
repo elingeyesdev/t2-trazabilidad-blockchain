@@ -263,7 +263,7 @@ class FaseCSecuenciaConcurrenciaTest extends TestCase
         $this->assertSame(1, (int) $asignacion->orden);
     }
 
-    public function test_opp05_segundo_completar_falla(): void
+    public function test_opp05_reintento_identico_no_duplica_y_resultado_distinto_genera_conflicto(): void
     {
         $jefe = $this->createUser('jefe_planta', 'JefeDbl');
         $op = $this->createUser('planta', 'OpDbl', $jefe->usuarioid);
@@ -295,19 +295,40 @@ class FaseCSecuenciaConcurrenciaTest extends TestCase
             'creado_en' => now(),
         ]);
 
+        $variable = \App\Models\VariableEstandar::create([
+            'codigo' => 'PESO-DBL', 'nombre' => 'Cantidad medida', 'unidad' => 'kg', 'activo' => true,
+        ]);
+        \App\Models\MaquinaVariablePlanta::create([
+            'maquinaplantaid' => $maquina->maquinaplantaid,
+            'variableestandarid' => $variable->variableestandarid,
+            'valor_minimo' => 1, 'valor_maximo' => 100, 'obligatorio' => true,
+        ]);
         $service = app(AsignacionEtapaPlantaService::class);
         $payload = [
             'hora_inicio' => now()->subHour()->toDateTimeString(),
             'hora_fin' => now()->toDateTimeString(),
-            'parametros' => [],
+            'parametros' => [['variableestandarid' => $variable->variableestandarid, 'valor' => '10.000000']],
         ];
 
-        $service->completar($asignacion, $payload, $op);
+        $registro = $service->completar($asignacion, $payload, $op);
         $this->assertSame(1, RegistroProcesoMaquinaPlanta::query()
             ->where('loteproduccionpedidoid', $lote->loteproduccionpedidoid)
             ->count());
 
-        $this->expectException(\InvalidArgumentException::class);
-        $service->completar($asignacion->fresh(), $payload, $op);
+        $completadaEn = $asignacion->fresh()->completada_en->toDateTimeString();
+        $reintento = $service->completar($asignacion->fresh(), $payload, $op);
+        $this->assertSame($registro->getKey(), $reintento->getKey());
+        $this->assertSame($completadaEn, $asignacion->fresh()->completada_en->toDateTimeString());
+
+        $payload['parametros'][0]['valor'] = '11.000000';
+        try {
+            $service->completar($asignacion->fresh(), $payload, $op);
+            $this->fail('Un resultado distinto no debe reemplazar un cierre confirmado.');
+        } catch (\App\Exceptions\PlantaConflictoException $e) {
+            $this->assertStringContainsString('otros resultados', $e->getMessage());
+        }
+        $this->assertSame(1, RegistroProcesoMaquinaPlanta::where('loteproduccionpedidoid', $lote->getKey())->count());
+        $this->assertSame(AsignacionEtapaPlanta::ESTADO_COMPLETADA, $asignacion->fresh()->estado);
+        $this->assertEquals(10, json_decode($registro->fresh()->variables_ingresadas, true)['parametros'][0]['valor']);
     }
 }
