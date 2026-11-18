@@ -307,20 +307,107 @@ no verifican la conexión con Laravel real ni el cifrado en un dispositivo.
 
 ## Configurar la API
 
+### Conectar a Laravel local
+
+Sin indicar `API_BASE_URL`, la app utiliza `http://127.0.0.1:8001/api` en
+web y escritorio, y `http://10.0.2.2:8001/api` en Android. La dirección Android
+corresponde al emulador oficial ejecutado en el mismo equipo que Laravel.
+
+Desde la carpeta `Web/`, inicia Laravel:
+
+```powershell
+php artisan serve --host=0.0.0.0 --port=8001
+```
+
+Abre la web en `http://127.0.0.1:8001`. Desde `Mobile/`, ejecuta Flutter en
+el navegador o en el emulador, según corresponda:
+
+```powershell
+flutter run -d edge
+flutter run -d emulator-5554
+```
+
+Utiliza `flutter devices` si el identificador del emulador es diferente.
+En Android Studio, abre `Mobile/` y selecciona
+[AgroFusion - Local](.run/AgroFusion_Local.run.xml), que utiliza estas
+direcciones según el dispositivo. La configuración no necesita un túnel público.
+
+Comprueba **Comprobar conexión** e inicia sesión con una cuenta local activa
+y aprobada. Para un teléfono físico, indica la IP de la computadora mediante
+`API_BASE_URL`, como se describe en **Otras instalaciones de Laravel**.
+
+### Conectar el emulador Android a Ubuntu Server en VirtualBox
+
+Para utilizar el acceso local de la VM, abre **la carpeta `Mobile/`** como
+proyecto Flutter en Android Studio y configura manualmente
+`API_BASE_URL=http://10.0.2.2:8088/api` como se indica a continuación.
+La configuración compartida **AgroFusion - Local** utiliza Laravel en Windows.
+Para conectar a la VM, indica explícitamente la dirección de este apartado.
+
+La conexión utiliza este recorrido:
+
+```text
+App Android → 10.0.2.2:8088 → Windows 127.0.0.1:8088
+            → VirtualBox NAT → Ubuntu:80 → Nginx → Laravel → PostgreSQL
+```
+
+Antes de ejecutar, enciende la VM y comprueba que su regla NAT reenvíe el puerto
+8088 de Windows al 80 de Ubuntu. Desde PowerShell, esta consulta no cambia
+archivos ni datos y no requiere administrador:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8088/api/test-api
+```
+
+Debe devolver `ok: True`. Para iniciar desde terminal, entra a `Mobile/` y usa
+el identificador de `flutter devices`:
+
+```powershell
+flutter devices
+flutter run -d ID_EMULADOR --dart-define=API_BASE_URL=http://10.0.2.2:8088/api
+```
+
+`flutter devices` consulta los dispositivos. `flutter run` compila e instala
+la app debug en el emulador; actualiza artefactos locales bajo `build/` y no
+requiere sudo ni permisos administrativos de Ubuntu. Detén la ejecución anterior
+y vuelve a compilar al cambiar la URL; hot reload no sustituye este paso.
+
+Si configuras manualmente Android Studio, en **Run > Edit Configurations**
+selecciona una configuración Flutter con `lib/main.dart` y coloca en
+**Additional run args**:
+
+```text
+--dart-define=API_BASE_URL=http://10.0.2.2:8088/api
+```
+
+Comprueba **Comprobar conexión**, después inicia sesión con una cuenta activa y
+aprobada del servidor y abre **Mi perfil**. Para las evidencias de la tarea,
+captura la pantalla **Conexión disponible** y el perfil autenticado; no captures
+contraseñas ni tokens. Una cuenta demo puede cambiar de contraseña si vuelves a
+ejecutar sus seeders en Ubuntu.
+
+En el emulador, `127.0.0.1` identifica Android y `10.0.2.2` identifica el loopback
+del equipo Windows. La IP NAT de Ubuntu `10.0.2.15` no es una ruta directa desde
+este emulador. La variante Android debug ya permite HTTP para este laboratorio;
+utiliza HTTPS en producción. Referencia:
+[red del emulador Android](https://developer.android.com/studio/run/emulator-networking-address).
+
+### Otras instalaciones de Laravel
+
 Define `API_BASE_URL` al ejecutar o compilar Flutter. La URL incluye el prefijo
-`/api` y se normaliza con una barra final. El valor de desarrollo por defecto
-es `http://127.0.0.1:8000/api`.
+`/api` y se normaliza con una barra final. El valor indicado sustituye
+la dirección local predeterminada.
 
 Para ejecutar en Edge contra Laravel en el mismo equipo, usa:
 
 ```powershell
-flutter run -d edge --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
+flutter run -d edge --dart-define=API_BASE_URL=http://127.0.0.1:8001/api
 ```
 
 Para el emulador oficial de Android, usa la dirección del equipo anfitrión:
 
 ```powershell
-flutter run -d ID_DISPOSITIVO --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
+flutter run -d ID_DISPOSITIVO --dart-define=API_BASE_URL=http://10.0.2.2:8001/api
 ```
 
 Sustituye `ID_DISPOSITIVO` por el identificador que muestra `flutter devices`.

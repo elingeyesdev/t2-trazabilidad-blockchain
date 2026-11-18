@@ -209,32 +209,6 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
     return Column(
       children: [
-        if (!_searching)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppTheme.sage,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(widget.module.icon, color: AppTheme.forest),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    widget.module.description,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: AppTheme.muted),
-                  ),
-                ),
-              ],
-            ),
-          ),
         Expanded(
           child: page.records.isEmpty
               ? AppEmptyState(
@@ -262,7 +236,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
               : ListView.builder(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
                   itemCount: records.length,
                   itemBuilder: (context, index) => _recordCard(records[index]),
                 ),
@@ -294,12 +268,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
     );
   }
 
-  Widget _recordCard(ModuleRecord record) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
+  Widget _recordCard(ModuleRecord record) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
     child: Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         side: const BorderSide(color: AppTheme.line),
       ),
       clipBehavior: Clip.antiAlias,
@@ -308,39 +282,77 @@ class _ModuleScreenState extends State<ModuleScreen> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(record.title, style: Theme.of(context).textTheme.titleLarge),
-              if (record.fieldInfo?.status != null) ...[
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: RecordStatusBadge(status: record.fieldInfo!.status!),
-                ),
-              ],
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1, color: AppTheme.line),
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  Text(
+                    '#${record.id.toString().padLeft(3, '0')}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.muted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (record.fieldInfo?.status case final status?)
+                    RecordStatusBadge(status: status),
+                ],
               ),
+              const SizedBox(height: 12),
+              Text(record.title, style: Theme.of(context).textTheme.titleLarge),
+              const Divider(height: 32, color: AppTheme.line),
               if (record.fieldInfo != null && record.fieldInfo!.status == null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'Estado: No disponible',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text('Estado: No disponible'),
                 ),
-              for (final field
-                  in (record.fieldInfo?.summary ?? record.details).entries)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '${field.key}: ${field.value}',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final paired =
+                      constraints.maxWidth >= 280 &&
+                      MediaQuery.textScalerOf(context).scale(16) <= 24;
+                  return Wrap(
+                    spacing: 20,
+                    runSpacing: 12,
+                    children: [
+                      for (final field
+                          in (record.fieldInfo?.summary ?? record.details)
+                              .entries)
+                        SizedBox(
+                          width: paired
+                              ? (constraints.maxWidth - 20) / 2
+                              : constraints.maxWidth,
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '${field.key}: ',
+                                  style: const TextStyle(
+                                    color: AppTheme.muted,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                                TextSpan(text: field.value),
+                              ],
+                            ),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              height: 1.5,
+                              color: AppTheme.ink,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
               if (_supportsSearch) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
                 const Row(
                   children: [
                     Expanded(
@@ -348,14 +360,15 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         'Ver detalle',
                         style: TextStyle(
                           color: AppTheme.forest,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                     Icon(
                       Icons.arrow_forward_rounded,
                       color: AppTheme.forest,
-                      size: 20,
+                      size: 18,
                     ),
                   ],
                 ),

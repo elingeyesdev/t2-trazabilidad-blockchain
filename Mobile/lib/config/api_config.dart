@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConfig {
   ApiConfig({
     required String baseUrl,
@@ -10,10 +12,11 @@ class ApiConfig {
 
   factory ApiConfig.fromEnvironment() {
     return ApiConfig(
-      baseUrl: const String.fromEnvironment(
-        'API_BASE_URL',
-        defaultValue: 'http://127.0.0.1:8000/api',
-      ),
+      baseUrl: const bool.hasEnvironment('API_BASE_URL')
+          ? const String.fromEnvironment('API_BASE_URL')
+          : !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+          ? 'http://10.0.2.2:8001/api'
+          : 'http://127.0.0.1:8001/api',
     );
   }
 

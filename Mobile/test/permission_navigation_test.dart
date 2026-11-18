@@ -401,10 +401,9 @@ void main() {
       expect(find.text('SOL-009'), findsOneWidget);
       expect(find.text('Planta: Planta Sur'), findsOneWidget);
       expect(find.text('Estado: pendiente'), findsOneWidget);
-      expect(find.text('Revisa los pedidos y su estado.'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.text('Hola, Ana'), findsOneWidget);
+      expect(find.text('Tus accesos'), findsOneWidget);
     },
   );
 

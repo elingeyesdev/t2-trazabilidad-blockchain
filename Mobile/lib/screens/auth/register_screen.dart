@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../../controllers/auth_controller.dart';
 import '../../models/registration_result.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/action_confirmation.dart';
+import '../../widgets/brand_header.dart';
+import '../../widgets/form_validation.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key, required this.controller});
@@ -44,7 +48,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
-    if (widget.controller.isSubmitting || !_formKey.currentState!.validate()) {
+    if (widget.controller.isSubmitting || !validateForm(_formKey)) {
       return;
     }
     FocusScope.of(context).unfocus();
@@ -56,7 +60,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       phone: _fields['telefono']!.text,
       password: _fields['password']!.text,
     );
-    if (!mounted || result == null) return;
+    if (!mounted) return;
+    if (result == null) {
+      revealFormErrors(_formKey);
+      return;
+    }
     _fields['password']!.clear();
     _fields['password_confirmation']!.clear();
     TextInput.finishAutofillContext(shouldSave: false);
@@ -82,6 +90,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: TextFormField(
         key: ValueKey('register.$name'),
         controller: _fields[name],
+        scrollPadding: formScrollPadding(context),
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        forceErrorText: messages == null || messages.isEmpty
+            ? null
+            : messages.join('\n'),
         enabled: !busy,
         keyboardType: keyboard,
         autofillHints: autofillHints,
@@ -98,11 +111,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         decoration: InputDecoration(
           labelText: label,
           helperText: helperText,
-          border: const OutlineInputBorder(),
           errorMaxLines: 3,
-          errorText: messages == null || messages.isEmpty
-              ? null
-              : messages.join('\n'),
           suffixIcon: secret
               ? IconButton(
                   tooltip:
@@ -128,12 +137,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
             validator ??
             (value) {
               if (optional) return null;
-              final empty =
-                  value == null ||
-                  (secret ? value.isEmpty : value.trim().isEmpty);
-              return empty ? 'Completa este campo.' : null;
+              if (name == 'email') return validateEmail(value);
+              final input = secret ? value ?? '' : value?.trim() ?? '';
+              if (input.isEmpty) {
+                return switch (name) {
+                  'nombre' => 'Ingresa tu nombre.',
+                  'apellido' => 'Ingresa tu apellido.',
+                  'nombreusuario' => 'Ingresa un nombre de usuario.',
+                  _ => 'Ingresa tu contraseña.',
+                };
+              }
+              if (name == 'password' && input.runes.length < 6) {
+                return 'Usa una contraseña de al menos 6 caracteres.';
+              }
+              return null;
             },
-        onChanged: (_) => widget.controller.clearError(),
+        onChanged: (_) => widget.controller.clearError(field: name),
       ),
     );
   }
@@ -148,10 +167,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.schedule_outlined,
-                size: 56,
-                color: theme.colorScheme.primary,
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: AppTheme.sage,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mark_email_read_outlined,
+                  size: 48,
+                  color: AppTheme.forest,
+                ),
               ),
               const SizedBox(height: 20),
               Text(
@@ -162,9 +188,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 12),
               Text(result.email, textAlign: TextAlign.center),
               const SizedBox(height: 20),
-              Semantics(
-                liveRegion: true,
-                child: Text(result.message, textAlign: TextAlign.center),
+              AppNotice(
+                tone: AppNoticeTone.success,
+                message: result.message,
               ),
               const SizedBox(height: 12),
               const Text(
@@ -172,6 +198,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 28),
+              const Divider(color: AppTheme.line),
+              const SizedBox(height: 16),
               FilledButton(
                 onPressed: _leave,
                 child: const Text('Volver al inicio de sesión'),
@@ -215,7 +243,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ? _confirmation(result)
                   : Center(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: formContentPadding(context),
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 440),
                           child: AutofillGroup(
@@ -225,10 +255,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
+                                  const BrandWordmark(),
+                                  const SizedBox(height: 32),
+                                  Text(
+                                    'Todo empieza en el campo.',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.headlineSmall,
+                                  ),
+                                  const SizedBox(height: 8),
                                   const Text(
-                                    'Solicita una cuenta de agricultor. Tu registro requiere la aprobación de un administrador.',
+                                    'Crea tu cuenta de agricultor para consultar tus lotes y seguir el trabajo de cada cosecha.',
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.sage,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline_rounded,
+                                          size: 20,
+                                          color: AppTheme.forest,
+                                        ),
+                                        SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            'Tu registro requiere la aprobación de un administrador.',
+                                            style: TextStyle(
+                                              color: AppTheme.forest,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                   const SizedBox(height: 24),
+                                  _section('01', 'Datos personales'),
                                   _field(
                                     'nombre',
                                     'Nombre',
@@ -246,6 +314,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     ],
                                   ),
                                   _field(
+                                    'telefono',
+                                    'Teléfono (opcional)',
+                                    optional: true,
+                                    keyboard: TextInputType.phone,
+                                    autofillHints: const [
+                                      AutofillHints.telephoneNumber,
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _section('02', 'Datos de acceso'),
+                                  _field(
                                     'email',
                                     'Correo electrónico',
                                     keyboard: TextInputType.emailAddress,
@@ -256,15 +335,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     'Nombre de usuario',
                                     autofillHints: const [
                                       AutofillHints.newUsername,
-                                    ],
-                                  ),
-                                  _field(
-                                    'telefono',
-                                    'Teléfono (opcional)',
-                                    optional: true,
-                                    keyboard: TextInputType.phone,
-                                    autofillHints: const [
-                                      AutofillHints.telephoneNumber,
                                     ],
                                   ),
                                   _field(
@@ -290,16 +360,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     },
                                   ),
                                   if (message != null) ...[
-                                    Semantics(
-                                      liveRegion: true,
-                                      child: Text(
-                                        message,
-                                        style: TextStyle(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.error,
-                                        ),
-                                      ),
+                                    AppNotice(
+                                      tone: AppNoticeTone.error,
+                                      message: message,
                                     ),
                                     const SizedBox(height: 20),
                                   ],
@@ -315,15 +378,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           )
                                         : const Icon(Icons.person_add_outlined),
                                     label: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
+                                      padding: EdgeInsets.zero,
                                       child: Text(
                                         busy
                                             ? 'Enviando solicitud...'
                                             : 'Enviar solicitud',
                                       ),
                                     ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: busy ? null : _leave,
+                                    child: const Text('Ya tengo una cuenta'),
                                   ),
                                 ],
                               ),
@@ -338,4 +404,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       },
     );
   }
+
+  Widget _section(String number, String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Row(
+      children: [
+        Text(
+          number,
+          style: const TextStyle(
+            color: AppTheme.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ),
+      ],
+    ),
+  );
 }

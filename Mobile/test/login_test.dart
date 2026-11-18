@@ -92,10 +92,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(LoginScreen), findsNothing);
     expect(find.text('Hola, Ana'), findsOneWidget);
-    expect(find.text('ana@example.test'), findsOneWidget);
+    expect(find.text('ana@example.test'), findsNothing);
     expect(await storage.readToken(), '1|token-valido');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Explica un correo incompleto y permite corregirlo sin perder la clave',
+    (tester) async {
+      var calls = 0;
+      final api = apiWith((_) async {
+        calls++;
+        return jsonResponse({'message': 'Credenciales incorrectas'}, 401);
+      });
+      await tester.pumpWidget(AgroFusionApp(apiClient: api));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).first, 'ana@');
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'clave-de-prueba',
+      );
+      await tester.tap(find.text('Iniciar sesión'));
+      await tester.pumpAndSettle();
+      const message =
+          'Escribe un correo válido, por ejemplo nombre@correo.com.';
+      expect(find.text(message), findsOneWidget);
+      expect(calls, 0);
+
+      await tester.enterText(
+        find.byType(TextFormField).first,
+        'ana@example.test',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(message), findsNothing);
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(1))
+            .controller!
+            .text,
+        'clave-de-prueba',
+      );
+      await tester.tap(find.text('Iniciar sesión'));
+      await tester.pumpAndSettle();
+      expect(calls, 1);
+    },
+  );
 
   for (final error in [
     (401, 'Credenciales incorrectas'),
@@ -126,6 +167,7 @@ void main() {
           'message': 'Revisa los datos enviados.',
           'errors': {
             'email': ['El correo no es válido.'],
+            'password': ['Revisa la contraseña indicada.'],
           },
         }, 422),
       );
@@ -135,6 +177,7 @@ void main() {
       await tester.tap(find.text('Iniciar sesión'));
       await tester.pumpAndSettle();
       expect(find.text('El correo no es válido.'), findsOneWidget);
+      expect(find.text('Revisa la contraseña indicada.'), findsOneWidget);
 
       await tester.enterText(
         find.byType(TextFormField).first,
@@ -142,6 +185,29 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('El correo no es válido.'), findsNothing);
+      expect(find.text('Revisa la contraseña indicada.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Mantiene visible un error general aunque también haya errores de campos',
+    (tester) async {
+      final api = apiWith(
+        (_) async => jsonResponse({
+          'message': 'La cuenta requiere revisión.',
+          'errors': {
+            'email': ['Revisa el correo indicado.'],
+            'cuenta': ['La cuenta requiere revisión.'],
+          },
+        }, 422),
+      );
+      await tester.pumpWidget(AgroFusionApp(apiClient: api));
+      await tester.pumpAndSettle();
+      await enterCredentials(tester);
+      await tester.tap(find.text('Iniciar sesión'));
+      await tester.pumpAndSettle();
+      expect(find.text('Revisa el correo indicado.'), findsOneWidget);
+      expect(find.text('La cuenta requiere revisión.'), findsOneWidget);
     },
   );
 
