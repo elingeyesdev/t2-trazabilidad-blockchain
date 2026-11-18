@@ -15,7 +15,7 @@ class MateriaPrimaLote extends Model
         'materiaprimabaseid', 'proveedor_actorid', 'lote_proveedor', 'numero_factura',
         'fecha_recepcion', 'fecha_vencimiento', 'cantidad', 'cantidad_disponible',
         'conformidad_recepcion', 'observaciones',
-        'insumoid', 'almacenid',
+        'insumoid', 'almacenid', 'detallepedidoid',
     ];
 
     protected $casts = [

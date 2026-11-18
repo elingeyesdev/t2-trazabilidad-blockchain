@@ -571,7 +571,7 @@ class LoteProduccionController extends Controller
             if ($respondeJson) {
                 return response()->json([
                     'ok' => false,
-                    'message' => 'No se pudo completar la etapa. '.$e->getMessage(),
+                    'message' => 'No se pudo completar la etapa. Intente nuevamente.',
                 ], 500);
             }
 

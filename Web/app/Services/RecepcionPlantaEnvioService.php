@@ -28,177 +28,168 @@ class RecepcionPlantaEnvioService
         float $cantidad,
         ?string $observaciones = null
     ): void {
-        if (! in_array($asignacion->estado, ['en_transporte_planta', 'en_ruta', 'en_transito'], true)) {
-            throw new \InvalidArgumentException('El envío debe estar en transporte hacia planta para confirmar la recepción.');
+        $pedido = $asignacion->pedido;
+        if (! $pedido || $pedido->detalles()->count() !== 1) {
+            throw new \InvalidArgumentException('Use el pesaje por línea del pedido para confirmar esta recepción.');
         }
-
-        if ($asignacion->fecha_recepcion_planta) {
-            throw new \InvalidArgumentException('Este envío ya fue confirmado en planta.');
+        $almacen = $this->resolverAlmacenPlantaDesdePedido($pedido);
+        $insumo = Insumo::findOrFail($insumoid);
+        $detalle = $pedido->detalles()->with('insumo')->firstOrFail();
+        $producto = trim((string) ($detalle->cultivo_personalizado ?: $detalle->insumo?->nombre));
+        if ((int) $almacen->getKey() !== $almacenid || (int) $insumo->almacenid !== $almacenid || $insumo->nombre !== $producto) {
+            throw new \InvalidArgumentException('El producto y el almacén deben corresponder al destino del pedido.');
         }
-
-        $almacen = Almacen::query()
-            ->whereKey($almacenid)
-            ->where('activo', true)
-            ->firstOrFail();
-
-        if (($almacen->ambito ?? AlmacenAmbito::PLANTA) !== AlmacenAmbito::PLANTA) {
-            throw new \InvalidArgumentException('Debe seleccionar un almacén de planta.');
-        }
-
-        $insumo = Insumo::query()->findOrFail($insumoid);
-        if ((int) $insumo->almacenid !== (int) $almacenid) {
-            $insumo->almacenid = $almacenid;
-            $insumo->save();
-        }
-
-        $tipoIngreso = $this->tipoMovimientoIngresoRecepcion();
-
-        DB::transaction(function () use ($asignacion, $usuario, $almacen, $insumo, $cantidad, $observaciones, $tipoIngreso) {
-            $ahora = now();
-
-            AlmacenMovimiento::create([
-                'almacenid' => $almacen->almacenid,
-                'insumoid' => $insumo->insumoid,
-                'tipo_movimiento_almacenid' => $tipoIngreso->tipo_movimiento_almacenid,
-                'usuarioid' => $usuario->usuarioid,
-                'fecha' => $ahora->toDateString(),
-                'cantidad' => $cantidad,
-                'referencia' => $asignacion->externo_envio_id,
-                'destino_motivo' => $almacen->nombre,
-                'observaciones' => '[Recepción planta — '.$asignacion->externo_envio_id.'] '.($observaciones ?? ''),
-            ]);
-
-            $insumo->incrementarStock($cantidad);
-
-            $asignacion->update(EnvioAsignacionEstadoCatalogo::applyToAttributes([
-                'estado' => 'recibido_planta',
-                'almacenid' => $almacen->almacenid,
-                'fecha_recepcion_planta' => $ahora,
-                'recepcion_usuarioid' => $usuario->usuarioid,
-            ]));
-        });
+        $this->confirmarDesdePedido($pedido, $usuario, [$detalle->getKey() => $cantidad]);
     }
 
     /**
      * Confirma recepción en planta con pesaje (JPL-08).
      *
      * @param  array<int, float>  $cantidadesRecibidas  mapa detallepedidoid => kg recibidos (obligatorio).
-     *        No hay path legacy sin pesaje: transportista/cierre/simulación no pueden acreditar stock.
+     *                                                  No hay path legacy sin pesaje: transportista/cierre/simulación no pueden acreditar stock.
      */
     public function confirmarDesdePedido(Pedido $pedido, Usuario $usuario, ?array $cantidadesRecibidas = null): void
     {
-        $pedido->load(['detalles.insumo', 'envioAsignacion']);
-        $asignacion = $pedido->envioAsignacion;
-
-        if ($asignacion === null) {
-            throw new \InvalidArgumentException('El pedido no tiene envío registrado.');
-        }
-
-        if ($asignacion->fecha_recepcion_planta) {
-            throw new \InvalidArgumentException('Este envío ya fue confirmado en planta.');
-        }
-
-        if (! in_array($asignacion->estado, ['en_transporte_planta', 'en_ruta', 'en_transito'], true)) {
-            throw new \InvalidArgumentException('El envío debe estar en transporte hacia planta para confirmar la recepción.');
-        }
-
-        if ($pedido->detalles->isEmpty()) {
-            throw new \InvalidArgumentException('El pedido no tiene productos.');
-        }
-
         if (! UsuarioRol::puedeConfirmarRecepcionPlanta($usuario)) {
             throw new \InvalidArgumentException('Solo el jefe de planta puede confirmar la recepción con pesaje.');
         }
-
-        if ($cantidadesRecibidas === null || $cantidadesRecibidas === []) {
-            throw new \InvalidArgumentException(
-                'Debe indicar la cantidad recibida (pesaje) para cada producto.'
-            );
+        if (! $cantidadesRecibidas) {
+            throw new \InvalidArgumentException('Debe indicar la cantidad recibida (pesaje) para cada producto.');
         }
-
-        $almacen = $this->resolverAlmacenPlantaDesdePedido($pedido);
-
-        if (! UsuarioRol::esAdminGlobal($usuario)
-            && ! PlantaAccess::puedeGestionarAlmacen($usuario, $almacen)) {
-            throw new \InvalidArgumentException('No puede confirmar recepción en un almacén de otra planta.');
-        }
-
-        $tipoIngreso = $this->tipoMovimientoIngresoRecepcion();
-        $numeroSolicitud = (string) $pedido->numero_solicitud;
-
-        DB::transaction(function () use (
-            $asignacion,
-            $usuario,
-            $almacen,
-            $pedido,
-            $tipoIngreso,
-            $numeroSolicitud,
-            $cantidadesRecibidas
-        ) {
-            $ahora = now();
-
-            foreach ($pedido->detalles as $detalle) {
-                $enviada = (float) $detalle->cantidad;
-                $detalleId = (int) $detalle->detallepedidoid;
-
-                if (! array_key_exists($detalleId, $cantidadesRecibidas)) {
-                    throw new \InvalidArgumentException(
-                        'Debe indicar la cantidad recibida (pesaje) para cada producto.'
-                    );
-                }
-                $cantidad = (float) $cantidadesRecibidas[$detalleId];
-                if ($cantidad <= 0) {
-                    throw new \InvalidArgumentException('La cantidad recibida debe ser mayor que 0.');
-                }
-
-                $producto = trim((string) ($detalle->cultivo_personalizado ?? $detalle->insumo?->nombre ?? ''));
-                if ($producto === '') {
-                    $producto = 'Cosecha recibida de pedido';
-                }
-
-                $insumo = $this->resolverInsumoEnAlmacen($almacen, $producto);
-                if ($insumo === null && $detalle->insumoid) {
-                    $ref = Insumo::query()->find($detalle->insumoid);
-                    if ($ref !== null) {
-                        $insumo = $this->resolverInsumoEnAlmacen($almacen, $ref->nombre);
-                    }
-                }
-                if ($insumo === null || (int) $insumo->almacenid !== (int) $almacen->almacenid) {
-                    $insumo = $this->crearInsumoRecepcionEnAlmacen($almacen, $producto, $numeroSolicitud, $detalle->insumo);
-                } else {
-                    $this->aplicarDetalleRecepcionPedido($insumo, $numeroSolicitud);
-                }
-
-                $obs = '[Recepción planta — '.$asignacion->externo_envio_id.'] '
-                    .$producto.' · '.$this->textoRecepcionPedido($numeroSolicitud)
-                    .' · enviado '.$enviada.' kg · recibido '.$cantidad.' kg';
-                if (abs($cantidad - $enviada) > 0.0001) {
-                    $diff = $cantidad - $enviada;
-                    $obs .= ' · discrepancia '.($diff > 0 ? '+' : '').round($diff, 2).' kg';
-                }
-
-                AlmacenMovimiento::create([
-                    'almacenid' => $almacen->almacenid,
-                    'insumoid' => $insumo->insumoid,
-                    'tipo_movimiento_almacenid' => $tipoIngreso->tipo_movimiento_almacenid,
-                    'usuarioid' => $usuario->usuarioid,
-                    'fecha' => $ahora->toDateString(),
-                    'cantidad' => $cantidad,
-                    'referencia' => $asignacion->externo_envio_id,
-                    'destino_motivo' => $almacen->nombre,
-                    'observaciones' => $obs,
-                ]);
-
-                $insumo->incrementarStock($cantidad);
+        $cantidades = [];
+        foreach ($cantidadesRecibidas as $id => $cantidad) {
+            if (! ctype_digit((string) $id) || (int) $id < 1) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['cantidades' => 'Identifique las líneas del pedido.']);
             }
-
+            $cantidades[(int) $id] = \App\Support\CosechaDecimal::cantidad($cantidad, 'cantidades.'.$id);
+        }
+        ksort($cantidades);
+        $huella = hash('sha256', json_encode($cantidades, JSON_THROW_ON_ERROR));
+        DB::transaction(function () use ($pedido, $usuario, $cantidades, $huella) {
+            if (DB::getDriverName() === 'sqlite') {
+                DB::table('pedido')->where('pedidoid', $pedido->pedidoid)->update(['estado' => DB::raw('estado')]);
+            }
+            $pedido = Pedido::whereKey($pedido->pedidoid)->lockForUpdate()->firstOrFail();
+            $almacen = $this->resolverAlmacenPlantaDesdePedido($pedido);
+            if (! PlantaAccess::puedeGestionarAlmacen($usuario, $almacen)) {
+                throw new \InvalidArgumentException('No puede confirmar recepción en un almacén de otra planta.');
+            }
+            $almacen = Almacen::whereKey($almacen->almacenid)->lockForUpdate()->firstOrFail();
+            if (! $almacen->activo || ! PlantaAccess::puedeGestionarAlmacen($usuario, $almacen)) {
+                throw new \InvalidArgumentException('El almacén destino no está disponible para esta recepción.');
+            }
+            $asignacion = $pedido->envioAsignacion()->lockForUpdate()->first();
+            if (! $asignacion) {
+                throw new \InvalidArgumentException('El pedido no tiene envío registrado.');
+            }
+            if ($asignacion->fecha_recepcion_planta) {
+                if (($asignacion->recepcion_planta_datos['huella'] ?? null) === $huella) {
+                    return;
+                }
+                throw new \App\Exceptions\PlantaConflictoException('Este envío ya fue confirmado en planta con otro pesaje o sin comprobante verificable.');
+            }
+            if (! in_array($asignacion->estado, ['en_transporte_planta', 'en_ruta', 'en_transito'], true)) {
+                throw new \InvalidArgumentException('El envío debe estar en transporte hacia planta para confirmar la recepción.');
+            }
+            $detalles = $pedido->detalles()->with(['insumo', 'cosechaAlmacen.produccion'])->orderBy('detallepedidoid')->lockForUpdate()->get();
+            if ($detalles->isEmpty() || $detalles->pluck('detallepedidoid')->map(fn ($id) => (int) $id)->sort()->values()->all() !== array_keys($cantidades)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['cantidades' => 'Indique exactamente una cantidad para cada línea de este pedido.']);
+            }
+            $tipo = $this->tipoMovimientoIngresoRecepcion();
+            $kg = UnidadMedida::where('categoria', 'peso')->get()->first(fn ($u) => \App\Support\CosechaDecimal::factorUnidad($u) === '1');
+            if (! $kg) {
+                throw new \InvalidArgumentException('No está configurada la unidad de pesaje en kilogramos.');
+            }
+            $lineas = [];
+            foreach ($detalles as $detalle) {
+                $campo = 'cantidades.'.$detalle->detallepedidoid;
+                $cantidad = $cantidades[$detalle->detallepedidoid];
+                $enviada = \App\Support\CosechaDecimal::cantidad($detalle->getRawOriginal('cantidad'), $campo);
+                if (\App\Support\InventarioDecimal::unidades($cantidad) > \App\Support\InventarioDecimal::unidades($enviada)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([$campo => 'El pesaje recibido no puede superar la cantidad enviada.']);
+                }
+                // El origen ya se descontó al aceptar el pedido: no volver a consumirlo aquí.
+                $origen = $this->origenDetalle($detalle, $pedido);
+                $producto = trim((string) ($detalle->cultivo_personalizado ?: $detalle->insumo?->nombre ?: $detalle->cosechaAlmacen?->produccion?->lote?->cultivo?->nombre));
+                if ($producto === '') {
+                    throw \Illuminate\Validation\ValidationException::withMessages([$campo => 'La línea no tiene un producto de origen identificable.']);
+                }
+                // Coincidencia exacta y unidad kg: no fusionar productos por semejanza de nombre.
+                $insumo = Insumo::where('almacenid', $almacen->almacenid)->where('nombre', $producto)
+                    ->where('unidadmedidaid', $kg->unidadmedidaid)->orderBy('insumoid')->lockForUpdate()->first();
+                if (! $insumo) {
+                    $insumo = $this->crearInsumoRecepcionEnAlmacen($almacen, $producto, $pedido->numero_solicitud, $detalle->insumo);
+                    $insumo->update(['unidadmedidaid' => $kg->unidadmedidaid]);
+                }
+                app(InventarioExistenciaService::class)->bloquear([(int) $insumo->insumoid]);
+                $insumo->refresh();
+                $antes = \App\Support\InventarioDecimal::unidades($insumo->getRawOriginal('stock'));
+                $despues = $antes + \App\Support\InventarioDecimal::unidades($cantidad);
+                $saldo = \App\Support\InventarioDecimal::texto($despues);
+                \App\Support\InventarioDecimal::unidades($saldo);
+                $partida = \App\Models\MateriaPrimaLote::create([
+                    'insumoid' => $insumo->insumoid, 'almacenid' => $almacen->almacenid,
+                    'detallepedidoid' => $detalle->detallepedidoid, 'lote_proveedor' => $asignacion->externo_envio_id,
+                    'fecha_recepcion' => now()->toDateString(), 'fecha_vencimiento' => $origen['fecha_vencimiento'],
+                    'cantidad' => $cantidad, 'cantidad_disponible' => $cantidad, 'conformidad_recepcion' => true,
+                    'observaciones' => 'Recepción pedido '.$pedido->numero_solicitud.'; línea '.$detalle->detallepedidoid,
+                ]);
+                $obs = '[Recepción planta — '.$asignacion->externo_envio_id.'] '.$producto
+                    .' · '.$this->textoRecepcionPedido($pedido->numero_solicitud)
+                    .' · enviado '.\App\Support\CosechaDecimal::mostrar($enviada).' kg · recibido '.\App\Support\CosechaDecimal::mostrar($cantidad).' kg';
+                if ($cantidad !== $enviada) {
+                    $obs .= ' · discrepancia -'.\App\Support\CosechaDecimal::mostrar(\App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($enviada) - \App\Support\InventarioDecimal::unidades($cantidad))).' kg';
+                }
+                $mov = AlmacenMovimiento::create([
+                    'almacenid' => $almacen->almacenid, 'insumoid' => $insumo->insumoid,
+                    'tipo_movimiento_almacenid' => $tipo->getKey(), 'usuarioid' => $usuario->usuarioid,
+                    'fecha' => now()->toDateString(), 'cantidad' => $cantidad, 'unidadmedidaid' => $kg->unidadmedidaid,
+                    'referencia' => $asignacion->externo_envio_id, 'destino_motivo' => $almacen->nombre,
+                    'observaciones' => $obs, 'materiaprimaloteid' => $partida->getKey(),
+                    'saldo_anterior' => \App\Support\InventarioDecimal::texto($antes), 'saldo_posterior' => $saldo,
+                ]);
+                $insumo->update(['stock' => $saldo]);
+                $lineas[] = ['detallepedidoid' => (int) $detalle->getKey(), 'cantidad_enviada' => $enviada,
+                    'cantidad_recibida' => $cantidad, 'unidadmedidaid' => (int) $kg->getKey(), 'unidad' => 'kg',
+                    'materiaprimaloteid' => (int) $partida->getKey(), 'almacenmovimientoid' => (int) $mov->getKey(),
+                    'insumoid' => (int) $insumo->getKey(), 'producto' => $producto, 'origen' => $origen];
+            }
             $asignacion->update(EnvioAsignacionEstadoCatalogo::applyToAttributes([
-                'estado' => 'recibido_planta',
-                'almacenid' => $almacen->almacenid,
-                'fecha_recepcion_planta' => $ahora,
-                'recepcion_usuarioid' => $usuario->usuarioid,
+                'estado' => 'recibido_planta', 'almacenid' => $almacen->almacenid,
+                'fecha_recepcion_planta' => now(), 'recepcion_usuarioid' => $usuario->usuarioid,
+                'recepcion_planta_datos' => ['huella' => $huella, 'lineas' => $lineas],
             ]));
-        });
+        }, 5);
+    }
+
+    private function origenDetalle(\App\Models\DetallePedido $detalle, Pedido $pedido): array
+    {
+        $fecha = null;
+        $materiaId = null;
+        if ($detalle->insumoid) {
+            $salidas = AlmacenMovimiento::where('insumoid', $detalle->insumoid)->where('referencia', $pedido->numero_solicitud)
+                ->whereHas('tipo', fn ($q) => $q->where('naturaleza', 'salida'))->get();
+            $ids = $salidas->pluck('materiaprimaloteid')->filter()->unique();
+            if ($ids->count() > 1) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['cantidades.'.$detalle->getKey() => 'El origen contiene varias partidas sin distribución verificable por línea.']);
+            }
+            $materiaId = $ids->first();
+            if ($materiaId) {
+                $partida = \App\Models\MateriaPrimaLote::whereKey($materiaId)->lockForUpdate()->firstOrFail();
+                if ((int) $partida->insumoid !== (int) $detalle->insumoid || ! app(InventarioExistenciaService::class)->utilizable($partida)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['cantidades.'.$detalle->getKey() => 'La partida de origen está vencida, bloqueada o no corresponde al producto.']);
+                }
+                $fecha = $partida->fecha_vencimiento?->toDateString();
+            } elseif (\App\Models\MateriaPrimaLote::where('insumoid', $detalle->insumoid)->exists()
+                || \App\Models\InventarioPresentacionLote::where('insumoid', $detalle->insumoid)->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['cantidades.'.$detalle->getKey() => 'Falta identificar la partida efectivamente despachada en el movimiento de origen.']);
+            }
+        }
+        $cosecha = $detalle->cosechaAlmacen;
+
+        return ['insumoid' => $detalle->insumoid, 'produccionalmacenamientoid' => $detalle->produccionalmacenamientoid,
+            'produccionid' => $cosecha?->produccionid, 'loteid' => $cosecha?->produccion?->loteid,
+            'materiaprimaloteid' => $materiaId, 'fecha_vencimiento' => $fecha];
     }
 
     public function puedeRecibirPedido(Pedido $pedido, Usuario $usuario): bool
@@ -216,16 +207,15 @@ class RecepcionPlantaEnvioService
         return PlantaAccess::puedeGestionarAlmacen($usuario, $almacen);
     }
 
-    private function resolverAlmacenPlantaDesdePedido(Pedido $pedido): Almacen
+    public function resolverAlmacenPlantaDesdePedido(Pedido $pedido, ?\Illuminate\Support\Collection $almacenes = null): Almacen
     {
         $texto = (string) ($pedido->direccion_texto ?? '');
         $nombre = trim(explode('·', $texto)[0]);
         $nombre = trim(explode('GPS', $nombre)[0]);
 
-        $query = AlmacenAmbito::scope(
-            Almacen::query()->where('activo', true),
-            AlmacenAmbito::PLANTA
-        );
+        $almacenes ??= AlmacenAmbito::scope(
+            Almacen::query()->where('activo', true), AlmacenAmbito::PLANTA
+        )->get();
 
         if ($nombre === '') {
             throw new \InvalidArgumentException(
@@ -233,7 +223,7 @@ class RecepcionPlantaEnvioService
             );
         }
 
-        $coincidencias = (clone $query)->where('nombre', 'like', '%'.$nombre.'%')->get();
+        $coincidencias = $almacenes->filter(fn ($a) => str_contains(mb_strtolower($a->nombre), mb_strtolower($nombre)));
 
         if ($coincidencias->count() === 1) {
             return $coincidencias->first();

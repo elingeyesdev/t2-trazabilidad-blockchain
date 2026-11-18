@@ -1478,7 +1478,7 @@
             etapa.parametros_medidos.forEach(function (pm) {
                 const unidad = pm.unidad ? ' ' + escHtml(pm.unidad) : '';
                 params += '<span class="badge badge-light border text-success mr-1">' +
-                    escHtml(pm.nombre) + ': ' + escHtml(Number(pm.valor).toFixed(1)) + unidad + '</span>';
+                    escHtml(pm.nombre) + ': ' + escHtml(pm.valor_decimal ?? pm.valor) + unidad + '</span>';
             });
             params += '</div>';
         }

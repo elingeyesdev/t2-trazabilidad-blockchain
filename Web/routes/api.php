@@ -63,6 +63,17 @@ $recursoProtegido = function (string $uri, string $controller, string $modulo, ?
 
 Route::name('api.')->group(function () use ($recursoProtegido) {
 
+    Route::prefix('planta')->middleware('auth:sanctum')->group(function () {
+        $controller = \App\Http\Controllers\Api\PlantaTrabajoController::class;
+        Route::get('tareas', [$controller, 'tareas'])->middleware('action.permission:lote_produccion,read');
+        Route::get('tareas/{asignacion}', [$controller, 'tarea'])->whereNumber('asignacion')->middleware('action.permission:lote_produccion,read');
+        Route::post('lotes-produccion/{loteProduccion}/tareas/{asignacion}/completar', [$controller, 'completar'])
+            ->whereNumber(['loteProduccion', 'asignacion'])->middleware('action.permission:lote_produccion,read');
+        Route::get('recepciones', [$controller, 'recepciones'])->middleware('action.permission:recepcion_planta,read');
+        Route::get('recepciones/{pedido}', [$controller, 'recepcion'])->whereNumber('pedido')->middleware('action.permission:recepcion_planta,read');
+        Route::post('recepciones/{pedido}/confirmar', [$controller, 'confirmar'])->whereNumber('pedido')->middleware('action.permission:recepcion_planta,confirm');
+    });
+
     // ENDPOINT DE PRUEBA
     Route::get('/test-api', function () {
         return response()->json(['ok' => true]);
