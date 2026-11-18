@@ -273,7 +273,7 @@ class RecepcionPlantaEnvioService
             'tipoinsumoid' => (int) $tipoId,
             'unidadmedidaid' => (int) $unidadId,
             'stock' => 0,
-            'stockminimo' => InsumoCatalogo::UMBRAL_ALERTA_STOCK,
+            'stockminimo' => null,
             'almacenid' => $almacen->almacenid,
             'descripcion' => $this->textoRecepcionPedido($numeroSolicitud),
         ]);

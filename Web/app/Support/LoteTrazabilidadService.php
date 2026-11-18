@@ -2558,7 +2558,7 @@ class LoteTrazabilidadService
                 if (! is_array($fila)) {
                     continue;
                 }
-                $insumoModel = isset($fila['insumoid']) ? Insumo::query()->with('tipo')->find((int) $fila['insumoid']) : null;
+                $insumoModel = isset($fila['insumoid']) ? AlmacenAcceso::scopeVisibles(Insumo::query()->with('tipo'), auth()->user())->find((int) $fila['insumoid']) : null;
                 $insumos[] = [
                     'insumoid' => (int) ($fila['insumoid'] ?? 0),
                     'almacenid' => (int) ($fila['almacenid'] ?? $insumoModel?->almacenid ?? 0),
@@ -2566,6 +2566,7 @@ class LoteTrazabilidadService
                     'cantidad' => (float) ($fila['cantidad'] ?? 0),
                     'unidad' => (string) ($fila['unidad'] ?? 'ud'),
                     'imagen' => $insumoModel ? InsumoImagenCatalogo::urlPara($insumoModel) : null,
+                    'existencia' => $insumoModel ? app(\App\Services\InventarioExistenciaService::class)->resumen($insumoModel) : null,
                 ];
             }
         }

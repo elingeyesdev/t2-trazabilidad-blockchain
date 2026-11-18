@@ -208,7 +208,7 @@
 
         <p>
 
-            Consulta el resultado de cada parcela ya cosechada. Aquí aparece <strong>una cosecha por lote</strong>.
+            Consulta cada cosecha registrada en los lotes de tu ámbito, con su cantidad original y equivalencia conservada.
 
             Para registrar o gestionar el ciclo (certificación, almacén, etc.) use el <strong>lote</strong> correspondiente.
 
@@ -226,7 +226,7 @@
 
                 <div class="cosecha-kpi__val">{{ $stats['total'] ?? 0 }}</div>
 
-                <div class="cosecha-kpi__lbl">Lotes cosechados</div>
+                <div class="cosecha-kpi__lbl">Cosechas registradas</div>
 
             </div>
 
@@ -236,7 +236,7 @@
 
             <div class="cosecha-kpi cosecha-kpi--teal">
 
-                <div class="cosecha-kpi__val">{{ number_format($stats['kg_total'] ?? 0, 0) }}<span style="font-size:.85rem"> kg</span></div>
+                <div class="cosecha-kpi__val">{{ \App\Support\CosechaDecimal::mostrar($stats['kg_total'] ?? '0') }}<span style="font-size:.85rem"> kg</span></div>
 
                 <div class="cosecha-kpi__lbl">Volumen total</div>
 
@@ -248,9 +248,9 @@
 
             <div class="cosecha-kpi cosecha-kpi--amber">
 
-                <div class="cosecha-kpi__val">{{ number_format($stats['promedio'] ?? 0, 0) }}<span style="font-size:.85rem"> kg</span></div>
+                <div class="cosecha-kpi__val">{{ \App\Support\CosechaDecimal::mostrar($stats['promedio'] ?? '0') }}<span style="font-size:.85rem"> kg</span></div>
 
-                <div class="cosecha-kpi__lbl">Promedio por lote</div>
+                <div class="cosecha-kpi__lbl">Promedio con equivalencia registrada</div>
 
             </div>
 
@@ -426,8 +426,11 @@
                                     @endif
                                 </td>
                                 <td class="text-right">
-                                    <span class="cosecha-cantidad">{{ number_format($p->cantidad ?? 0, 2) }}</span>
-                                    <span class="text-muted">{{ $p->unidadMedida->abreviatura ?? 'kg' }}</span>
+                                    @php $presentacion = app(\App\Services\CosechaPresentacionService::class)->paraProduccion($p); @endphp
+                                    <span class="cosecha-cantidad">{{ \App\Support\CosechaDecimal::mostrar($p->cantidad) }}</span>
+                                    <span class="text-muted">{{ $presentacion['unidad_abreviatura'] ?? $p->unidadMedida?->abreviatura }}</span>
+                                    <div class="cosecha-meta">{{ $presentacion['calibre_nombre'] ?? 'Presentación histórica sin factor' }}</div>
+                                    <div class="cosecha-meta">{{ \App\Support\CosechaDecimal::mostrar($p->cantidad_base) }}{{ $p->cantidad_base !== null ? ' kg equivalentes' : ' · equivalencia no registrada' }}</div>
                                     @if($almacenActivo?->almacen)
                                         <div class="mt-1">
                                             <span class="cos-chip cos-chip--sky"><i class="fas fa-warehouse"></i>{{ $almacenActivo->almacen->nombre }}</span>

@@ -214,8 +214,10 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
     Route::delete('lote-insumos/{lote_insumo}', fn () => redirect()->route('actividades.index'))->name('lote-insumos.destroy')->middleware('action.permission:inventario,delete');
     Route::resource('prioridades', PrioridadController::class)
         ->parameters(['prioridades' => 'prioridad']);
+    Route::get('producciones/configuracion', [ProduccionController::class, 'configuracion'])->name('producciones.configuracion')->middleware('action.permission:lotes,read');
+    Route::get('producciones/vista-previa', [ProduccionController::class, 'vistaPrevia'])->name('producciones.vista-previa')->middleware('action.permission:lotes,read');
     Route::resource('producciones', ProduccionController::class)
-        ->parameters(['producciones' => 'produccion']);
+        ->parameters(['producciones' => 'produccion'])->middleware('action.permission:lotes,read');
     Route::resource('procesos-planta', ProcesoPlantaController::class)->only(['index', 'show', 'create', 'store', 'edit', 'update', 'destroy']);
     Route::get('plantillas-transformacion/{plantillas_transformacion}/parametros', [PlantillaTransformacionController::class, 'parametrosJson'])
         ->name('plantillas-transformacion.parametros');
@@ -358,6 +360,9 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
                     ->name('movimientos.store')
                     ->middleware('action.permission:almacen_movimientos,read');
 
+                Route::get('/{almacen}/existencias', [\App\Http\Controllers\InventarioExistenciasController::class, 'index'])->name('existencias.index')->middleware('action.permission:inventario,read');
+                Route::patch('/{almacen}/existencias/{insumo}/minimo', [\App\Http\Controllers\InventarioExistenciasController::class, 'minimo'])->name('existencias.minimo')->middleware('action.permission:inventario,update');
+                Route::get('/{almacen}/movimientos', [\App\Http\Controllers\InventarioExistenciasController::class, 'movimientos'])->name('existencias.movimientos')->middleware('action.permission:almacen_movimientos,read');
                 Route::get('/{almacen}/inventario/{insumo}', [AlmacenInventarioController::class, 'show'])
                     ->whereNumber(['almacen', 'insumo'])
                     ->name('inventario.show')

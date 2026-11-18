@@ -30,6 +30,7 @@ final class ActividadConsulta
                     'unidad' => $fila['unidad'] ?? null,
                     'unidad_historica' => isset($fila['unidad']),
                     'almacenid' => isset($fila['almacenid']) ? (int) $fila['almacenid'] : null,
+                    'materiaprimaloteid' => $fila['materiaprimaloteid'] ?? null,
                 ];
             }
         } elseif ($cerrada) {

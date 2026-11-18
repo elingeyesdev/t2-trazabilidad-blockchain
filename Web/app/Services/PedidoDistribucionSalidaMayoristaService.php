@@ -143,7 +143,8 @@ class PedidoDistribucionSalidaMayoristaService
             $this->inventarioPresentacion->descontar(
                 $detalle->inventarioPresentacionLote,
                 $cantidadUnidades,
-                $kgMovimiento
+                $kgMovimiento,
+                $pedido->pedidodistribucionid
             );
         } elseif ($presentacion !== null) {
             $this->inventarioPresentacion->descontarFifo(
@@ -158,7 +159,7 @@ class PedidoDistribucionSalidaMayoristaService
                     "Stock insuficiente en origen para «{$insumoOrigen->nombre}». Disponible: {$insumoOrigen->stock}."
                 );
             }
-            $insumoOrigen->decrementarStock($kgMovimiento);
+            $insumoOrigen->decrementarStock($kgMovimiento, null, false, $pedido->pedidodistribucionid);
         }
 
         $tipoSalida ??= TipoMovimientoAlmacen::activosPorNaturaleza('salida')->firstOrFail();

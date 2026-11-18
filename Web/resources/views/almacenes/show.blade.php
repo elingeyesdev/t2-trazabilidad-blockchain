@@ -113,6 +113,7 @@
 
 
 @section('content')
+<div class="mb-3"><a class="btn btn-outline-success" href="{{ route($rutaPrefijo.'.existencias.index', $almacen) }}">Existencias, alertas y vencimientos</a></div>
 
 <div class="modulo-inv page-almacen-show">
 

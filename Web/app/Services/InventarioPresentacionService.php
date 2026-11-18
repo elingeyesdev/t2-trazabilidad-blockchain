@@ -20,6 +20,7 @@ class InventarioPresentacionService
             ->where('almacenid', $almacenId)
             ->where('insumo_presentacionid', $presentacionId)
             ->where('cantidad_unidades', '>', 0)
+            ->where(fn ($q) => $q->whereNull('fecha_vencimiento')->orWhere('fecha_vencimiento', '>=', now(config('app.timezone'))->toDateString()))
             ->orderBy('referencia_lote')
             ->orderBy('inventario_presentacion_loteid')
             ->get();
@@ -59,6 +60,9 @@ class InventarioPresentacionService
 
     public function validarDisponibilidad(InventarioPresentacionLote $inventario, float $unidades, float $kg): void
     {
+        if (app(InventarioExistenciaService::class)->estadoFecha($inventario->fecha_vencimiento?->toDateString()) === 'vencido') {
+            throw new InvalidArgumentException('La partida de inventario está vencida.');
+        }
         if ($unidades <= 0) {
             throw new InvalidArgumentException('La cantidad en unidades debe ser mayor a cero.');
         }
@@ -84,62 +88,44 @@ class InventarioPresentacionService
         }
     }
 
-    public function descontar(InventarioPresentacionLote $inventario, float $unidades, float $kg): void
+    public function descontar(InventarioPresentacionLote $inventario, float|string $unidades, float $kg, ?int $excluirPedidoId = null): void
     {
-        $this->validarDisponibilidad($inventario, $unidades, $kg);
-
-        $stockUnidades = (float) $inventario->cantidad_unidades;
-        $kgDescontar = $unidades >= $stockUnidades - 0.0001
-            ? (float) $inventario->cantidad_kg
-            : min($kg, (float) $inventario->cantidad_kg);
-
-        $inventario->decrement('cantidad_unidades', $unidades);
-        $inventario->decrement('cantidad_kg', $kgDescontar);
-
-        $this->sincronizarStockAgregadoInsumo((int) $inventario->insumoid);
+        DB::transaction(function () use ($inventario, $unidades, $excluirPedidoId) {
+            $existencias = app(InventarioExistenciaService::class);
+            $insumo = $existencias->bloquear([(int) $inventario->insumoid])->get($inventario->insumoid);
+            if (! $insumo) { throw new InvalidArgumentException('El producto ya no existe.'); }
+            // Kg derivados de las cantidades históricas de la partida; no del catálogo actual.
+            $insumo->decrementarStock('0.000001', null, false, $excluirPedidoId,
+                (int) $inventario->inventario_presentacion_loteid, (string) $unidades);
+            $inventario->refresh();
+        }, 5);
     }
 
-    public function descontarFifo(int $almacenId, int $presentacionId, float $unidades, float $kg): void
+    public function descontarFifo(int $almacenId, int $presentacionId, float|string $unidades, float $kg, ?int $excluirPedidoId = null): void
     {
-        if ($unidades <= 0) {
-            throw new InvalidArgumentException('La cantidad en unidades debe ser mayor a cero.');
-        }
-
-        $lotes = InventarioPresentacionLote::query()
-            ->with('presentacion')
-            ->where('almacenid', $almacenId)
-            ->where('insumo_presentacionid', $presentacionId)
-            ->where('cantidad_unidades', '>', 0)
-            ->orderBy('referencia_lote')
-            ->orderBy('inventario_presentacion_loteid')
-            ->get();
-
-        if ($lotes->isEmpty()) {
-            throw new InvalidArgumentException('No hay lotes con stock para descontar la presentación solicitada.');
-        }
-
-        $restante = $unidades;
-        $kgRestante = $kg;
-
-        foreach ($lotes as $lote) {
-            if ($restante <= 0.0001) {
-                break;
+        DB::transaction(function () use ($almacenId, $presentacionId, $unidades, $excluirPedidoId) {
+            if (DB::getDriverName() === 'sqlite') {
+                DB::table('inventario_presentacion_lote')->where('almacenid', $almacenId)->where('insumo_presentacionid', $presentacionId)->update(['cantidad_kg' => DB::raw('cantidad_kg')]);
             }
-
-            $stockLote = (float) $lote->cantidad_unidades;
-            $tomar = min($restante, $stockLote);
-            $kgTomar = $tomar >= $stockLote - 0.0001
-                ? (float) $lote->cantidad_kg
-                : min($kgRestante, round($tomar * $lote->presentacion?->pesoNetoKg(), 4));
-
-            $this->descontar($lote, $tomar, $kgTomar);
-            $restante -= $tomar;
-            $kgRestante = max(0, $kgRestante - $kgTomar);
-        }
-
-        if ($restante > 0.0001) {
-            throw new InvalidArgumentException('Stock insuficiente en lotes para completar el descuento.');
-        }
+            $presentacion = InsumoPresentacion::findOrFail($presentacionId);
+            app(InventarioExistenciaService::class)->bloquear([(int) $presentacion->insumoid]);
+            $restante = \App\Support\InventarioDecimal::unidades($unidades);
+            if ($restante <= 0) { throw new InvalidArgumentException('La cantidad debe ser mayor a cero.'); }
+            $lotes = InventarioPresentacionLote::where('almacenid', $almacenId)->where('insumo_presentacionid', $presentacionId)
+                ->where('insumoid', $presentacion->insumoid)->orderBy('referencia_lote')->orderBy('inventario_presentacion_loteid')->lockForUpdate()->get();
+            if ($lotes->contains(fn ($lote) => $lote->fecha_vencimiento !== null && \App\Support\InventarioDecimal::unidades($lote->getRawOriginal('cantidad_unidades')) > 0)) {
+                throw new InvalidArgumentException('Selecciona una partida para conservar su fecha de vencimiento en la salida.');
+            }
+            if ($lotes->sum(fn ($lote) => \App\Support\InventarioDecimal::unidades($lote->getRawOriginal('cantidad_unidades'))) < $restante) {
+                throw new InvalidArgumentException('Stock insuficiente en lotes para completar el descuento.');
+            }
+            foreach ($lotes as $lote) {
+                if ($restante === 0) { break; }
+                $tomar = min($restante, \App\Support\InventarioDecimal::unidades($lote->getRawOriginal('cantidad_unidades')));
+                if ($tomar > 0) { $this->descontar($lote, \App\Support\InventarioDecimal::texto($tomar), 0, $excluirPedidoId); }
+                $restante -= $tomar;
+            }
+        }, 5);
     }
 
     public function ingresar(
@@ -149,15 +135,21 @@ class InventarioPresentacionService
         ?int $loteProduccionId,
         ?string $referenciaLote,
         float $unidades,
-        float $kg
+        float $kg,
+        ?string $fechaVencimiento = null
     ): InventarioPresentacionLote {
+        return DB::transaction(function () use ($almacenId, $insumoId, $presentacionId, $loteProduccionId, $referenciaLote, $unidades, $kg, $fechaVencimiento) {
+            $insumo = app(InventarioExistenciaService::class)->bloquear([$insumoId])->get($insumoId);
+            if (! $insumo || (int) $insumo->almacenid !== $almacenId || ! InsumoPresentacion::where('insumoid', $insumoId)->whereKey($presentacionId)->exists()) {
+                throw new InvalidArgumentException('La presentación no pertenece al producto y almacén.');
+            }
         if ($unidades <= 0 || $kg <= 0) {
             throw new InvalidArgumentException('Las cantidades de ingreso deben ser mayores a cero.');
         }
 
         $query = InventarioPresentacionLote::query()
             ->where('almacenid', $almacenId)
-            ->where('insumo_presentacionid', $presentacionId);
+            ->where('insumo_presentacionid', $presentacionId)->where('insumoid', $insumoId)->where('fecha_vencimiento', $fechaVencimiento);
 
         if ($loteProduccionId !== null) {
             $query->where('loteproduccionpedidoid', $loteProduccionId);
@@ -167,11 +159,13 @@ class InventarioPresentacionService
             $query->whereNull('loteproduccionpedidoid')->whereNull('referencia_lote');
         }
 
-        $existente = $query->first();
+        $existente = $query->lockForUpdate()->first();
 
         if ($existente !== null) {
-            $existente->increment('cantidad_unidades', $unidades);
-            $existente->increment('cantidad_kg', $kg);
+            $existente->update([
+                'cantidad_unidades' => \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($existente->getRawOriginal('cantidad_unidades')) + \App\Support\InventarioDecimal::unidades($unidades)),
+                'cantidad_kg' => \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($existente->getRawOriginal('cantidad_kg')) + \App\Support\InventarioDecimal::unidades($kg)),
+            ]);
             $this->sincronizarStockAgregadoInsumo($insumoId);
 
             return $existente->fresh();
@@ -183,6 +177,7 @@ class InventarioPresentacionService
             'insumo_presentacionid' => $presentacionId,
             'loteproduccionpedidoid' => $loteProduccionId,
             'referencia_lote' => $referenciaLote,
+            'fecha_vencimiento' => $fechaVencimiento,
             'cantidad_unidades' => $unidades,
             'cantidad_kg' => $kg,
         ]);
@@ -190,6 +185,7 @@ class InventarioPresentacionService
         $this->sincronizarStockAgregadoInsumo($insumoId);
 
         return $inventario;
+        }, 5);
     }
 
     public function sincronizarStockAgregadoInsumo(int $insumoId): void
@@ -199,14 +195,12 @@ class InventarioPresentacionService
             return;
         }
 
-        $totalKg = (float) InventarioPresentacionLote::query()
-            ->where('insumoid', $insumoId)
-            ->where('almacenid', $insumo->almacenid)
-            ->sum('cantidad_kg');
-
-        if ($totalKg > 0) {
-            $insumo->update(['stock' => round($totalKg, 4)]);
-
+        $totalKg = \Brick\Math\BigDecimal::zero();
+        foreach (InventarioPresentacionLote::where('insumoid', $insumoId)->where('almacenid', $insumo->almacenid)->get() as $partida) {
+            $totalKg = $totalKg->plus((string) $partida->getRawOriginal('cantidad_kg'));
+        }
+        if ($totalKg->isPositive()) {
+            $insumo->update(['stock' => (string) $totalKg->toScale(6)]);
             return;
         }
 
@@ -249,6 +243,7 @@ class InventarioPresentacionService
             ->where('almacenid', $almacenId)
             ->where('insumoid', $insumoId)
             ->where('cantidad_unidades', '>', 0)
+            ->where(fn ($q) => $q->whereNull('fecha_vencimiento')->orWhere('fecha_vencimiento', '>=', now(config('app.timezone'))->toDateString()))
             ->exists();
 
         if ($tieneInventario) {

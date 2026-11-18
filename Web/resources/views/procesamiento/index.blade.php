@@ -461,7 +461,7 @@
 (function() {
     const EMPAQUE_CFG = @json($empaqueCfgJs);
     const UNIDAD_KG_ID = @json($unidadKgId);
-    const materias = [];
+    const materias = @json($materiasAnteriores ?? []);
     const tbody = document.getElementById('tbodyMaterias');
     const filaVacia = document.getElementById('filaMateriasVacia');
     const btnBuscarInsumo = document.getElementById('btnBuscarInsumo');
@@ -783,6 +783,14 @@
         validarStockMateriaPrima();
     }
 
+    function selectorPartida(m, i) {
+        const partidas = m.existencia?.partidas || [];
+        if (!partidas.length) return '';
+        let opciones = '<option value="">Selecciona la partida</option>';
+        if (Number(m.existencia.cantidad_sin_partida) > 0) opciones += '<option value="0"' + (m.partida === '0' ? ' selected' : '') + '>Sin partida histórica · sin fecha registrada</option>';
+        partidas.forEach(p => { opciones += '<option value="' + (p.materiaprimaloteid ? 'm:' + Number(p.materiaprimaloteid) : 'p:' + Number(p.inventario_presentacion_loteid)) + '"' + (p.utilizable && Number(p.cantidad_fisica) > 0 ? '' : ' disabled') + ((m.partida === (p.materiaprimaloteid ? 'm:' + p.materiaprimaloteid : 'p:' + p.inventario_presentacion_loteid) || (p.materiaprimaloteid && String(m.materiaprimaloteid) === String(p.materiaprimaloteid)) || (p.inventario_presentacion_loteid && String(m.inventario_presentacion_loteid) === String(p.inventario_presentacion_loteid))) ? ' selected' : '') + '>' + esc(p.referencia || ('#' + p.materiaprimaloteid)) + ' · ' + esc(p.fecha_vencimiento || 'Sin fecha registrada') + '</option>'; });
+        return '<label class="small d-block mt-2">Partida utilizada<select name="materias[' + i + '][partida]" class="form-control form-control-sm" required>' + opciones + '</select></label>';
+    }
     function renderMaterias() {
         tbody.querySelectorAll('tr:not(#filaMateriasVacia)').forEach(r => r.remove());
         if (!materias.length) {
@@ -797,9 +805,9 @@
             const tr = document.createElement('tr');
             tr.innerHTML =
                 '<td><strong>' + esc(m.label) + '</strong><br><small class="text-muted">' + esc(m.meta) + '</small>' +
-                '<input type="hidden" name="materias[' + i + '][insumoid]" value="' + m.id + '"></td>' +
+                '<input type="hidden" name="materias[' + i + '][insumoid]" value="' + m.id + '">' + selectorPartida(m, i) + '</td>' +
                 '<td><div class="input-group input-group-sm">' +
-                '<input type="number" name="materias[' + i + '][cantidad]" class="form-control mp-cantidad-input" data-unidad="' + esc(m.unidad) + '" data-stock="' + m.stock + '" step="0.001" min="0.001" max="' + m.stock + '" required>' +
+                '<input type="number" name="materias[' + i + '][cantidad]" value="' + esc(m.cantidad ?? '') + '" class="form-control mp-cantidad-input" data-unidad="' + esc(m.unidad) + '" data-stock="' + m.stock + '" step="0.001" min="0.001" max="' + m.stock + '" required>' +
                 '<div class="input-group-append"><span class="input-group-text">' + esc(m.unidad) + '</span></div></div></td>' +
                 '<td><button type="button" class="btn btn-outline-danger btn-sm btn-quitar-materia" data-idx="' + i + '" title="Quitar materia prima"><i class="fas fa-trash"></i></button></td>';
             tbody.appendChild(tr);
@@ -829,6 +837,7 @@
             meta: payload.meta || ((extra.almacen || '') + ' · Stock: ' + (extra.stock ?? 0) + ' ' + (extra.unidad || '')),
             stock: extra.stock ?? 999999,
             unidad: extra.unidad || 'ud',
+            existencia: extra.existencia,
         });
         renderMaterias();
     }

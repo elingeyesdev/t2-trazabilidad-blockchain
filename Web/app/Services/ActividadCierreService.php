@@ -25,7 +25,10 @@ class ActividadCierreService
             'resultado' => 'required|string|max:250',
             'evidencia_foto' => 'required|file|image|mimes:jpg,jpeg,png,webp|mimetypes:image/jpeg,image/png,image/webp|max:5120',
             'consumos' => 'sometimes|array|max:10',
-            'consumos.*' => 'array:insumoid,almacenid,cantidad,unidadmedidaid',
+            'consumos.*' => 'array:insumoid,almacenid,cantidad,unidadmedidaid,materiaprimaloteid,inventario_presentacion_loteid,partida',
+            'consumos.*.materiaprimaloteid' => 'sometimes|nullable|integer|min:0',
+            'consumos.*.inventario_presentacion_loteid' => 'sometimes|nullable|integer|min:1',
+            'consumos.*.partida' => 'sometimes|nullable|string|max:40',
             'consumos.*.insumoid' => 'required|integer|exists:insumo,insumoid|distinct',
             'consumos.*.almacenid' => 'required|integer|exists:almacen,almacenid',
             'consumos.*.cantidad' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/D'],
@@ -57,6 +60,9 @@ class ActividadCierreService
 
         try {
             return DB::transaction(function () use ($request, $actividad, $data, $foto, $shaFoto, $resolver, &$nuevoPath) {
+                if (DB::getDriverName() === 'sqlite') {
+                    DB::table('lote')->where('loteid', $actividad->loteid)->update(['nombre' => DB::raw('nombre')]);
+                }
                 // All activity closings serialize on the lot first, then the activity.
                 Lote::query()->whereKey($actividad->loteid)->lockForUpdate()->firstOrFail();
                 $locked = $resolver ? $resolver() : Actividad::query()->whereKey($actividad->actividadid)->lockForUpdate()->firstOrFail();
@@ -163,6 +169,7 @@ class ActividadCierreService
         }
         $normalizados = [];
         foreach ($filas as $i => $fila) {
+            $fila = app(InventarioExistenciaService::class)->seleccion($fila);
             try {
                 $cantidad = InventarioDecimal::consumo($fila['cantidad'] ?? '0');
             } catch (\InvalidArgumentException $error) {
@@ -180,6 +187,12 @@ class ActividadCierreService
                 throw ValidationException::withMessages(["consumos.$i.unidadmedidaid" => 'Usa la unidad del insumo; no se realizan conversiones.']);
             }
             $normalizados[$id] = ['insumoid' => $id, 'almacenid' => (int) ($fila['almacenid'] ?? $insumo->almacenid), 'cantidad' => $cantidad];
+            if (array_key_exists('materiaprimaloteid', $fila) && $fila['materiaprimaloteid'] !== null) {
+                $normalizados[$id]['materiaprimaloteid'] = (int) $fila['materiaprimaloteid'];
+            }
+            if (isset($fila['inventario_presentacion_loteid'])) {
+                $normalizados[$id]['inventario_presentacion_loteid'] = (int) $fila['inventario_presentacion_loteid'];
+            }
         }
         ksort($normalizados, SORT_NUMERIC);
 

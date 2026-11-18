@@ -86,10 +86,10 @@
             <div class="small-box small-box-yellow">
                 <div class="inner">
                     <h3>≤ {{ $umbral ?? 5 }}</h3>
-                    <p>Umbral de alerta</p>
+                    <p>Mínimo configurable</p>
                 </div>
                 <div class="icon"><i class="fas fa-bell"></i></div>
-                <span class="small-box-footer">Aviso cuando el stock llega a {{ $umbral ?? 5 }} o menos</span>
+                <span class="small-box-footer">Aviso según el disponible y el mínimo de cada existencia</span>
             </div>
         </div>
     </div>
@@ -164,7 +164,7 @@
                 <tbody>
                     @forelse($insumos as $i)
                         @php
-                            $rowStockClass = \App\Support\InsumoCatalogo::claseStock((float) $i->stock);
+                            $rowStockClass = \App\Support\InsumoCatalogo::claseStockInsumo($i);
                         @endphp
                         <tr class="search-item-row"
                             data-nombre="{{ strtolower($i->nombre) }}"
@@ -226,7 +226,7 @@
         <div id="cardView" style="display: none;">
             @forelse($insumos as $i)
                 @php
-                    $stockClass = \App\Support\InsumoCatalogo::claseStock((float) $i->stock);
+                    $stockClass = \App\Support\InsumoCatalogo::claseStockInsumo($i);
                     $imagenSrc = $i->imagenSrc(128);
                     $outline = $stockClass === 'low' ? 'danger' : ($stockClass === 'medium' ? 'warning' : 'success');
                 @endphp

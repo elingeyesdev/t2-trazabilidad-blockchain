@@ -109,12 +109,27 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     Route::delete('lotes/{lote}', [LoteController::class, 'destroy'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,delete']);
     $recursoProtegido('estadolotes', EstadoLoteController::class, 'lotes');
-    $recursoProtegido('producciones', ProduccionController::class, 'lotes');
+    Route::apiResource('producciones', ProduccionController::class)
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/producciones', [ProduccionController::class, 'index'])
+        ->name('lotes.producciones.index')->whereNumber('lote')->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/producciones/{produccion}', [ProduccionController::class, 'showEnLote'])
+        ->name('lotes.producciones.show')->whereNumber(['lote', 'produccion'])->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/presentaciones-cosecha', [ProduccionController::class, 'configuracion'])
+        ->name('lotes.presentaciones-cosecha')->whereNumber('lote')->middleware(['auth:sanctum', 'action.permission:lotes,read']);
     $recursoProtegido('historial-estados-lote', HistorialEstadoLoteController::class, 'lotes');
 
     // ========================================================
     // GRUPO: ALMACENES Y ALMACENAMIENTO
     // ========================================================
+    Route::get('almacenes/{almacen}/existencias', [\App\Http\Controllers\InventarioExistenciasController::class, 'index'])
+        ->middleware(['auth:sanctum', 'action.permission:inventario,read']);
+    Route::patch('almacenes/{almacen}/existencias/{insumo}/minimo', [\App\Http\Controllers\InventarioExistenciasController::class, 'minimo'])
+        ->middleware(['auth:sanctum', 'action.permission:inventario,update']);
+    Route::get('almacenes/{almacen}/movimientos', [\App\Http\Controllers\InventarioExistenciasController::class, 'movimientos'])
+        ->middleware(['auth:sanctum', 'action.permission:almacen_movimientos,read']);
+    Route::get('almacenes/{almacen}/movimientos/{movimiento}', [\App\Http\Controllers\InventarioExistenciasController::class, 'movimiento'])
+        ->middleware(['auth:sanctum', 'action.permission:almacen_movimientos,read']);
     $recursoProtegido('almacenes', AlmacenController::class, 'inventario');
     $recursoProtegido('producciones-almacenamiento', ProduccionAlmacenamientoController::class, 'inventario');
     Route::get('almacen-movimientos', [AlmacenMovimientoController::class, 'index'])

@@ -11,8 +11,8 @@
 
 @php
     use App\Support\InsumoCatalogo;
-    $claseStock = InsumoCatalogo::claseStock((float) $insumo->stock);
-    $umbral = $umbral ?? InsumoCatalogo::UMBRAL_ALERTA_STOCK;
+    $claseStock = InsumoCatalogo::claseStockInsumo($insumo);
+    $umbral = $insumo->stockminimo;
     $slugTipo = InsumoCatalogo::slugFromNombreTipo($insumo->tipo->nombre ?? '');
     $iconoTipo = match ($slugTipo) {
         'material_siembra' => 'seedling',
@@ -76,6 +76,7 @@
 @endpush
 
 @section('content')
+@if($insumo->almacenid)<div class="mb-3"><a class="btn btn-outline-success" href="{{ route('almacen-agricola.existencias.index', $insumo->almacenid) }}">Existencias, alertas y vencimientos del almacén</a></div>@endif
 <div class="modulo-inv page-insumo-show">
     <div class="row justify-content-center">
         <div class="col-lg-8">
@@ -99,7 +100,9 @@
                     </div>
 
                     <div class="alerta-banner mb-4 {{ $claseStock === 'low' ? 'critico' : ($claseStock === 'medium' ? 'atencion' : 'ok') }}">
-                        @if($claseStock === 'low')
+                        @if($umbral === null)
+                            <strong>Mínimo sin configurar.</strong> Configúrelo en las existencias del almacén para activar el aviso.
+                        @elseif($claseStock === 'low')
                             <i class="fas fa-exclamation-triangle mr-1"></i>
                             <strong>Alerta de stock:</strong> quedan {{ number_format($insumo->stock, 2) }}
                             {{ $insumo->unidadMedida->abreviatura ?? 'u.' }} (umbral ≤ {{ $umbral }}).

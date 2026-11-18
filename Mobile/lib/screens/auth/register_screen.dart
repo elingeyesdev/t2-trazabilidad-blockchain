@@ -188,10 +188,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 12),
               Text(result.email, textAlign: TextAlign.center),
               const SizedBox(height: 20),
-              AppNotice(
-                tone: AppNoticeTone.success,
-                message: result.message,
-              ),
+              AppNotice(tone: AppNoticeTone.success, message: result.message),
               const SizedBox(height: 12),
               const Text(
                 'Podrás iniciar sesión cuando un administrador apruebe tu cuenta.',

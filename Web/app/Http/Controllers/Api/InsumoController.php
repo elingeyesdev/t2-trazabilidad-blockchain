@@ -18,6 +18,7 @@ class InsumoController extends Controller
             $this->scopeVisibles(Insumo::query(), $request)
                 ->with(['tipo', 'unidadMedida'])
                 ->get()
+                ->each(fn ($insumo) => $insumo->setAttribute('existencia', app(\App\Services\InventarioExistenciaService::class)->resumen($insumo)))
                 ->makeVisible(['tipo', 'unidadMedida'])
         );
     }
@@ -29,14 +30,17 @@ class InsumoController extends Controller
             ->findOrFail($id)
             ->makeVisible(['tipo', 'unidadMedida']);
 
+        $insumo->setAttribute('existencia', app(\App\Services\InventarioExistenciaService::class)->resumen($insumo));
         return response()->json($insumo);
     }
 
     public function store(Request $request)
     {
         $data = $this->validarInsumo($request);
-        $data['stockminimo'] = InsumoCatalogo::UMBRAL_ALERTA_STOCK;
+        // El mínimo pertenece a esta existencia; no imponer el umbral global.
 
+        unset($data['motivo_ajuste'], $data['materiaprimaloteid']);
+        $data['stockminimo'] = $data['stockminimo'] ?? null;
         $insumo = Insumo::create($data);
 
         return response()->json($insumo->load(['tipo', 'unidadMedida'])->makeVisible(['tipo', 'unidadMedida']), 201);
@@ -49,16 +53,9 @@ class InsumoController extends Controller
 
         $data = $this->validarInsumo($request, partial: true);
 
-        // El stock de almacenes mayoristas/PDV solo cambia por movimientos auditados, no por edición directa.
-        if (array_key_exists('stock', $data) && $this->esInventarioComercial($insumo)
-            && abs((float) $data['stock'] - (float) $insumo->stock) > 0.0001) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'stock' => 'El stock de este almacén se modifica mediante movimientos de ingreso/salida.',
-            ]);
-        }
-        $data['stockminimo'] = InsumoCatalogo::UMBRAL_ALERTA_STOCK;
+        // El mínimo pertenece a esta existencia; no imponer el umbral global.
 
-        $insumo->update($data);
+        app(\App\Services\InventarioMovimientoService::class)->actualizarFicha($request->user(), $insumo, $data, $request->input('motivo_ajuste'), $request->filled('materiaprimaloteid') ? (int) $request->input('materiaprimaloteid') : null);
 
         return response()->json($insumo->load(['tipo', 'unidadMedida'])->makeVisible(['tipo', 'unidadMedida']));
     }
@@ -114,6 +111,9 @@ class InsumoController extends Controller
             'tipoinsumoid' => ($partial ? 'sometimes|' : '').'required|'.Rule::in($tiposIds),
             'unidadmedidaid' => ($partial ? 'sometimes|' : '').'required|exists:unidadmedida,unidadmedidaid',
             'stock' => ($partial ? 'sometimes|' : '').'required|numeric|min:0',
+            'stockminimo' => ['nullable', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$/D'],
+            'motivo_ajuste' => 'nullable|string|max:150',
+            'materiaprimaloteid' => 'nullable|integer|min:0',
             'descripcion' => 'nullable|string',
         ];
 

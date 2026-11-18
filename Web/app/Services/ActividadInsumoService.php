@@ -156,6 +156,9 @@ class ActividadInsumoService
             return;
         }
         DB::transaction(function () use ($actividad, &$detalle) {
+            if (DB::getDriverName() === 'sqlite') {
+                DB::table('actividad')->where('actividadid', $actividad->actividadid)->update(['descripcion' => DB::raw('descripcion')]);
+            }
             $locked = Actividad::query()->whereKey($actividad->actividadid)->lockForUpdate()->firstOrFail();
             $persistido = json_decode($locked->detalle_json ?? '', true) ?: [];
             if (! empty($persistido['stock_aplicado'])) {
@@ -173,7 +176,7 @@ class ActividadInsumoService
             if (count($ids) !== count(array_unique($ids))) {
                 throw ValidationException::withMessages(['consumos' => 'No repitas el mismo insumo; registra su cantidad total.']);
             }
-            $existencias = Insumo::query()->whereIn('insumoid', $ids)->orderBy('insumoid')->lockForUpdate()->get()->keyBy('insumoid');
+            $existencias = app(InventarioExistenciaService::class)->bloquear($ids);
             $normalizados = [];
             foreach ($filas as $i => $fila) {
                 $indice = $fila['_indice'] ?? $i;
@@ -201,6 +204,8 @@ class ActividadInsumoService
                     throw ValidationException::withMessages(["consumos.$indice.cantidad" => 'Stock insuficiente en el almacén autorizado.']);
                 }
                 $normalizados[] = ['insumoid' => (int) $insumo->insumoid, 'almacenid' => (int) $almacen->almacenid,
+                    'materiaprimaloteid' => isset($fila['materiaprimaloteid']) ? (int) $fila['materiaprimaloteid'] : null,
+                    'inventario_presentacion_loteid' => isset($fila['inventario_presentacion_loteid']) ? (int) $fila['inventario_presentacion_loteid'] : null,
                     'cantidad' => $cantidad, 'nombre' => $insumo->nombre, 'unidadmedidaid' => (int) $insumo->unidadmedidaid,
                     'unidad' => $insumo->unidadMedida?->abreviatura ?? $insumo->unidadMedida?->nombre ?? 'ud'];
             }
@@ -210,12 +215,21 @@ class ActividadInsumoService
             $estadoId = $this->idEstadoAplicado();
             foreach ($normalizados as $fila) {
                 $insumo = $existencias->get($fila['insumoid']);
-                $insumo->decrementarStock($fila['cantidad']);
+                $saldoAnterior = $insumo->getRawOriginal('stock');
+                try {
+                    $insumo->decrementarStock($fila['cantidad'], $fila['materiaprimaloteid'], false, null, $fila['inventario_presentacion_loteid']);
+                } catch (ValidationException $e) {
+                    $indice = array_search($fila['insumoid'], array_column($filas, 'insumoid'));
+                    throw ValidationException::withMessages(collect($e->errors())->mapWithKeys(fn ($mensajes, $campo) => ["consumos.$indice.$campo" => $mensajes])->all());
+                }
                 AlmacenMovimiento::create([
                     'almacenid' => $almacen->almacenid, 'insumoid' => $insumo->insumoid,
                     'tipo_movimiento_almacenid' => $tipoSalida->tipo_movimiento_almacenid,
                     'usuarioid' => $actividad->usuarioid_ejecutor ?: $actividad->usuarioid,
                     'fecha' => now()->toDateString(), 'cantidad' => $fila['cantidad'],
+                    'materiaprimaloteid' => $fila['materiaprimaloteid'] ?: null,
+                    'inventario_presentacion_loteid' => $fila['inventario_presentacion_loteid'],
+                    'unidadmedidaid' => $insumo->unidadmedidaid, 'saldo_anterior' => $saldoAnterior, 'saldo_posterior' => $insumo->getRawOriginal('stock'),
                     'referencia' => 'ACT-'.$actividad->actividadid, 'destino_motivo' => 'Lote #'.$actividad->loteid,
                     'observaciones' => '[Consumo actividad #'.$actividad->actividadid.'] '.$insumo->nombre,
                 ]);

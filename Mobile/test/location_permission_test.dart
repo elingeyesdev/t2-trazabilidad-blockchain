@@ -85,14 +85,8 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('location.latitud')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('location.longitud')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('location.latitud')), findsOneWidget);
+      expect(find.byKey(const ValueKey('location.longitud')), findsOneWidget);
 
       await tester.enterText(
         find.byKey(const ValueKey('location.ubicacion')),
@@ -168,11 +162,7 @@ void main() {
       final location = TextEditingController();
       addTearDown(location.dispose);
 
-      await pumpLocationForm(
-        tester,
-        formKey: formKey,
-        location: location,
-      );
+      await pumpLocationForm(tester, formKey: formKey, location: location);
 
       await tester.tap(find.text('Guardar ubicación'));
       await tester.pumpAndSettle();
@@ -198,10 +188,7 @@ void main() {
       await tester.tap(find.text('Guardar ubicación'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Ingresa una latitud entre -90 y 90.'),
-        findsOneWidget,
-      );
+      expect(find.text('Ingresa una latitud entre -90 y 90.'), findsOneWidget);
       expect(
         find.text('Ingresa una longitud entre -180 y 180.'),
         findsOneWidget,

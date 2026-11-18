@@ -116,8 +116,10 @@ class LoteProduccionPlantaService
                     $lote,
                     $usuario,
                     (int) $linea['insumoid'],
-                    (float) $linea['cantidad'],
-                    $tipoSalida
+                    (string) $linea['cantidad'],
+                    $tipoSalida,
+                    isset($linea['materiaprimaloteid']) ? (int) $linea['materiaprimaloteid'] : null,
+                    isset($linea['inventario_presentacion_loteid']) ? (int) $linea['inventario_presentacion_loteid'] : null
                 );
             }
 
@@ -141,14 +143,18 @@ class LoteProduccionPlantaService
         LoteProduccionPedido $lote,
         Usuario $usuario,
         int $insumoid,
-        float $cantidad,
-        TipoMovimientoAlmacen $tipoSalida
+        string|float $cantidad,
+        TipoMovimientoAlmacen $tipoSalida,
+        ?int $partidaId = null,
+        ?int $presentacionLoteId = null
     ): void {
         if ($cantidad <= 0) {
             throw new \InvalidArgumentException('La cantidad debe ser mayor a cero.');
         }
 
-        $insumo = Insumo::query()->with('almacen')->findOrFail($insumoid);
+        $insumo = app(InventarioExistenciaService::class)->bloquear([$insumoid])->get($insumoid);
+        abort_unless($insumo, 404);
+        $cantidad = \App\Support\InventarioDecimal::consumo($cantidad);
         $almacen = $insumo->almacen;
 
         if (! $almacen || ($almacen->ambito ?? '') !== AlmacenAmbito::PLANTA) {
@@ -161,25 +167,31 @@ class LoteProduccionPlantaService
             );
         }
 
+        \App\Support\AlmacenAcceso::asegurarPuedeGestionar($usuario, $almacen);
+        $saldoAnterior = $insumo->getRawOriginal('stock');
+        $unidadesAntes = $presentacionLoteId ? \App\Models\InventarioPresentacionLote::whereKey($presentacionLoteId)->value('cantidad_unidades') : null;
+        $insumo->decrementarStock($cantidad, $partidaId, false, null, $presentacionLoteId);
+        $unidadesConsumidas = $presentacionLoteId ? \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($unidadesAntes) - \App\Support\InventarioDecimal::unidades(\App\Models\InventarioPresentacionLote::whereKey($presentacionLoteId)->value('cantidad_unidades'))) : null;
         AlmacenMovimiento::create([
             'almacenid' => $almacen->almacenid,
             'insumoid' => $insumo->insumoid,
             'tipo_movimiento_almacenid' => $tipoSalida->tipo_movimiento_almacenid,
             'usuarioid' => $usuario->usuarioid,
             'fecha' => now()->toDateString(),
-            'cantidad' => $cantidad,
+            'cantidad' => $cantidad, 'materiaprimaloteid' => $partidaId ?: null, 'inventario_presentacion_loteid' => $presentacionLoteId,
+            'unidadmedidaid' => $insumo->unidadmedidaid, 'saldo_anterior' => $saldoAnterior, 'saldo_posterior' => $insumo->getRawOriginal('stock'),
             'referencia' => $lote->codigo_lote,
             'destino_motivo' => 'Lote de producción',
             'observaciones' => '[Consumo lote '.$lote->codigo_lote.'] '.$insumo->nombre,
         ]);
 
-        $insumo->decrementarStock($cantidad);
-
-        $materiaLoteId = $this->resolverMateriaPrimaLoteId($insumo, $cantidad);
+        $materiaLoteId = $partidaId;
 
         $linea = [
             'loteproduccionpedidoid' => $lote->loteproduccionpedidoid,
             'insumoid' => $insumo->insumoid,
+            'inventario_presentacion_loteid' => $presentacionLoteId,
+            'cantidad_unidades_consumidas' => $unidadesConsumidas,
             'cantidad_planificada' => $cantidad,
             'cantidad_usada' => $cantidad,
         ];
@@ -234,39 +246,6 @@ class LoteProduccionPlantaService
         ]);
 
         return (int) $loteMp->materiaprimaloteid;
-    }
-
-    private function resolverMateriaPrimaLoteId(Insumo $insumo, float $cantidad): ?int
-    {
-        if (! \Illuminate\Support\Facades\Schema::hasTable('materia_prima_lote')) {
-            return null;
-        }
-
-        $base = MateriaPrimaBase::query()
-            ->where('activo', true)
-            ->get()
-            ->first(fn (MateriaPrimaBase $b) => Str::lower($b->nombre) === Str::lower($insumo->nombre));
-
-        if (! $base) {
-            return null;
-        }
-
-        $loteMp = MateriaPrimaLote::query()
-            ->where('materiaprimabaseid', $base->materiaprimabaseid)
-            ->where('cantidad_disponible', '>=', $cantidad)
-            ->orderBy('fecha_recepcion')
-            ->first();
-
-        if ($loteMp) {
-            $loteMp->cantidad_disponible = max(0, (float) $loteMp->cantidad_disponible - $cantidad);
-            $loteMp->save();
-            $base->cantidad_disponible = max(0, (float) $base->cantidad_disponible - $cantidad);
-            $base->save();
-
-            return $loteMp->materiaprimaloteid;
-        }
-
-        return null;
     }
 
     private function crearPedidoInterno(string $nombreLote): int
@@ -387,8 +366,10 @@ class LoteProduccionPlantaService
                         $lote,
                         $usuario,
                         (int) $linea['insumoid'],
-                        (float) $linea['cantidad'],
-                        $tipoSalida
+                        (string) $linea['cantidad'],
+                        $tipoSalida,
+                        isset($linea['materiaprimaloteid']) ? (int) $linea['materiaprimaloteid'] : null,
+                    isset($linea['inventario_presentacion_loteid']) ? (int) $linea['inventario_presentacion_loteid'] : null
                     );
                 }
             }
@@ -477,12 +458,23 @@ class LoteProduccionPlantaService
         $tipoEntrada = $this->tipoMovimientoEntradaReversion();
 
         foreach ($lote->materiasPrimas as $linea) {
-            $cantidad = (float) $linea->cantidad_usada;
+            $cantidad = $linea->getRawOriginal('cantidad_usada');
             if ($cantidad <= 0 || ! $linea->insumo) {
                 continue;
             }
 
             $insumo = $linea->insumo;
+            $insumo = app(InventarioExistenciaService::class)->bloquear([$linea->insumoid])->get($linea->insumoid);
+            if ($linea->materiaprimaloteid) {
+                $partida = MateriaPrimaLote::where('insumoid', $insumo->insumoid)->where('almacenid', $insumo->almacenid)->lockForUpdate()->findOrFail($linea->materiaprimaloteid);
+                $partida->update(['cantidad_disponible' => \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($partida->getRawOriginal('cantidad_disponible')) + \App\Support\InventarioDecimal::unidades($cantidad))]);
+            }
+            if ($linea->inventario_presentacion_loteid) {
+                $partidaPresentacion = \App\Models\InventarioPresentacionLote::where('insumoid', $insumo->insumoid)->where('almacenid', $insumo->almacenid)->lockForUpdate()->findOrFail($linea->inventario_presentacion_loteid);
+                // Los kg ya consumidos se devuelven a la misma partida; nunca modificar su fecha.
+                $partidaPresentacion->update(['cantidad_kg' => \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($partidaPresentacion->getRawOriginal('cantidad_kg')) + \App\Support\InventarioDecimal::unidades($cantidad)),
+                    'cantidad_unidades' => \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($partidaPresentacion->getRawOriginal('cantidad_unidades')) + \App\Support\InventarioDecimal::unidades($linea->cantidad_unidades_consumidas))]);
+            }
             $insumo->incrementarStock($cantidad);
 
             if ($tipoEntrada !== null && $insumo->almacen) {
@@ -504,7 +496,7 @@ class LoteProduccionPlantaService
     private function tipoMovimientoEntradaReversion(): ?TipoMovimientoAlmacen
     {
         $tipo = TipoMovimientoAlmacen::query()
-            ->where('naturaleza', 'entrada')
+            ->where('naturaleza', 'ingreso')
             ->where('activo', true)
             ->get()
             ->first(fn (TipoMovimientoAlmacen $t) => in_array(
@@ -513,6 +505,6 @@ class LoteProduccionPlantaService
                 true
             ));
 
-        return $tipo ?? TipoMovimientoAlmacen::activosPorNaturaleza('entrada')->first();
+        return $tipo ?? TipoMovimientoAlmacen::activosPorNaturaleza('ingreso')->first();
     }
 }
