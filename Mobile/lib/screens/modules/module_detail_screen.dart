@@ -8,13 +8,14 @@ import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/module_palette.dart';
 import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
+import '../../widgets/field_kit.dart';
 import '../../widgets/form_validation.dart';
 import '../../widgets/record_status_badge.dart';
-import '../../widgets/information_section.dart';
 import 'actividad_close_screen.dart';
 import 'actividad_form_screen.dart';
 import 'lote_form_screen.dart';
@@ -54,6 +55,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   bool _editingObservations = false;
   bool _savingObservations = false;
   ApiException? _obsError;
+
   bool get _isLote => widget.module == AppModule.lotes;
 
   @override
@@ -229,14 +231,17 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
               onPressed: loading ? null : _refresh,
               icon: const Icon(Icons.refresh_rounded),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         body: SafeArea(
           child: loading
               ? const AppLoading(message: 'Cargando detalle...')
               : error is ApiException && error.statusCode == 404
-              ? AppEmptyState(
+              ? const AppEmptyState(
                   icon: Icons.search_off_rounded,
+                  tone: AppTheme.maizeSoft,
+                  ink: Color(0xFF5F4100),
                   title: 'El registro ya no está disponible',
                   message: 'Vuelve a la lista y actualiza la información.',
                 )
@@ -249,20 +254,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 )
               : _details(snapshot.requireData),
         ),
-        bottomNavigationBar: DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppTheme.line)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-              child: OutlinedButton.icon(
-                onPressed: _backToList,
-                icon: const Icon(Icons.arrow_back_rounded),
-                label: const Text('Volver a la lista'),
-              ),
-            ),
+        bottomNavigationBar: BottomActionBar(
+          child: OutlinedButton.icon(
+            onPressed: _backToList,
+            icon: const Icon(Icons.arrow_back_rounded),
+            label: const Text('Volver a la lista'),
           ),
         ),
       );
@@ -270,63 +266,76 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   );
 
   Widget _details(ModuleRecord record) {
-    final fields = record.fieldInfo?.details ?? record.details;
-    Map<String, String> pick(List<String> keys) => {
-      for (final key in keys)
-        if (fields.containsKey(key)) key: fields[key]!,
-    };
+    final look = widget.module.look;
+    final fields = <MapEntry<String, String>>[
+      ...(record.fieldInfo?.details ?? record.details).entries.where(
+        (field) =>
+            field.key != 'Identificador' &&
+            (record.fieldInfo?.status == null || field.key != 'Estado'),
+      ),
+      if (!_isLote && record.actividadData?.resultado != null)
+        MapEntry('Resultado', record.actividadData!.resultado!),
+    ];
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 16,
-                runSpacing: 12,
-                children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    children: [
-                      Icon(
-                        widget.module.icon,
-                        size: 20,
-                        color: AppTheme.forest,
-                      ),
-                      Text(
-                        '${_isLote ? 'Lote' : 'Actividad'} #${record.id}',
-                        style: const TextStyle(
-                          color: AppTheme.forest,
-                          fontWeight: FontWeight.w600,
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: look.tone,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AppTheme.ink, width: 2),
+                  boxShadow: AppTheme.stamp(5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        ModuleMark(widget.module, size: 48, solid: true),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '${_isLote ? 'Lote' : 'Actividad'} #${record.id}',
+                            style: TextStyle(
+                              color: look.ink,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        record.title,
+                        style: Theme.of(context).textTheme.headlineMedium,
                       ),
+                    ),
+                    if (record.fieldInfo?.status != null) ...[
+                      const SizedBox(height: 14),
+                      RecordStatusBadge(status: record.fieldInfo!.status!),
                     ],
-                  ),
-                  if (record.fieldInfo?.status case final status?)
-                    RecordStatusBadge(status: status),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                record.title,
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineSmall?.copyWith(fontSize: 32, height: 1.15),
+                  ],
+                ),
               ),
               if (_notice case final notice?) ...[
                 const SizedBox(height: 20),
                 AppNotice(tone: AppNoticeTone.success, message: notice),
               ],
-              const SizedBox(height: 28),
               if (_isLote) ...[
                 if (record.loteData?.isClosed != true &&
                     (LotePermissions.canEdit(widget.user) ||
                         ActividadPermissions.canAssign(widget.user))) ...[
+                  const SizedBox(height: 20),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
@@ -334,230 +343,197 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                       if (LotePermissions.canEdit(widget.user))
                         FilledButton.icon(
                           onPressed: () => _editLote(record),
-                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          icon: const Icon(Icons.edit_outlined),
                           label: const Text('Editar lote'),
                         ),
                       if (ActividadPermissions.canAssign(widget.user))
                         OutlinedButton.icon(
                           onPressed: () => _assignActivity(record),
-                          icon: const Icon(Icons.assignment_add, size: 18),
+                          icon: const Icon(Icons.assignment_add),
                           label: const Text('Asignar actividad'),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 16),
                 ],
-                Material(
-                  color: AppTheme.forest,
-                  borderRadius: BorderRadius.circular(16),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).pushNamed(
-                      '${AppModule.lotes.route}/${record.id}/historial',
-                      arguments: record.title,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.history_rounded,
-                            color: AppTheme.ochre,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Historial de actividades',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(color: Colors.white),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'El trabajo de este lote, paso a paso.',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.arrow_forward_rounded,
-                            color: AppTheme.ochre,
-                            size: 20,
-                          ),
-                        ],
-                      ),
-                    ),
+                const SizedBox(height: 20),
+                PressableCard(
+                  onTap: () => Navigator.of(context).pushNamed(
+                    '${AppModule.lotes.route}/${record.id}/historial',
+                    arguments: record.title,
                   ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Información del lote',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                _lotOverview(
-                  pick(['Cultivo', 'Superficie', 'Actividades pendientes']),
-                ),
-                const SizedBox(height: 16),
-                InformationSection(
-                  title: 'Trabajo de campo',
-                  icon: Icons.spa_outlined,
-                  columns: 2,
-                  fields: pick(['Responsable', 'Fecha de siembra']),
-                ),
-                const SizedBox(height: 16),
-                InformationSection(
-                  title: 'Origen y trazabilidad',
-                  icon: Icons.fingerprint_rounded,
-                  fields: pick([
-                    'Ubicación',
-                    'Código de trazabilidad',
-                    'Fecha de creación',
-                  ]),
-                ),
-              ] else ...[
-                if (ActividadPermissions.canClose(
-                  widget.user,
-                  record.actividadData,
-                )) ...[
-                  FilledButton.icon(
-                    onPressed: () => _closeActivity(record),
-                    icon: const Icon(Icons.task_alt_rounded, size: 18),
-                    label: const Text('Completar y cerrar actividad'),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                InformationSection(
-                  title: 'Información de la actividad',
-                  icon: Icons.assignment_outlined,
-                  columns: 2,
-                  fields: pick([
-                    'Lote',
-                    'Cultivo',
-                    'Responsable',
-                    'Tipo de actividad',
-                    'Prioridad',
-                  ]),
-                ),
-                const SizedBox(height: 16),
-                InformationSection(
-                  title: 'Fechas y seguimiento',
-                  icon: Icons.event_outlined,
-                  columns: 2,
-                  fields: pick(['Fecha planificada', 'Inicio', 'Finalización']),
-                ),
-                const SizedBox(height: 16),
-                InformationSection(
-                  title: 'Notas del campo',
-                  icon: Icons.notes_rounded,
-                  fields: {
-                    ...pick(['Observaciones']),
-                    'Resultado': ?record.actividadData?.resultado,
-                  },
-                ),
-                if (ActividadPermissions.canAddObservations(widget.user)) ...[
-                  const SizedBox(height: 16),
-                  if (_editingObservations)
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppTheme.line),
+                  color: AppTheme.maizeSoft,
+                  child: Row(
+                    children: [
+                      const IconMedallion(
+                        icon: Icons.history_rounded,
+                        tone: AppTheme.maize,
+                        ink: AppTheme.ink,
+                        size: 52,
                       ),
-                      child: Form(
-                        key: _obsFormKey,
+                      const SizedBox(width: 16),
+                      Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Observaciones de campo',
-                              style: Theme.of(context).textTheme.titleMedium,
+                              'Historial de actividades',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
                             ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              key: const ValueKey('actividad.observaciones'),
-                              controller: _obsController,
-                              scrollPadding: formScrollPadding(context),
-                              autovalidateMode:
-                                  AutovalidateMode.onUserInteraction,
-                              forceErrorText: _obsError
-                                  ?.validationErrors['observaciones']
-                                  ?.join('\n'),
-                              enabled: !_savingObservations,
-                              maxLines: 3,
-                              maxLength: 250,
-                              textCapitalization: TextCapitalization.sentences,
-                              decoration: const InputDecoration(
-                                labelText: 'Observaciones',
-                                hintText:
-                                    'Describe avances o novedades de la tarea',
-                              ),
-                              onChanged: (_) {
-                                if (_obsError != null) {
-                                  setState(() => _obsError = null);
-                                }
-                              },
-                            ),
-                            if (_obsError != null &&
-                                (_obsError!.validationErrors.isEmpty ||
-                                    _obsError!.validationErrors.keys.any(
-                                      (k) => k != 'observaciones',
-                                    ))) ...[
-                              const SizedBox(height: 12),
-                              AppNotice(
-                                tone: AppNoticeTone.error,
-                                message: _obsError!.message,
-                              ),
-                            ],
-                            const SizedBox(height: 16),
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 8,
-                              children: [
-                                FilledButton(
-                                  onPressed: _savingObservations
-                                      ? null
-                                      : () => _saveObservations(record),
-                                  child: Text(
-                                    _savingObservations
-                                        ? 'Guardando...'
-                                        : 'Guardar observaciones',
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: _savingObservations
-                                      ? null
-                                      : () => setState(() {
-                                          _editingObservations = false;
-                                          _obsError = null;
-                                        }),
-                                  child: const Text('Cancelar'),
-                                ),
-                              ],
+                            const SizedBox(height: 2),
+                            Text(
+                              'Consulta el trabajo registrado en este lote.',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppTheme.ink),
                             ),
                           ],
                         ),
                       ),
-                    )
-                  else
-                    OutlinedButton.icon(
-                      onPressed: () => _startEditingObservations(record),
-                      icon: const Icon(Icons.edit_note_rounded, size: 20),
-                      label: Text(
-                        (record.actividadData?.observations ?? '').isEmpty
-                            ? 'Añadir observaciones'
-                            : 'Editar observaciones',
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 32,
+                        color: AppTheme.ink,
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (ActividadPermissions.canClose(
+                widget.user,
+                record.actividadData,
+              )) ...[
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => _closeActivity(record),
+                  icon: const Icon(Icons.task_alt_rounded),
+                  label: const Text('Completar y cerrar actividad'),
+                ),
+              ],
+              const SizedBox(height: 28),
+              SectionTitle(
+                _isLote
+                    ? 'Información del lote'
+                    : 'Información de la actividad',
+                color: look.tone,
+              ),
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(AppTheme.radius),
+                  border: Border.all(color: AppTheme.ink, width: 2),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < fields.length; i++) ...[
+                      if (i > 0) const Divider(height: 1),
+                      DetailField(label: fields[i].key, value: fields[i].value),
+                    ],
+                  ],
+                ),
+              ),
+              if (!_isLote &&
+                  ActividadPermissions.canAddObservations(widget.user)) ...[
+                const SizedBox(height: 20),
+                if (_editingObservations)
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                      border: Border.all(color: AppTheme.ink, width: 2),
+                    ),
+                    child: Form(
+                      key: _obsFormKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Observaciones de campo',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            key: const ValueKey('actividad.observaciones'),
+                            controller: _obsController,
+                            scrollPadding: formScrollPadding(context),
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            forceErrorText: _obsError
+                                ?.validationErrors['observaciones']
+                                ?.join('\n'),
+                            enabled: !_savingObservations,
+                            maxLines: 3,
+                            maxLength: 250,
+                            textCapitalization: TextCapitalization.sentences,
+                            style: const TextStyle(fontSize: 18),
+                            decoration: const InputDecoration(
+                              labelText: 'Observaciones',
+                              hintText:
+                                  'Describe avances o novedades de la tarea',
+                            ),
+                            onChanged: (_) {
+                              if (_obsError != null) {
+                                setState(() => _obsError = null);
+                              }
+                            },
+                          ),
+                          if (_obsError != null &&
+                              (_obsError!.validationErrors.isEmpty ||
+                                  _obsError!.validationErrors.keys.any(
+                                    (k) => k != 'observaciones',
+                                  ))) ...[
+                            const SizedBox(height: 12),
+                            AppNotice(
+                              tone: AppNoticeTone.error,
+                              message: _obsError!.message,
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 10,
+                            children: [
+                              FilledButton(
+                                onPressed: _savingObservations
+                                    ? null
+                                    : () => _saveObservations(record),
+                                child: Text(
+                                  _savingObservations
+                                      ? 'Guardando...'
+                                      : 'Guardar observaciones',
+                                ),
+                              ),
+                              OutlinedButton(
+                                onPressed: _savingObservations
+                                    ? null
+                                    : () => setState(() {
+                                        _editingObservations = false;
+                                        _obsError = null;
+                                      }),
+                                child: const Text('Cancelar'),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                ],
+                  )
+                else
+                  OutlinedButton.icon(
+                    onPressed: () => _startEditingObservations(record),
+                    icon: const Icon(Icons.edit_note_rounded),
+                    label: Text(
+                      (record.actividadData?.observations ?? '').isEmpty
+                          ? 'Añadir observaciones'
+                          : 'Editar observaciones',
+                    ),
+                  ),
               ],
             ],
           ),
@@ -565,59 +541,4 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       ),
     );
   }
-
-  Widget _lotOverview(Map<String, String> fields) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: AppTheme.sage,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final paired =
-            constraints.maxWidth >= 280 &&
-            MediaQuery.textScalerOf(context).scale(16) <= 24;
-        return Wrap(
-          spacing: 24,
-          runSpacing: 20,
-          children: [
-            for (final field in fields.entries)
-              SizedBox(
-                width: paired && field.key != 'Cultivo'
-                    ? (constraints.maxWidth - 24) / 2
-                    : constraints.maxWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: paired && field.key != 'Cultivo' ? 40 : 0,
-                      ),
-                      child: Text(
-                        field.key,
-                        style: const TextStyle(
-                          color: AppTheme.forest,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      field.value,
-                      style: TextStyle(
-                        color: AppTheme.forest,
-                        fontSize: field.key == 'Cultivo' ? 24 : 20,
-                        height: 1.3,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        );
-      },
-    ),
-  );
 }

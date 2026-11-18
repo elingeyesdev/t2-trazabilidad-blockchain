@@ -7,6 +7,7 @@ import '../../models/profile_photo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
 import '../../widgets/camera_permission_notice.dart';
+import '../../widgets/field_kit.dart';
 import '../../widgets/form_validation.dart';
 
 class ProfileEditForm extends StatefulWidget {
@@ -229,9 +230,10 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
             : null);
     String? fieldError(String field) =>
         error?.validationErrors[field]?.join('\n');
+    final theme = Theme.of(context).textTheme;
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: formContentPadding(context),
+      padding: formContentPadding(context, base: 20),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
@@ -240,13 +242,18 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Editar perfil',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                Semantics(
+                  header: true,
+                  child: Text('Editar perfil', style: theme.headlineSmall),
                 ),
-                const SizedBox(height: 8),
-                const Text('Personaliza cómo apareces en AgroFusion.'),
+                const SizedBox(height: 6),
+                Text(
+                  'Actualiza tu nombre de usuario o tu fotografía.',
+                  style: theme.bodyLarge?.copyWith(color: AppTheme.inkSoft),
+                ),
                 const SizedBox(height: 24),
+                const SectionTitle('Nombre de usuario'),
+                const SizedBox(height: 12),
                 if (user?.canUpdateUsername == true)
                   TextFormField(
                     controller: _username,
@@ -254,9 +261,10 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     forceErrorText: fieldError('nombreusuario'),
                     enabled: !busy && !_needsReload,
-                    decoration: InputDecoration(
+                    style: const TextStyle(fontSize: 18),
+                    decoration: const InputDecoration(
                       labelText: 'Nombre de usuario',
-                      prefixText: '@',
+                      prefixIcon: Icon(Icons.alternate_email_rounded),
                       helperText: 'Solo puedes cambiarlo una vez.',
                       helperMaxLines: 2,
                       errorMaxLines: 3,
@@ -271,107 +279,157 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                     },
                   )
                 else
-                  Text(
-                    'Nombre de usuario: @${user?.username ?? ''}\nEl cambio de nombre no está disponible.',
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppTheme.line, width: 2),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.lock_outline_rounded,
+                          color: AppTheme.inkSoft,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Nombre de usuario: @${user?.username ?? ''}\nEl cambio de nombre no está disponible.',
+                            style: theme.bodyLarge,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 if (user?.canUpdatePhoto == true) ...[
-                  const SizedBox(height: 24),
-                  const Divider(color: AppTheme.line),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Fotografía',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Una imagen para reconocer tu cuenta.'),
-                  const SizedBox(height: 16),
-                  if (_photo case final photo?) ...[
-                    Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.memory(
-                          photo.bytes,
-                          width: 120,
-                          height: 120,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              const Icon(Icons.broken_image_outlined, size: 64),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: busy || _needsReload
-                          ? null
-                          : () => setState(() => _photo = null),
-                      child: const Text('Quitar selección'),
-                    ),
-                  ],
-                  OutlinedButton.icon(
-                    onPressed: busy || _needsReload ? null : _capturePhoto,
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: const Text('Tomar foto'),
-                  ),
+                  const SizedBox(height: 28),
+                  const SectionTitle('Fotografía', color: AppTheme.sprout),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: busy || _needsReload ? null : _selectPhoto,
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Seleccionar foto'),
-                  ),
-                  if (_cameraPermissionMessage case final cameraMessage?) ...[
-                    const SizedBox(height: 16),
-                    CameraPermissionNotice(
-                      message: cameraMessage,
-                      alternativeLabel: 'Elegir imagen del dispositivo',
-                      onUseAlternative: busy || _needsReload
-                          ? null
-                          : _selectPhoto,
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                      border: Border.all(color: AppTheme.ink, width: 2),
                     ),
-                  ],
-                  const SizedBox(height: 8),
-                  const Text(
-                    'JPG, PNG, WEBP o GIF, hasta 2 MB.',
-                    textAlign: TextAlign.center,
-                  ),
-                  if (fieldError('imagen') case final message?)
-                    Text(
-                      message,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_photo case final photo?) ...[
+                          Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.memory(
+                                photo.bytes,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 64,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: busy || _needsReload
+                                  ? null
+                                  : () => setState(() => _photo = null),
+                              icon: const Icon(Icons.close_rounded),
+                              label: const Text('Quitar selección'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        OutlinedButton.icon(
+                          onPressed: busy || _needsReload
+                              ? null
+                              : _capturePhoto,
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text('Tomar foto'),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: busy || _needsReload ? null : _selectPhoto,
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text('Seleccionar foto'),
+                        ),
+                        if (_cameraPermissionMessage
+                            case final cameraMessage?) ...[
+                          const SizedBox(height: 16),
+                          CameraPermissionNotice(
+                            message: cameraMessage,
+                            alternativeLabel: 'Elegir imagen del dispositivo',
+                            onUseAlternative: busy || _needsReload
+                                ? null
+                                : _selectPhoto,
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        Text(
+                          'JPG, PNG, WEBP o GIF, hasta 2 MB.',
+                          textAlign: TextAlign.center,
+                          style: theme.bodyMedium,
+                        ),
+                        if (fieldError('imagen') case final message?) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            message,
+                            style: const TextStyle(
+                              color: AppTheme.clay,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
+                  ),
                 ],
-                if (message != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 20),
-                    child: AppNotice(
-                      tone: _notice != null
-                          ? AppNoticeTone.info
-                          : AppNoticeTone.error,
-                      message: message,
+                if (message != null) ...[
+                  const SizedBox(height: 20),
+                  AppNotice(
+                    tone: _notice != null
+                        ? AppNoticeTone.info
+                        : AppNoticeTone.error,
+                    message: message,
+                  ),
+                ],
+                if (_needsReload) ...[
+                  const SizedBox(height: 16),
+                  AppNotice(
+                    tone: AppNoticeTone.warning,
+                    message:
+                        'No se pudo confirmar el guardado. Consulta el perfil para comprobar si el cambio se aplicó antes de volver a guardar.',
+                    action: TextButton(
+                      onPressed: busy ? null : widget.onReload,
+                      child: const Text('Consultar perfil'),
                     ),
                   ),
-                if (_needsReload)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: AppNotice(
-                      tone: AppNoticeTone.warning,
-                      message:
-                          'No se pudo confirmar el guardado. Consulta el perfil para comprobar si el cambio se aplicó antes de volver a guardar.',
-                      action: TextButton(
-                        onPressed: busy ? null : widget.onReload,
-                        child: const Text('Consultar perfil'),
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 24),
-                FilledButton(
+                ],
+                const SizedBox(height: 28),
+                FilledButton.icon(
                   onPressed: busy || _needsReload ? null : _save,
-                  child: Text(
+                  icon: auth.isSavingProfile
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: AppTheme.inkSoft,
+                          ),
+                        )
+                      : const Icon(Icons.check_rounded),
+                  label: Text(
                     auth.isSavingProfile ? 'Guardando...' : 'Guardar cambios',
                   ),
                 ),
-                TextButton(
+                const SizedBox(height: 12),
+                OutlinedButton(
                   onPressed: busy ? null : _cancel,
                   child: const Text('Cancelar'),
                 ),

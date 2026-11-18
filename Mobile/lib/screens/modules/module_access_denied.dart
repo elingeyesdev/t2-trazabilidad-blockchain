@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../navigation/app_routes.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
 
 class ModuleAccessDenied extends StatelessWidget {
@@ -19,10 +20,13 @@ class ModuleAccessDenied extends StatelessWidget {
     body: SafeArea(
       child: AppEmptyState(
         icon: Icons.lock_outline_rounded,
+        tone: AppTheme.maizeSoft,
+        ink: const Color(0xFF5F4100),
         title: 'Acceso no autorizado',
         message: 'No tienes permiso para consultar este módulo.',
         action: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             OutlinedButton.icon(
               onPressed: onRefreshPermissions,
@@ -30,11 +34,12 @@ class ModuleAccessDenied extends StatelessWidget {
               label: const Text('Actualizar permisos'),
             ),
             const SizedBox(height: 12),
-            FilledButton(
+            FilledButton.icon(
               onPressed: () => Navigator.of(
                 context,
               ).pushNamedAndRemoveUntil(AppRoutes.home, (_) => false),
-              child: const Text('Volver al inicio'),
+              icon: const Icon(Icons.home_rounded),
+              label: const Text('Volver al inicio'),
             ),
           ],
         ),

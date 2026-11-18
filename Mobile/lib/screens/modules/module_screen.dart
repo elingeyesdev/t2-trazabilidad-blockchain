@@ -9,9 +9,11 @@ import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/module_palette.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
+import '../../widgets/field_kit.dart';
 import '../../widgets/record_status_badge.dart';
 import 'actividad_form_screen.dart';
 import 'lote_form_screen.dart';
@@ -233,11 +235,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     tooltip: 'Buscar ${widget.module.label.toLowerCase()}',
                     onPressed: loading || snapshot.hasError || !snapshot.hasData
                         ? null
-                        : () {
-                            setState(() {
-                              _searching = true;
-                            });
-                          },
+                        : () => setState(() => _searching = true),
                     icon: const Icon(Icons.search_rounded),
                   ),
                 if (_searching)
@@ -255,24 +253,32 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 ),
               ],
             ),
-            body: SafeArea(child: _content(snapshot)),
             floatingActionButton:
                 (_canCreateLote || _canAssignActividad) &&
                     !loading &&
                     !snapshot.hasError
                 ? FloatingActionButton.extended(
                     heroTag: null,
-                    backgroundColor: AppTheme.forest,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppTheme.maize,
+                    foregroundColor: AppTheme.ink,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: AppTheme.ink, width: 2),
+                    ),
                     onPressed: _canCreateLote ? _createLote : _assignActividad,
                     icon: Icon(
                       _canCreateLote ? Icons.add_rounded : Icons.assignment_add,
                     ),
                     label: Text(
                       _canCreateLote ? 'Nuevo lote' : 'Asignar actividad',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
                     ),
                   )
                 : null,
+            body: SafeArea(child: _content(snapshot)),
           ),
         );
       },
@@ -317,30 +323,76 @@ class _ModuleScreenState extends State<ModuleScreen> {
       );
       return terms.every(text.contains);
     }).toList();
+    final look = widget.module.look;
+    final compact =
+        MediaQuery.sizeOf(context).height < 520 ||
+        MediaQuery.viewInsetsOf(context).bottom > 0 ||
+        MediaQuery.textScalerOf(context).scale(16) > 22;
 
     return Column(
       children: [
+        if (!_searching && !compact)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    ModuleMark(widget.module, size: 52),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        widget.module.description,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppTheme.inkSoft,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_supportsSearch && page.records.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _searchTrigger(look),
+                ],
+              ],
+            ),
+          ),
         if (widget.module == AppModule.actividades && page.records.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final entry in {
-                    _ActivityFilter.all: 'Todas',
-                    _ActivityFilter.pending: 'Pendientes',
-                    _ActivityFilter.completed: 'Completadas',
-                  }.entries)
-                    ChoiceChip(
-                      label: Text(entry.value),
-                      selected: _activityFilter == entry.key,
-                      onSelected: (_) =>
-                          setState(() => _activityFilter = entry.key),
-                    ),
-                ],
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final entry in {
+                      _ActivityFilter.all: 'Todas',
+                      _ActivityFilter.pending: 'Pendientes',
+                      _ActivityFilter.completed: 'Completadas',
+                    }.entries) ...[
+                      ChoiceChip(
+                        label: Text(
+                          entry.value,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: _activityFilter == entry.key
+                                ? AppTheme.ink
+                                : AppTheme.inkSoft,
+                          ),
+                        ),
+                        selected: _activityFilter == entry.key,
+                        selectedColor: AppTheme.maize,
+                        backgroundColor: AppTheme.surface,
+                        side: const BorderSide(color: AppTheme.ink, width: 1.5),
+                        onSelected: (_) =>
+                            setState(() => _activityFilter = entry.key),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -348,9 +400,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
           child: page.records.isEmpty
               ? AppEmptyState(
                   icon: widget.module.icon,
+                  tone: look.tone,
+                  ink: look.ink,
                   title: 'Todavía no hay ${widget.module.label.toLowerCase()}',
                   message:
-                      'La información disponible para tu cuenta aparecerá aquí. Pulsa Actualizar para volver a consultar.',
+                      '${compact ? '${widget.module.description}\n\n' : ''}La información disponible para tu cuenta aparecerá aquí. Pulsa Actualizar para volver a consultar.',
                   action: OutlinedButton.icon(
                     onPressed: () => _load(1),
                     icon: const Icon(Icons.refresh_rounded),
@@ -360,6 +414,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
               : records.isEmpty
               ? AppEmptyState(
                   icon: Icons.search_off_rounded,
+                  tone: AppTheme.maizeSoft,
+                  ink: const Color(0xFF5F4100),
                   title: 'No encontramos coincidencias',
                   message: _activityFilter != _ActivityFilter.all
                       ? 'Prueba cambiando el filtro de estado o limpiando la búsqueda.'
@@ -382,151 +438,172 @@ class _ModuleScreenState extends State<ModuleScreen> {
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: EdgeInsets.fromLTRB(
-                    24,
-                    8,
-                    24,
-                    (_canCreateLote || _canAssignActividad) ? 88 : 16,
+                    20,
+                    4,
+                    20,
+                    _canCreateLote || _canAssignActividad ? 92 : 20,
                   ),
                   itemCount: records.length,
                   itemBuilder: (context, index) => _recordCard(records[index]),
                 ),
         ),
-        if (page.lastPage > 1)
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              children: [
-                TextButton(
-                  onPressed: page.currentPage > 1
-                      ? () => _load(page.currentPage - 1)
-                      : null,
-                  child: const Text('Anterior'),
-                ),
-                Text('Página ${page.currentPage} de ${page.lastPage}'),
-                TextButton(
-                  onPressed: page.currentPage < page.lastPage
-                      ? () => _load(page.currentPage + 1)
-                      : null,
-                  child: const Text('Siguiente'),
-                ),
-              ],
-            ),
-          ),
+        if (page.lastPage > 1) _pager(page),
       ],
     );
   }
 
-  Widget _recordCard(ModuleRecord record) => Padding(
-    padding: const EdgeInsets.only(bottom: 16),
-    child: Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppTheme.line),
+  Widget _searchTrigger(ModuleLook look) {
+    return Semantics(
+      button: true,
+      label: 'Buscar por nombre, cultivo o persona',
+      excludeSemantics: true,
+      child: PressableCard(
+        onTap: () => setState(() => _searching = true),
+        depth: 3,
+        color: Colors.white,
+        radius: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded, size: 26, color: AppTheme.ink),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Buscar por nombre, cultivo o persona',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppTheme.inkSoft),
+              ),
+            ),
+          ],
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: _supportsSearch ? () => _openRecord(record) : null,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    );
+  }
+
+  Widget _pager(ModulePage page) => DecoratedBox(
+    decoration: const BoxDecoration(
+      color: AppTheme.surface,
+      border: Border(top: BorderSide(color: AppTheme.ink, width: 2)),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Página ${page.currentPage} de ${page.lastPage}',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          Row(
             children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: page.currentPage > 1
+                      ? () => _load(page.currentPage - 1)
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('Anterior'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: page.currentPage < page.lastPage
+                      ? () => _load(page.currentPage + 1)
+                      : null,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('Siguiente'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _recordCard(ModuleRecord record) {
+    final look = widget.module.look;
+    final info = record.fieldInfo;
+    final fields = (info?.summary ?? record.details).entries
+        .where((field) => field.key != 'Identificador')
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: PressableCard(
+        onTap: _supportsSearch ? () => _openRecord(record) : null,
+        padding: EdgeInsets.zero,
+        borderColor: AppTheme.ink,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '#${record.id.toString().padLeft(3, '0')}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.muted,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    record.title,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  if (record.fieldInfo?.status case final status?)
-                    RecordStatusBadge(status: status),
+                  if (info?.status != null) ...[
+                    const SizedBox(height: 10),
+                    RecordStatusBadge(status: info!.status!),
+                  ],
+                  const SizedBox(height: 14),
+                  if (info != null && info.status == null)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: InfoLine(label: 'Estado', value: 'No disponible'),
+                    ),
+                  for (final field in fields)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: InfoLine(label: field.key, value: field.value),
+                    ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(record.title, style: Theme.of(context).textTheme.titleLarge),
-              const Divider(height: 32, color: AppTheme.line),
-              if (record.fieldInfo != null && record.fieldInfo!.status == null)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: Text('Estado: No disponible'),
+            ),
+            if (_supportsSearch)
+              Container(
+                padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
+                decoration: BoxDecoration(
+                  color: look.tone,
+                  border: const Border(
+                    top: BorderSide(color: AppTheme.ink, width: 2),
+                  ),
                 ),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final paired =
-                      constraints.maxWidth >= 280 &&
-                      MediaQuery.textScalerOf(context).scale(16) <= 24;
-                  return Wrap(
-                    spacing: 20,
-                    runSpacing: 12,
-                    children: [
-                      for (final field
-                          in (record.fieldInfo?.summary ?? record.details)
-                              .entries)
-                        SizedBox(
-                          width: paired
-                              ? (constraints.maxWidth - 20) / 2
-                              : constraints.maxWidth,
-                          child: Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '${field.key}: ',
-                                  style: const TextStyle(
-                                    color: AppTheme.muted,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                                TextSpan(text: field.value),
-                              ],
-                            ),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              height: 1.5,
-                              color: AppTheme.ink,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-              if (_supportsSearch) ...[
-                const SizedBox(height: 20),
-                const Row(
+                child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         'Ver detalle',
                         style: TextStyle(
-                          color: AppTheme.forest,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          color: look.ink,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                     Icon(
                       Icons.arrow_forward_rounded,
-                      color: AppTheme.forest,
-                      size: 18,
+                      color: look.ink,
+                      size: 26,
                     ),
                   ],
                 ),
-              ],
-            ],
-          ),
+              ),
+          ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }

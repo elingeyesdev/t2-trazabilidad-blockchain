@@ -5,8 +5,7 @@ import '../../controllers/auth_controller.dart';
 import '../../models/registration_result.dart';
 import '../../navigation/app_routes.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/action_confirmation.dart';
-import '../../widgets/brand_header.dart';
+import '../../widgets/field_kit.dart';
 import '../../widgets/form_validation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -68,13 +67,6 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (context, _) {
         final busy = widget.controller.isSubmitting;
         final theme = Theme.of(context);
-        final availableHeight =
-            MediaQuery.sizeOf(context).height -
-            MediaQuery.viewInsetsOf(context).bottom;
-        final showBrandPanel =
-            availableHeight >= 740 &&
-            MediaQuery.textScalerOf(context).scale(16) <= 24;
-        final scrollPadding = formScrollPadding(context);
         final emailError = _fieldError('email');
         final passwordError = _fieldError('password');
         final error = widget.controller.error;
@@ -86,6 +78,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ))
             ? error.message
             : null;
+        final largeText = MediaQuery.textScalerOf(context).scale(16) > 24;
+        final shortScreen = MediaQuery.sizeOf(context).height < 680;
+        final scrollPadding = formScrollPadding(context);
 
         return Scaffold(
           body: SafeArea(
@@ -93,7 +88,12 @@ class _LoginScreenState extends State<LoginScreen> {
               child: SingleChildScrollView(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: formContentPadding(context),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  shortScreen ? 10 : 16,
+                  20,
+                  shortScreen ? 16 : 28,
+                ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 440),
                   child: AutofillGroup(
@@ -103,38 +103,68 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (showBrandPanel)
-                            _brandPanel()
-                          else
-                            const BrandWordmark(),
-                          SizedBox(height: showBrandPanel ? 32 : 24),
-                          Text(
-                            'Inicia sesión',
-                            style: theme.textTheme.headlineSmall,
+                          if (!shortScreen) ...[
+                            _banner(largeText),
+                            const SizedBox(height: 24),
+                          ] else ...[
+                            const Row(
+                              children: [
+                                BrandMark(size: 36),
+                                SizedBox(width: 10),
+                                Flexible(
+                                  child: Text(
+                                    'AgroFusion',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.ink,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              'Inicia sesión con tu cuenta',
+                              style: theme.textTheme.headlineSmall,
+                            ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Tu campo y tu trabajo, en un mismo lugar.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 24),
+                          if (!shortScreen) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Escribe el correo y la contraseña que usas en AgroFusion.',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: AppTheme.inkSoft,
+                              ),
+                            ),
+                          ],
+                          SizedBox(height: shortScreen ? 14 : 22),
                           if (widget.controller.logoutResult
                               case final result?) ...[
-                            AppNotice(
+                            _notice(
+                              icon: result.remoteClosed
+                                  ? Icons.check_circle_rounded
+                                  : Icons.warning_amber_rounded,
+                              text: result.message,
                               tone: result.remoteClosed
-                                  ? AppNoticeTone.success
-                                  : AppNoticeTone.warning,
-                              message: result.message,
+                                  ? AppTheme.sprout
+                                  : AppTheme.maizeSoft,
+                              ink: result.remoteClosed
+                                  ? AppTheme.fieldDeep
+                                  : AppTheme.ink,
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                           ],
                           TextFormField(
                             controller: _email,
+                            enabled: !busy,
                             scrollPadding: scrollPadding,
                             autovalidateMode:
                                 AutovalidateMode.onUserInteraction,
                             forceErrorText: emailError,
-                            enabled: !busy,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             autofillHints: const [
@@ -143,45 +173,52 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                             autocorrect: false,
                             textCapitalization: TextCapitalization.none,
-                            decoration: InputDecoration(
+                            style: const TextStyle(fontSize: 18),
+                            decoration: const InputDecoration(
                               labelText: 'Correo electrónico',
-                              prefixIcon: const Icon(Icons.mail_outline),
                               hintText: 'nombre@correo.com',
+                              prefixIcon: Icon(Icons.mail_outline_rounded),
                             ),
                             validator: validateEmail,
                             onChanged: (_) =>
                                 widget.controller.clearError(field: 'email'),
                           ),
-                          const SizedBox(height: 16),
+                          SizedBox(height: shortScreen ? 14 : 20),
                           TextFormField(
                             controller: _password,
+                            enabled: !busy,
                             scrollPadding: scrollPadding,
                             autovalidateMode:
                                 AutovalidateMode.onUserInteraction,
                             forceErrorText: passwordError,
-                            enabled: !busy,
                             obscureText: _obscurePassword,
                             autocorrect: false,
                             enableSuggestions: false,
                             textInputAction: TextInputAction.done,
                             autofillHints: const [AutofillHints.password],
+                            style: const TextStyle(fontSize: 18),
                             decoration: InputDecoration(
                               labelText: 'Contraseña',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                tooltip: _obscurePassword
-                                    ? 'Mostrar contraseña'
-                                    : 'Ocultar contraseña',
-                                onPressed: busy
-                                    ? null
-                                    : () => setState(
-                                        () => _obscurePassword =
-                                            !_obscurePassword,
-                                      ),
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
+                              suffixIcon: Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: IconButton(
+                                  tooltip: _obscurePassword
+                                      ? 'Mostrar contraseña'
+                                      : 'Ocultar contraseña',
+                                  onPressed: busy
+                                      ? null
+                                      : () => setState(
+                                          () => _obscurePassword =
+                                              !_obscurePassword,
+                                        ),
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                  ),
                                 ),
                               ),
                             ),
@@ -193,58 +230,68 @@ class _LoginScreenState extends State<LoginScreen> {
                             onFieldSubmitted: (_) => _submit(),
                           ),
                           if (message != null) ...[
-                            const SizedBox(height: 20),
-                            AppNotice(
-                              tone: AppNoticeTone.error,
-                              message: message,
+                            const SizedBox(height: 16),
+                            _notice(
+                              icon: Icons.error_outline_rounded,
+                              text: message,
+                              tone: AppTheme.claySoft,
+                              ink: const Color(0xFF5E1D0E),
                             ),
                           ],
-                          const SizedBox(height: 24),
+                          SizedBox(height: shortScreen ? 16 : 24),
                           FilledButton(
                             onPressed: busy ? null : _submit,
-                            child: Padding(
-                              padding: EdgeInsets.zero,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if (busy) ...[
-                                    const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                  ],
-                                  Flexible(
-                                    child: Text(
-                                      busy ? 'Ingresando...' : 'Iniciar sesión',
-                                      textAlign: TextAlign.center,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                if (busy) ...[
+                                  const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: AppTheme.inkSoft,
                                     ),
                                   ),
-                                  if (!busy) ...[
-                                    const SizedBox(width: 12),
-                                    const Icon(
-                                      Icons.arrow_forward_rounded,
-                                      size: 20,
-                                    ),
-                                  ],
+                                  const SizedBox(width: 14),
+                                ] else ...[
+                                  const Icon(Icons.login_rounded),
+                                  const SizedBox(width: 10),
                                 ],
-                              ),
+                                Flexible(
+                                  child: Text(
+                                    busy ? 'Ingresando...' : 'Iniciar sesión',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              const Text('¿Aún no tienes cuenta?'),
-                              TextButton(
-                                onPressed: busy ? null : _openRegistration,
-                                child: const Text('Crear cuenta'),
-                              ),
-                            ],
+                          SizedBox(height: shortScreen ? 12 : 22),
+                          if (!shortScreen) ...[
+                            Row(
+                              children: [
+                                const Expanded(child: Divider()),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    '¿Primera vez aquí?',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const Expanded(child: Divider()),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                          OutlinedButton.icon(
+                            onPressed: busy ? null : _openRegistration,
+                            icon: const Icon(Icons.person_add_alt_1_rounded),
+                            label: const Text('Crear cuenta'),
                           ),
                         ],
                       ),
@@ -259,39 +306,85 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _brandPanel() => ClipRRect(
-    borderRadius: BorderRadius.circular(24),
-    child: ColoredBox(
-      color: AppTheme.forest,
-      child: Stack(
-        children: [
-          const Positioned(
-            right: -30,
-            bottom: -48,
-            width: 170,
-            height: 180,
-            child: ExcludeSemantics(child: CustomPaint(painter: FieldLines())),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const BrandWordmark(inverse: true),
-                const SizedBox(height: 32),
-                const Text(
-                  'El origen de\ncada cosecha.',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    height: 1.12,
-                    letterSpacing: -.8,
-                    fontWeight: FontWeight.w600,
+  Widget _banner(bool compact) => Container(
+    height: compact ? 64 : 148,
+    decoration: BoxDecoration(
+      color: const Color(0xFFCFE5EC),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: AppTheme.ink, width: 2),
+      boxShadow: AppTheme.stamp(5),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        const ExcludeSemantics(child: CustomPaint(painter: FurrowPainter())),
+        Positioned(
+          left: 16,
+          top: 16,
+          right: 16,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: AppTheme.ink, width: 2),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  BrandMark(size: 36),
+                  SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'AgroFusion',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -.3,
+                        color: AppTheme.ink,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Container(width: 32, height: 3, color: AppTheme.ochre),
-              ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _notice({
+    required IconData icon,
+    required String text,
+    required Color tone,
+    required Color ink,
+  }) => Semantics(
+    liveRegion: true,
+    child: Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tone,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ink, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: ink, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: ink,
+                fontSize: 17,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
