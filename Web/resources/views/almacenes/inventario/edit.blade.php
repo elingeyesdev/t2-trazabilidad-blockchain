@@ -2,7 +2,7 @@
     $rutaPrefijo = $rutaPrefijo ?? 'almacen-mayorista';
     $tituloModulo = $tituloModulo ?? 'Almacén mayorista';
     $unidad = $producto->unidadMedida?->abreviatura ?? $producto->unidadMedida?->nombre ?? 'u.';
-    $stockMinimo = old('stockminimo', $producto->stockminimo ?? \App\Support\InsumoCatalogo::UMBRAL_ALERTA_STOCK);
+    $stockMinimo = old('stockminimo', $producto->stockminimo);
 @endphp
 
 @extends('layouts.app')
@@ -116,6 +116,7 @@
 
                 <form action="{{ route($rutaPrefijo.'.inventario.update', [$almacen, $producto]) }}" method="POST" enctype="multipart/form-data">
                     @csrf
+                    <div class="form-group"><label for="inventario-motivo">Motivo si cambia el saldo</label><input id="inventario-motivo" name="motivo_ajuste" maxlength="150" class="form-control" value="{{ old('motivo_ajuste') }}"><small class="text-muted">Para ajustar una partida concreta, utiliza Existencias del almacén.</small></div>
                     @method('PUT')
                     @if(! empty($redirectAfter))
                         <input type="hidden" name="redirect" value="{{ $redirectAfter }}">

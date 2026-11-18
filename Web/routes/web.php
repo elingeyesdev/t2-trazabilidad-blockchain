@@ -360,6 +360,9 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
                     ->name('movimientos.store')
                     ->middleware('action.permission:almacen_movimientos,read');
 
+                Route::get('/{almacen}/existencias', [\App\Http\Controllers\InventarioExistenciasController::class, 'index'])->name('existencias.index')->middleware('action.permission:inventario,read');
+                Route::patch('/{almacen}/existencias/{insumo}/minimo', [\App\Http\Controllers\InventarioExistenciasController::class, 'minimo'])->name('existencias.minimo')->middleware('action.permission:inventario,update');
+                Route::get('/{almacen}/movimientos', [\App\Http\Controllers\InventarioExistenciasController::class, 'movimientos'])->name('existencias.movimientos')->middleware('action.permission:almacen_movimientos,read');
                 Route::get('/{almacen}/inventario/{insumo}', [AlmacenInventarioController::class, 'show'])
                     ->whereNumber(['almacen', 'insumo'])
                     ->name('inventario.show')

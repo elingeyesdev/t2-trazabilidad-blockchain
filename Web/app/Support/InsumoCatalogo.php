@@ -335,53 +335,23 @@ class InsumoCatalogo
     /**
      * @return array{clase: string, etiqueta: string, icono: string, porcentaje: float, mensaje: string, umbral: float}
      */
+    public static function claseStockInsumo(Insumo $insumo): string
+    {
+        return $insumo->stockBajo() ? 'low' : 'high';
+    }
+
     public static function estadoStockAlmacen(Insumo $insumo): array
     {
-        $stock = (float) $insumo->stock;
-        $umbral = (float) ($insumo->stockminimo ?? self::UMBRAL_ALERTA_STOCK);
-        if ($umbral <= 0) {
-            $umbral = (float) self::UMBRAL_ALERTA_STOCK;
-        }
-
-        if ($stock <= 0) {
-            return [
-                'clase' => 'agotado',
-                'etiqueta' => 'Agotado',
-                'icono' => 'times-circle',
-                'porcentaje' => 0.0,
-                'mensaje' => 'Sin stock disponible en este almacén.',
-                'umbral' => $umbral,
-            ];
-        }
-
-        if (self::stockCritico($stock) || $stock <= $umbral) {
-            return [
-                'clase' => 'bajo',
-                'etiqueta' => 'Stock bajo',
-                'icono' => 'exclamation-triangle',
-                'porcentaje' => min(100.0, max(5.0, ($stock / max($umbral * 2, 1)) * 100)),
-                'mensaje' => 'El stock está por debajo del mínimo recomendado.',
-                'umbral' => $umbral,
-            ];
-        }
-
-        if (self::stockMedio($stock)) {
-            return [
-                'clase' => 'medio',
-                'etiqueta' => 'Stock moderado',
-                'icono' => 'info-circle',
-                'porcentaje' => min(100.0, ($stock / max($umbral * 4, 1)) * 100),
-                'mensaje' => 'Stock dentro del rango aceptable; conviene reponer pronto.',
-                'umbral' => $umbral,
-            ];
-        }
-
+        $resumen = app(\App\Services\InventarioExistenciaService::class)->resumen($insumo);
+        $umbral = $resumen['minimo'];
+        $agotado = \App\Support\InventarioDecimal::unidades($resumen['cantidad_disponible']) === 0;
+        $bajo = $resumen['existencias_bajas'];
         return [
-            'clase' => 'ok',
-            'etiqueta' => 'Stock saludable',
-            'icono' => 'check-circle',
-            'porcentaje' => 100.0,
-            'mensaje' => 'Hay suficiente inventario para operar con normalidad.',
+            'clase' => $agotado ? 'agotado' : ($bajo ? 'bajo' : 'ok'),
+            'etiqueta' => $agotado ? 'Sin disponible' : ($bajo ? 'Existencias bajas' : ($umbral === null ? 'Mínimo sin configurar' : 'Existencias suficientes')),
+            'icono' => $bajo || $agotado ? 'exclamation-triangle' : 'check-circle',
+            'porcentaje' => $bajo || $agotado ? 0.0 : 100.0,
+            'mensaje' => $umbral === null ? 'Configure el mínimo para activar el aviso de este almacén.' : ($bajo ? 'El disponible es igual o menor al mínimo configurado.' : 'El disponible supera el mínimo configurado.'),
             'umbral' => $umbral,
         ];
     }
@@ -587,7 +557,7 @@ class InsumoCatalogo
                 ]);
                 if (! $insumo->exists) {
                     $insumo->stock = 0;
-                    $insumo->stockminimo = self::UMBRAL_ALERTA_STOCK;
+                    $insumo->stockminimo = null;
                 }
                 $insumo->tipoinsumoid = $tipoId;
                 $insumo->unidadmedidaid = (int) $def['um'];

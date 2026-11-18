@@ -47,11 +47,12 @@ class InsumoController extends Controller
             $q->whereNotNull('almacenid');
         }
 
+        $enAlerta = (clone $q)->get()->filter(fn ($insumo) => $insumo->stockBajo())->count();
         $stats = [
             'total' => (clone $q)->count(),
-            'stock_bajo' => (clone $q)->where('stock', '<=', $umbral)->count(),
+            'stock_bajo' => $enAlerta,
             'categorias' => (clone $q)->distinct()->count('tipoinsumoid'),
-            'en_alerta' => (clone $q)->where('stock', '<=', $umbral)->count(),
+            'en_alerta' => $enAlerta,
         ];
 
         $insumos = $q->paginate(15);
@@ -79,13 +80,15 @@ class InsumoController extends Controller
         $calibreData = $data['_calibre'] ?? null;
         unset($data['_calibre']);
 
-        $data['stockminimo'] = InsumoCatalogo::UMBRAL_ALERTA_STOCK;
+        // El mínimo pertenece a esta existencia; no imponer el umbral global.
         $data = $this->aplicarImagenInsumo($request, $data);
 
         if (Schema::hasColumn('insumo', 'almacenid')) {
             $data['almacenid'] = $this->resolverAlmacenAgricolaParaNuevoInsumo($request);
         }
 
+        unset($data['motivo_ajuste'], $data['materiaprimaloteid']);
+        $data['stockminimo'] = $data['stockminimo'] ?? null;
         $insumo = Insumo::create($data);
         $this->guardarCalibreSiembra($insumo, $calibreData);
 
@@ -129,13 +132,13 @@ class InsumoController extends Controller
         $calibreData = $data['_calibre'] ?? null;
         unset($data['_calibre']);
 
-        $data['stockminimo'] = InsumoCatalogo::UMBRAL_ALERTA_STOCK;
+        // El mínimo pertenece a esta existencia; no imponer el umbral global.
         $data = $this->aplicarImagenInsumo($request, $data, $insumo);
 
         // AGR-04: la existencia no puede reasignarse a otro almacén por request manipulado.
         unset($data['almacenid']);
 
-        $insumo->update($data);
+        app(\App\Services\InventarioMovimientoService::class)->actualizarFicha($request->user(), $insumo, $data, $request->input('motivo_ajuste'), $request->filled('materiaprimaloteid') ? (int) $request->input('materiaprimaloteid') : null);
         $this->guardarCalibreSiembra($insumo->fresh(), $calibreData);
 
         return redirect()->route('insumos.index')->with('success', 'Insumo actualizado.');
@@ -162,6 +165,9 @@ class InsumoController extends Controller
             'tipoinsumoid' => ['required', Rule::in($tiposIds)],
             'unidadmedidaid' => 'required|exists:unidadmedida,unidadmedidaid',
             'stock' => ['required', 'numeric', 'min:0', 'max:999999999'],
+            'stockminimo' => ['nullable', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$/D'],
+            'motivo_ajuste' => 'nullable|string|max:150',
+            'materiaprimaloteid' => 'nullable|integer|min:0',
             'descripcion' => 'nullable|string',
             'dosis_por_ha' => 'nullable|numeric|min:0',
             'dosis_unidad' => 'nullable|string|max:20',

@@ -134,6 +134,7 @@ final class DocumentoEntregaArchivo
             return true;
         }
 
+        $limiteAnterior = (int) ini_get('max_execution_time');
         @set_time_limit(120);
 
         try {
@@ -168,6 +169,8 @@ final class DocumentoEntregaArchivo
             ]);
 
             return false;
+        } finally {
+            @set_time_limit($limiteAnterior);
         }
     }
 

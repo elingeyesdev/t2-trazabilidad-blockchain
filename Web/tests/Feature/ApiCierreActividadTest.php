@@ -172,6 +172,6 @@ class ApiCierreActividadTest extends TestCase
         $copia->decrementarStock('2.500');
         $this->assertSame('9.500000', $this->stock());
         try { $copia->decrementarStock('10.000'); $this->fail('No debe permitir stock negativo.'); }
-        catch (\InvalidArgumentException $e) { $this->assertSame('9.500000', $this->stock()); }
+        catch (\Illuminate\Validation\ValidationException $e) { $this->assertSame('9.500000', $this->stock()); }
     }
 }

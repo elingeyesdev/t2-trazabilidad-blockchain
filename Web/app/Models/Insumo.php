@@ -87,14 +87,10 @@ class Insumo extends Model
      * @return bool
      * @throws \Exception
      */
-    public function decrementarStock(float|string $cantidad): bool
+    public function decrementarStock(float|string $cantidad, ?int $partidaId = null, bool $retiro = false, ?int $excluirPedidoId = null, ?int $presentacionLoteId = null, ?string $unidades = null): bool
     {
-        $cantidad = \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($cantidad));
-        if (\App\Support\InventarioDecimal::unidades($cantidad) === 0) {
-            throw new \Exception("La cantidad a decrementar debe ser mayor a 0");
-        }
-
-        return $this->modificarStockDecimal($cantidad, false);
+        app(\App\Services\InventarioExistenciaService::class)->descontar($this, $cantidad, $partidaId, $retiro, $excluirPedidoId, $presentacionLoteId, $unidades);
+        return true;
     }
 
     /**
@@ -155,7 +151,18 @@ class Insumo extends Model
      */
     public function stockBajo(): bool
     {
-        return \App\Support\InsumoCatalogo::stockCritico((float) $this->stock);
+        return app(\App\Services\InventarioExistenciaService::class)->resumen($this)['existencias_bajas'];
+    }
+
+    public function partidas()
+    {
+        return $this->hasMany(MateriaPrimaLote::class, 'insumoid', 'insumoid');
+    }
+
+    public function setStockAttribute($cantidad): void
+    {
+        $texto = \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($cantidad));
+        $this->attributes['stock'] = rtrim(rtrim($texto, '0'), '.');
     }
 
     public function imagenSrc(int $width = 256): string

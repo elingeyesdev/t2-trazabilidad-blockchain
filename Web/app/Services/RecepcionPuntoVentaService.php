@@ -354,7 +354,7 @@ class RecepcionPuntoVentaService
                 'tipoinsumoid' => $tipoInsumoId,
                 'unidadmedidaid' => $unidadMedidaId,
                 'stock' => 0,
-                'stockminimo' => InsumoCatalogo::UMBRAL_ALERTA_STOCK,
+                'stockminimo' => null,
                 'descripcion' => 'Producto recibido desde mayorista — '.$pedido->numero_solicitud,
                 'almacenid' => $almacenPdv->almacenid,
             ]);
@@ -447,7 +447,8 @@ class RecepcionPuntoVentaService
                     $loteProduccionId !== null ? (int) $loteProduccionId : null,
                     $referenciaLote,
                     $cantidad,
-                    $kgMovimiento
+                    $kgMovimiento,
+                    $loteOrigen?->fecha_vencimiento?->toDateString()
                 );
             } else {
                 $this->inventarioPresentacion->sincronizarStockAgregadoInsumo((int) $insumoDestino->insumoid);

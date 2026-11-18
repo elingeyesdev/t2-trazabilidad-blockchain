@@ -14,13 +14,16 @@ class LoteProduccionMateriaPrima extends Model
         'loteproduccionpedidoid',
         'materiaprimaloteid',
         'insumoid',
+        'inventario_presentacion_loteid',
+        'cantidad_unidades_consumidas',
         'cantidad_planificada',
         'cantidad_usada',
     ];
 
     protected $casts = [
-        'cantidad_planificada' => 'float',
-        'cantidad_usada'       => 'float',
+        'cantidad_planificada' => 'decimal:6',
+        'cantidad_usada'       => 'decimal:6',
+        'cantidad_unidades_consumidas' => 'decimal:6',
     ];
 
     public function loteProduccionPedido(): BelongsTo

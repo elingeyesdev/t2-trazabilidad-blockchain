@@ -21,57 +21,24 @@ class AlmacenMovimientoController extends Controller
             ->orderByDesc('fecha')
             ->orderByDesc('almacen_movimientoid');
 
-        return response()->json($q->paginate(20));
+        $filtros = $request->validate(['almacenid' => 'nullable|integer', 'insumoid' => 'nullable|integer', 'naturaleza' => 'nullable|in:ingreso,salida', 'page' => 'nullable|integer|min:1']);
+        if (isset($filtros['almacenid'])) {
+            AlmacenAcceso::scopeVisibles(Almacen::query(), $user)->findOrFail($filtros['almacenid']);
+            $q->where('almacenid', $filtros['almacenid']);
+        }
+        $q->when($filtros['insumoid'] ?? null, fn ($query, $id) => $query->where('insumoid', $id))
+            ->when($filtros['naturaleza'] ?? null, fn ($query, $naturaleza) => $query->whereHas('tipo', fn ($tipo) => $tipo->where('naturaleza', $naturaleza)));
+        return response()->json($q->paginate(20)->withQueryString()->through(fn ($movimiento) => $this->contratoExistente($movimiento)));
     }
 
     public function store(Request $request, string $naturaleza)
     {
-        abort_unless(in_array($naturaleza, ['ingreso', 'salida'], true), 404);
-        $permisoCrear = $naturaleza === 'ingreso' ? 'almacen.ingresos.create' : 'almacen.salidas.create';
-        abort_unless($request->user()?->can($permisoCrear), 403);
+        $movimiento = app(\App\Services\InventarioMovimientoService::class)->registrar($request->user(), $request->all(), $naturaleza);
+        return response()->json($this->contratoExistente($movimiento->load(['almacen', 'insumo', 'tipo', 'usuario'])), 201);
+    }
 
-        $data = $request->validate([
-            'almacenid' => 'required|exists:almacen,almacenid',
-            'insumoid' => 'required|exists:insumo,insumoid',
-            'tipo_movimiento_almacenid' => 'required|exists:tipo_movimiento_almacen,tipo_movimiento_almacenid',
-            'fecha' => 'required|date',
-            'cantidad' => 'required|numeric|min:0.001',
-            'referencia' => 'nullable|string|max:100',
-            'destino_motivo' => 'nullable|string|max:150',
-            'observaciones' => 'nullable|string|max:1000',
-        ]);
-
-        $user = $request->user();
-
-        // Ownership (MAY-03/05): el movimiento solo se registra en un almacén que el usuario opera.
-        AlmacenAcceso::asegurarPuedeGestionar($user, Almacen::query()->findOrFail($data['almacenid']));
-
-        $tipo = TipoMovimientoAlmacen::query()
-            ->whereKey($data['tipo_movimiento_almacenid'])
-            ->where('naturaleza', $naturaleza)
-            ->where('activo', true)
-            ->firstOrFail();
-
-        $insumo = Insumo::query()->findOrFail($data['insumoid']);
-        if ((int) $insumo->almacenid !== (int) $data['almacenid']) {
-            return response()->json(['message' => 'El insumo no pertenece al almacen indicado.'], 422);
-        }
-
-        $movimiento = DB::transaction(function () use ($data, $insumo, $tipo, $user) {
-            $mov = AlmacenMovimiento::create($data + [
-                'usuarioid' => $user->usuarioid,
-                'tipo_movimiento_almacenid' => $tipo->tipo_movimiento_almacenid,
-            ]);
-
-            if ($tipo->naturaleza === 'ingreso') {
-                $insumo->incrementarStock((float) $data['cantidad']);
-            } else {
-                $insumo->decrementarStock((float) $data['cantidad']);
-            }
-
-            return $mov;
-        });
-
-        return response()->json($movimiento->load(['almacen', 'insumo', 'tipo', 'usuario']), 201);
+    private function contratoExistente(AlmacenMovimiento $movimiento): array
+    {
+        return [...$movimiento->toArray(), 'cantidad' => (float) $movimiento->cantidad, 'cantidad_decimal' => $movimiento->cantidad];
     }
 }

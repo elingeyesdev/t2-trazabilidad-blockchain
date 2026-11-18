@@ -122,6 +122,14 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     // ========================================================
     // GRUPO: ALMACENES Y ALMACENAMIENTO
     // ========================================================
+    Route::get('almacenes/{almacen}/existencias', [\App\Http\Controllers\InventarioExistenciasController::class, 'index'])
+        ->middleware(['auth:sanctum', 'action.permission:inventario,read']);
+    Route::patch('almacenes/{almacen}/existencias/{insumo}/minimo', [\App\Http\Controllers\InventarioExistenciasController::class, 'minimo'])
+        ->middleware(['auth:sanctum', 'action.permission:inventario,update']);
+    Route::get('almacenes/{almacen}/movimientos', [\App\Http\Controllers\InventarioExistenciasController::class, 'movimientos'])
+        ->middleware(['auth:sanctum', 'action.permission:almacen_movimientos,read']);
+    Route::get('almacenes/{almacen}/movimientos/{movimiento}', [\App\Http\Controllers\InventarioExistenciasController::class, 'movimiento'])
+        ->middleware(['auth:sanctum', 'action.permission:almacen_movimientos,read']);
     $recursoProtegido('almacenes', AlmacenController::class, 'inventario');
     $recursoProtegido('producciones-almacenamiento', ProduccionAlmacenamientoController::class, 'inventario');
     Route::get('almacen-movimientos', [AlmacenMovimientoController::class, 'index'])

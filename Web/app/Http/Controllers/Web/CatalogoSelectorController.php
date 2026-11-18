@@ -646,13 +646,13 @@ class CatalogoSelectorController extends Controller
         return $this->respuestaPaginada($request, $query->orderBy('nombre'), function (Insumo $i) use ($request, $inventarioPresentacion) {
             $unidad = $i->unidadMedida?->abreviatura ?? $i->unidadMedida?->nombre ?? 'ud';
             $alm = $i->almacen?->nombre;
-            $stock = (float) ($i->stock ?? 0);
+            $existencia = app(\App\Services\InventarioExistenciaService::class)->resumen($i);
+            $stock = (float) $existencia['cantidad_disponible'];
             $esSemilla = InsumoCatalogo::slugFromNombreTipo($i->tipo?->nombre) === 'material_siembra';
             $esProductoTerminado = mb_strtolower(trim($i->tipo?->nombre ?? '')) === 'producto terminado';
             if ($request->boolean('ambito_planta') && $esProductoTerminado) {
                 $almacenId = $request->filled('almacenid') ? (int) $request->almacenid : (int) $i->almacenid;
                 if ($almacenId > 0) {
-                    $inventarioPresentacion->asegurarInventarioDesdeStock($almacenId, (int) $i->insumoid);
                     $presentaciones = InsumoPresentacion::query()
                         ->where('insumoid', $i->insumoid)
                         ->where('activo', true)
@@ -717,6 +717,7 @@ class CatalogoSelectorController extends Controller
                     'almacen' => $alm,
                     'precio' => $i->preciounitario ?? 0,
                     'sin_stock' => $stock <= 0,
+                    'existencia' => $existencia,
                     'dosis_por_ha' => $esSemilla ? (float) ($dosisPorHa ?? 0) : null,
                     'dosis_unidad' => $dosisUnidad,
                     'dosis_unidad_legible' => $esSemilla ? CultivoSiembraCatalogo::unidadLegible($dosisUnidad) : null,
@@ -798,7 +799,6 @@ class CatalogoSelectorController extends Controller
         }
 
         if ($almacenId > 0) {
-            $inventarioPresentacion->asegurarInventarioDesdeStock($almacenId, $insumoId);
         }
 
         $items = InsumoPresentacion::query()
@@ -921,7 +921,6 @@ class CatalogoSelectorController extends Controller
 
         $presentacion = InsumoPresentacion::query()->find($presentacionId);
         if ($presentacion !== null) {
-            $inventarioPresentacion->asegurarInventarioDesdeStock($almacenId, (int) $presentacion->insumoid);
         }
 
         $lotes = $inventarioPresentacion->lotesDisponibles($almacenId, $presentacionId);

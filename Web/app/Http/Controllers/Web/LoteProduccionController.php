@@ -162,6 +162,14 @@ class LoteProduccionController extends Controller
             $plantillaLabel = $pltOld?->nombre;
         }
 
+        $materiasAnteriores = collect(old('materias', []))->filter(fn ($fila) => is_array($fila) && isset($fila['insumoid']) && is_scalar($fila['insumoid']))->map(function ($fila) use ($almacenes) {
+            $insumo = \App\Models\Insumo::whereIn('almacenid', $almacenes->pluck('almacenid'))->with('unidadMedida')->find((int) $fila['insumoid']);
+            if (! $insumo) { return null; }
+            $existencia = app(\App\Services\InventarioExistenciaService::class)->resumen($insumo);
+            return ['id' => $insumo->insumoid, 'label' => $insumo->nombre, 'meta' => 'Existencia del almacén seleccionado',
+                'stock' => $existencia['cantidad_disponible'], 'unidad' => $insumo->unidadMedida?->abreviatura ?? '',
+                'cantidad' => $fila['cantidad'] ?? '', 'partida' => $fila['partida'] ?? null, 'existencia' => $existencia];
+        })->filter()->values();
         $empaquesPlanta = EmpaquePlantaCatalogo::opcionesSelect();
 
         return view('procesamiento.index', compact(
@@ -181,6 +189,7 @@ class LoteProduccionController extends Controller
             'procesosPlanta',
             'plantillaLabel',
             'empaquesPlanta',
+            'materiasAnteriores',
         ));
     }
 
@@ -889,7 +898,10 @@ class LoteProduccionController extends Controller
             'observaciones' => ['nullable', 'string', 'max:500'],
             'materias' => ['required', 'array', 'size:1'],
             'materias.*.insumoid' => ['required', 'integer', 'exists:insumo,insumoid'],
-            'materias.*.cantidad' => ['required', 'numeric', 'min:0.001'],
+            'materias.*.cantidad' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/D'],
+            'materias.*.materiaprimaloteid' => ['nullable', 'integer', 'min:0'],
+            'materias.*.partida' => ['nullable', 'string', 'max:40'],
+            'materias.*.inventario_presentacion_loteid' => ['nullable', 'integer', 'min:1'],
             'plantillatransformacionid' => ['nullable', 'integer', 'exists:plantilla_transformacion,plantillatransformacionid'],
             'empaque_catalogo_slug' => ['required', 'string', 'max:40'],
             'modo_planificacion' => ['required', 'string', Rule::in([EmpaquePlantaCatalogo::MODO_EMPAQUES, EmpaquePlantaCatalogo::MODO_MATERIA_PRIMA])],
@@ -929,10 +941,12 @@ class LoteProduccionController extends Controller
         }
 
         $lineas = collect($data['materias'])
-            ->map(fn (array $m) => [
+            ->map(fn (array $m) => app(\App\Services\InventarioExistenciaService::class)->seleccion([
                 'insumoid' => (int) $m['insumoid'],
-                'cantidad' => (float) $m['cantidad'],
-            ])
+                'cantidad' => (string) $m['cantidad'],
+                'materiaprimaloteid' => isset($m['materiaprimaloteid']) ? (int) $m['materiaprimaloteid'] : null,
+                'partida' => $m['partida'] ?? null, 'inventario_presentacion_loteid' => $m['inventario_presentacion_loteid'] ?? null,
+            ]))
             ->all();
 
         foreach ($lineas as $linea) {
@@ -1058,6 +1072,9 @@ class LoteProduccionController extends Controller
                 'stock' => (float) ($mp->insumo?->stock ?? 0) + (float) $mp->cantidad_usada,
                 'unidad' => $mp->insumo?->unidadMedida?->abreviatura ?? $mp->insumo?->unidadMedida?->nombre ?? 'ud',
                 'cantidad' => (float) $mp->cantidad_usada,
+                'materiaprimaloteid' => $mp->materiaprimaloteid,
+                'inventario_presentacion_loteid' => $mp->inventario_presentacion_loteid,
+                'existencia' => $mp->insumo ? app(\App\Services\InventarioExistenciaService::class)->resumen($mp->insumo) : null,
             ];
         })->values();
 
@@ -1092,7 +1109,10 @@ class LoteProduccionController extends Controller
             $rules['producto'] = ['required', 'string', 'max:100'];
             $rules['materias'] = ['required', 'array', 'size:1'];
             $rules['materias.*.insumoid'] = ['required', 'integer', 'exists:insumo,insumoid'];
-            $rules['materias.*.cantidad'] = ['required', 'numeric', 'min:0.001'];
+            $rules['materias.*.cantidad'] = ['required', 'regex:/^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/D'];
+            $rules['materias.*.materiaprimaloteid'] = ['nullable', 'integer', 'min:0'];
+            $rules['materias.*.partida'] = ['nullable', 'string', 'max:40'];
+            $rules['materias.*.inventario_presentacion_loteid'] = ['nullable', 'integer', 'min:1'];
         }
 
         $request->merge(['pedidoid' => $request->input('pedidoid') ?: null]);
@@ -1102,10 +1122,12 @@ class LoteProduccionController extends Controller
         $lineas = null;
         if ($puedeEditarMaterias) {
             $lineas = collect($data['materias'])
-                ->map(fn (array $m) => [
+                ->map(fn (array $m) => app(\App\Services\InventarioExistenciaService::class)->seleccion([
                     'insumoid' => (int) $m['insumoid'],
-                    'cantidad' => (float) $m['cantidad'],
-                ])
+                    'cantidad' => (string) $m['cantidad'],
+                'materiaprimaloteid' => isset($m['materiaprimaloteid']) ? (int) $m['materiaprimaloteid'] : null,
+                'partida' => $m['partida'] ?? null, 'inventario_presentacion_loteid' => $m['inventario_presentacion_loteid'] ?? null,
+            ]))
                 ->all();
         }
 

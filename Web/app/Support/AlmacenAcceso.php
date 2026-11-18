@@ -61,6 +61,8 @@ final class AlmacenAcceso
         }
 
         return match (AlmacenAmbito::resolverAmbito($almacen)) {
+            AlmacenAmbito::AGRICOLA => CampoAccess::puedeGestionarAlmacen($user, $almacen),
+            AlmacenAmbito::PLANTA => PlantaAccess::puedeGestionarAlmacen($user, $almacen),
             AlmacenAmbito::MAYORISTA => MayoristaAccess::puedeGestionarAlmacen($user, $almacen),
             AlmacenAmbito::PUNTO_VENTA => UsuarioRol::esMinorista($user),
             default => true,
@@ -74,6 +76,12 @@ final class AlmacenAcceso
 
     private static function scopeAmbito(Builder $query, string $ambito, Usuario $user): Builder
     {
+        if ($ambito === AlmacenAmbito::AGRICOLA) {
+            return CampoAccess::scopeAlmacenesAgricolas(AlmacenAmbito::scope($query, $ambito), $user);
+        }
+        if ($ambito === AlmacenAmbito::PLANTA) {
+            return PlantaAccess::scopeAlmacenesPlanta($query, $user);
+        }
         if ($ambito === AlmacenAmbito::PUNTO_VENTA) {
             $idsPdv = PuntoVentaAccess::scopePuntosDelUsuario(PuntoVenta::query(), $user)
                 ->whereNotNull('almacenid')

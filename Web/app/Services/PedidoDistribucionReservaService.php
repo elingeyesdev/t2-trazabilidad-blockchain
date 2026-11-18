@@ -82,7 +82,6 @@ class PedidoDistribucionReservaService
         $presentacionId = (int) ($detalle->insumo_presentacionid ?? 0);
 
         if ($presentacionId > 0) {
-            $this->inventarioPresentacion->asegurarInventarioDesdeStock($almacenId, (int) $detalle->insumoid);
             $stock = $this->inventarioPresentacion->stockTotalUnidades($almacenId, $presentacionId);
         } else {
             $stock = (float) (Insumo::query()->whereKey($detalle->insumoid)->value('stock') ?? 0);
