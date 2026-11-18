@@ -3,72 +3,58 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Produccion;
+use App\Http\Resources\Api\ProduccionResource;
+use App\Services\CosechaRegistroService;
 use Illuminate\Http\Request;
 
 class ProduccionController extends Controller
 {
-    public function index()
+    public function __construct(private readonly CosechaRegistroService $registro) {}
+
+    public function index(Request $request, ?int $lote = null)
     {
-        return response()->json(
-            Produccion::with(['lote', 'destino', 'unidadMedida', 'almacenamientos'])->get()
-        );
+        $data = $request->validate(['loteid' => 'sometimes|integer|min:1']);
+        $loteId = $lote ?? ($data['loteid'] ?? null);
+        $query = $this->registro->consulta($request->user())->with('unidadMedida');
+        if ($loteId !== null) {
+            $this->registro->loteVisible($request->user(), (int) $loteId);
+            $query->where('loteid', $loteId);
+        }
+
+        // Preserve the existing bare array contract, with exact decimal strings.
+        return response()->json($query->orderByDesc('fechacosecha')->orderByDesc('produccionid')->get()
+            ->map(fn ($p) => (new ProduccionResource($p))->resolve($request)));
     }
 
-    public function show($id)
+    public function show(Request $request, int $produccion, ?int $lote = null)
     {
-        return response()->json(
-            Produccion::with(['lote', 'destino', 'venta', 'unidadMedida', 'almacenamientos'])
-                ->findOrFail($id)
-        );
+        return response()->json((new ProduccionResource($this->registro->detalle($request->user(), $produccion, $lote)))->resolve($request));
+    }
+
+    public function showEnLote(Request $request, int $lote, int $produccion)
+    {
+        return $this->show($request, $produccion, $lote);
     }
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'loteid'             => 'required|exists:lote,loteid',
-            'cantidadkg'         => 'nullable|numeric|min:0',
-            'unidadmedidaid'     => 'nullable|exists:unidadmedida,unidadmedidaid',
-            'fechacosecha'       => 'nullable|date',
-            'destinoproduccionid'=> 'nullable|exists:destinoproduccion,destinoproduccionid',
-            'imagenurl'          => 'nullable|string|max:250',
-            'observaciones'      => 'nullable|string',
-        ]);
-
-        $produccion = Produccion::create($data);
-
-        return response()->json(
-            $produccion->load(['lote', 'destino', 'unidadMedida', 'almacenamientos']),
-            201
-        );
+        return response()->json((new ProduccionResource($this->registro->registrar($request)))->resolve($request), 201);
     }
 
-    public function update(Request $request, $id)
+    public function configuracion(Request $request, int $lote)
     {
-        $produccion = Produccion::findOrFail($id);
-
-        $data = $request->validate([
-            'loteid'             => 'sometimes|exists:lote,loteid',
-            'cantidadkg'         => 'nullable|numeric|min:0',
-            'unidadmedidaid'     => 'nullable|exists:unidadmedida,unidadmedidaid',
-            'fechacosecha'       => 'nullable|date',
-            'destinoproduccionid'=> 'nullable|exists:destinoproduccion,destinoproduccionid',
-            'imagenurl'          => 'nullable|string|max:250',
-            'observaciones'      => 'nullable|string',
-        ]);
-
-        $produccion->update($data);
-
-        return response()->json(
-            $produccion->load(['lote', 'destino', 'venta', 'unidadMedida', 'almacenamientos'])
-        );
+        return response()->json($this->registro->configuracion($request->user(), $lote));
     }
 
-    public function destroy($id)
+    public function update(Request $request, int $produccion)
     {
-        $produccion = Produccion::findOrFail($id);
-        $produccion->delete();
+        $this->registro->detalle($request->user(), $produccion);
 
-        return response()->json(['message' => 'Eliminado correctamente']);
+        return response()->json(['message' => 'Las cosechas registradas son de solo lectura.'], 405);
+    }
+
+    public function destroy(Request $request, int $produccion)
+    {
+        return $this->update($request, $produccion);
     }
 }

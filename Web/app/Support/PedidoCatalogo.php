@@ -532,7 +532,7 @@ final class PedidoCatalogo
      *
      * @return list<array<string, mixed>>
      */
-    public static function listarCalibresParaProducto(string $productoRef, ?int $tipoEmpaqueId = null): array
+    public static function listarCalibresParaProducto(string $productoRef, ?int $tipoEmpaqueId = null, bool $sincronizar = true): array
     {
         if (! \Illuminate\Support\Facades\Schema::hasTable('catalogo_tamano_conteo')) {
             return [];
@@ -543,7 +543,9 @@ final class PedidoCatalogo
             return [];
         }
 
-        CalibresVerdurasCatalogo::sincronizarParaInsumo($insumoId);
+        if ($sincronizar) {
+            CalibresVerdurasCatalogo::sincronizarParaInsumo($insumoId);
+        }
 
         $insumoIds = self::insumoIdsRelacionadosParaCalibres($insumoId);
 

@@ -109,7 +109,14 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     Route::delete('lotes/{lote}', [LoteController::class, 'destroy'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,delete']);
     $recursoProtegido('estadolotes', EstadoLoteController::class, 'lotes');
-    $recursoProtegido('producciones', ProduccionController::class, 'lotes');
+    Route::apiResource('producciones', ProduccionController::class)
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/producciones', [ProduccionController::class, 'index'])
+        ->name('lotes.producciones.index')->whereNumber('lote')->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/producciones/{produccion}', [ProduccionController::class, 'showEnLote'])
+        ->name('lotes.producciones.show')->whereNumber(['lote', 'produccion'])->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('lotes/{lote}/presentaciones-cosecha', [ProduccionController::class, 'configuracion'])
+        ->name('lotes.presentaciones-cosecha')->whereNumber('lote')->middleware(['auth:sanctum', 'action.permission:lotes,read']);
     $recursoProtegido('historial-estados-lote', HistorialEstadoLoteController::class, 'lotes');
 
     // ========================================================

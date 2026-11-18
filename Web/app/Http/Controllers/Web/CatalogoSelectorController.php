@@ -480,12 +480,11 @@ class CatalogoSelectorController extends Controller
         $this->aplicarBusqueda($query, (string) $request->q, ['nombre', 'codigo_trazabilidad', 'ubicacion']);
 
         if ($request->boolean('solo_cosecha')) {
-            $trazabilidad = app(\App\Support\LoteTrazabilidadService::class);
             $planificacion = app(\App\Services\PlanificacionCosechaService::class);
             $perPage = min(50, max(5, (int) $request->input('per_page', 20)));
             $page = max(1, (int) $request->input('page', 1));
             $filtrados = $query->orderBy('nombre')->get()
-                ->filter(fn (Lote $l) => $trazabilidad->puedeRegistrarCosecha($l))
+                ->filter(fn (Lote $l) => app(\App\Services\CosechaRegistroService::class)->puedeRegistrar($request->user(), $l))
                 ->values();
             $total = $filtrados->count();
             $items = $filtrados->slice(($page - 1) * $perPage, $perPage)->values();
@@ -513,7 +512,7 @@ class CatalogoSelectorController extends Controller
                             'usuarioid' => $l->usuarioid,
                             'cultivo' => $l->cultivo?->nombre ?? 'Sin cultivo',
                             'superficie' => $l->superficie,
-                            'estimacion_cosecha' => $planificacion->estimacionUiDesdeLote($l),
+                            'estimacion_cosecha' => $planificacion->estimacionUiDesdeLote($l, soloLectura: true),
                         ],
                     ];
                 })->values(),
