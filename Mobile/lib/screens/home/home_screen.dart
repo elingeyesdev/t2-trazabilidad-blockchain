@@ -4,7 +4,9 @@ import '../../models/auth_user.dart';
 import '../../navigation/app_module.dart';
 import '../../navigation/app_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/module_palette.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/field_kit.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.user, required this.onLogout});
@@ -38,6 +40,30 @@ class _HomeScreenState extends State<HomeScreen> {
     'Calidad y administración': [AppModule.certificaciones, AppModule.usuarios],
   };
 
+  static const _days = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+    'Domingo',
+  ];
+  static const _months = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+
   void _open(AppModule module) => Navigator.of(context).pushNamed(module.route);
 
   void _selectTab(int tab) {
@@ -48,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  bool get _largeText => MediaQuery.textScalerOf(context).scale(16) > 24;
+
   @override
   Widget build(BuildContext context) {
     final groups = {
@@ -57,90 +85,32 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList(),
     }..removeWhere((_, modules) => modules.isEmpty);
     final modules = groups.values.expand((group) => group).toList();
-    final today = DateTime.now();
-    const days = [
-      'Lunes',
-      'Martes',
-      'Miércoles',
-      'Jueves',
-      'Viernes',
-      'Sábado',
-      'Domingo',
-    ];
-    const months = [
-      'enero',
-      'febrero',
-      'marzo',
-      'abril',
-      'mayo',
-      'junio',
-      'julio',
-      'agosto',
-      'septiembre',
-      'octubre',
-      'noviembre',
-      'diciembre',
-    ];
     return PopScope(
       canPop: _tab == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _tab != 0) setState(() => _tab = 0);
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppTheme.forest,
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: const Icon(
-                  Icons.eco_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Flexible(child: Text('AgroFusion')),
-            ],
-          ),
-          actions: [
-            IconButton(
-              onPressed: widget.onLogout,
-              tooltip: 'Cerrar sesión',
-              icon: const Icon(Icons.logout_rounded, size: 22),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
         body: SafeArea(
           bottom: false,
           child: SingleChildScrollView(
             key: ValueKey(_tab),
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '${days[today.weekday - 1]}, ${today.day} de ${months[today.month - 1]}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Hola, ${widget.user.name}',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
+                    _topBar(),
+                    const SizedBox(height: 22),
+                    _greeting(),
                     const SizedBox(height: 24),
                     if (modules.isEmpty)
                       AppEmptyState(
                         icon: Icons.person_outline_rounded,
+                        tone: AppTheme.maizeSoft,
+                        ink: const Color(0xFF5F4100),
                         title: widget.user.permissions.isEmpty
                             ? 'Tu cuenta aún no tiene accesos'
                             : 'Las funciones de tu perfil están en la web',
@@ -152,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ..._home(modules)
                     else
                       ..._work(groups),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
                     _account(),
                   ],
                 ),
@@ -162,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         bottomNavigationBar: DecoratedBox(
           decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppTheme.line)),
+            border: Border(top: BorderSide(color: AppTheme.ink, width: 2)),
           ),
           child: NavigationBar(
             selectedIndex: _tab,
@@ -191,26 +161,94 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _topBar() => Row(
+    children: [
+      const BrandMark(size: 40),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          'AgroFusion',
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Tooltip(
+        message: 'Cerrar sesión',
+        excludeFromSemantics: true,
+        child: Semantics(
+          button: true,
+          label: 'Cerrar sesión',
+          excludeSemantics: true,
+          child: OutlinedButton.icon(
+            onPressed: widget.onLogout,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              textStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            icon: const Icon(Icons.logout_rounded, size: 22),
+            label: const Text('Salir'),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _greeting() {
+    final today = DateTime.now();
+    final theme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.wb_sunny_rounded,
+              size: 20,
+              color: Color(0xFF9A6A00),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${_days[today.weekday - 1]}, ${today.day} de ${_months[today.month - 1]}',
+                style: theme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Semantics(
+          header: true,
+          child: Text('Hola, ${widget.user.name}', style: theme.displaySmall),
+        ),
+      ],
+    );
+  }
+
   List<Widget> _home(List<AppModule> modules) {
     final primary = modules.first;
     final shortcuts = modules.skip(1).take(4).toList();
     return [
       _featured(primary),
       if (shortcuts.isNotEmpty) ...[
-        const SizedBox(height: 28),
-        _sectionHeading('Accesos rápidos', onMore: () => _selectTab(1)),
-        const SizedBox(height: 12),
+        const SizedBox(height: 32),
+        const SectionTitle('Accesos rápidos'),
+        const SizedBox(height: 14),
         LayoutBuilder(
           builder: (context, constraints) {
-            final singleColumn =
-                constraints.maxWidth < 300 ||
-                MediaQuery.textScalerOf(context).scale(16) > 24;
+            final singleColumn = constraints.maxWidth < 300 || _largeText;
             final width = singleColumn
                 ? constraints.maxWidth
-                : (constraints.maxWidth - 12) / 2;
+                : (constraints.maxWidth - 14) / 2;
             return Wrap(
-              spacing: 12,
-              runSpacing: 12,
+              spacing: 14,
+              runSpacing: 14,
               children: [
                 for (final module in shortcuts)
                   SizedBox(width: width, child: _shortcut(module)),
@@ -218,317 +256,275 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           },
         ),
-      ] else ...[
-        const SizedBox(height: 16),
+      ],
+      if (modules.length > 1) ...[
+        const SizedBox(height: 20),
         OutlinedButton.icon(
           onPressed: () => _selectTab(1),
-          icon: const Icon(Icons.grid_view_outlined),
-          label: const Text('Ver mis accesos'),
+          icon: const Icon(Icons.grid_view_rounded),
+          label: const Text('Ver todo mi trabajo'),
         ),
       ],
     ];
   }
 
   Widget _featured(AppModule module) {
-    final largeText = MediaQuery.textScalerOf(context).scale(16) > 24;
     final title = switch (module) {
-      AppModule.actividades => 'Actividades\ndel campo',
-      AppModule.asignaciones => 'Tus envíos\nasignados',
-      AppModule.pedidos => 'Pedidos',
-      AppModule.almacenes => 'Tus\nalmacenes',
+      AppModule.actividades => 'Actividades del campo',
+      AppModule.asignaciones => 'Tus envíos asignados',
+      AppModule.almacenes => 'Tus almacenes',
       _ => module.label,
     };
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: ColoredBox(
-        color: AppTheme.forest,
-        child: Stack(
-          children: [
-            if (!largeText)
-              const Positioned(
-                right: -16,
-                bottom: -10,
-                width: 164,
-                height: 176,
-                child: ExcludeSemantics(
-                  child: CustomPaint(painter: _FieldPainter()),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    children: [
-                      const Icon(
-                        Icons.wb_sunny_outlined,
-                        color: AppTheme.ochre,
-                        size: 16,
-                      ),
-                      Text(
-                        'TU ESPACIO DE TRABAJO',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: .82),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 30,
-                      height: 1.1,
-                      letterSpacing: -.7,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: largeText ? null : 210,
-                    child: Text(
-                      module.description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.45,
-                        color: Colors.white.withValues(alpha: .84),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () => _open(module),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.ochre,
-                      foregroundColor: AppTheme.forest,
-                      minimumSize: const Size(0, 48),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                    label: Text('Ver ${module.label.toLowerCase()}'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.fieldDeep,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.ink, width: 2),
+        boxShadow: AppTheme.stamp(6),
       ),
-    );
-  }
-
-  Widget _sectionHeading(String title, {VoidCallback? onMore}) => Wrap(
-    alignment: WrapAlignment.spaceBetween,
-    crossAxisAlignment: WrapCrossAlignment.center,
-    spacing: 12,
-    children: [
-      Text(title, style: Theme.of(context).textTheme.titleMedium),
-      if (onMore != null)
-        TextButton(onPressed: onMore, child: const Text('Ver todos')),
-    ],
-  );
-
-  Widget _shortcut(AppModule module) => Material(
-    color: Colors.white,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(18),
-      side: const BorderSide(color: AppTheme.line),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () => _open(module),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: _largeText ? 72 : 112,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Icon(module.icon, size: 28, color: AppTheme.forest),
-                const Spacer(),
-                const Icon(
-                  Icons.north_east_rounded,
-                  size: 16,
-                  color: AppTheme.muted,
+                const ColoredBox(color: Color(0xFF2C5E39)),
+                const ExcludeSemantics(
+                  child: CustomPaint(painter: FurrowPainter()),
+                ),
+                Positioned(
+                  left: 18,
+                  top: 16,
+                  child: ModuleMark(module, size: _largeText ? 40 : 52),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            Text(module.label, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              _shortcutLabel(module),
-              style: const TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: AppTheme.muted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  String _shortcutLabel(AppModule module) => switch (module) {
-    AppModule.lotes => 'Cultivos y ubicación',
-    AppModule.producciones => 'Cantidades y fechas',
-    AppModule.almacenes => 'Lugares de almacenamiento',
-    AppModule.insumos => 'Materiales y existencias',
-    _ => 'Consultar información',
-  };
-
-  List<Widget> _work(Map<String, List<AppModule>> groups) => [
-    Text('Tus accesos', style: Theme.of(context).textTheme.titleLarge),
-    const SizedBox(height: 6),
-    const Text('Encuentra aquí las herramientas de tu trabajo.'),
-    const SizedBox(height: 24),
-    for (final group in groups.entries) ...[
-      Text(group.key, style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 12),
-      Material(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: AppTheme.line),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            for (var i = 0; i < group.value.length; i++) ...[
-              if (i > 0)
-                const Divider(
-                  height: 1,
-                  indent: 64,
-                  endIndent: 16,
-                  color: AppTheme.line,
-                ),
-              ListTile(
-                minTileHeight: 84,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                leading: Icon(group.value[i].icon, color: AppTheme.forest),
-                title: Text(
-                  group.value[i].label,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                subtitle: Text(group.value[i].description),
-                trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-                onTap: () => _open(group.value[i]),
-              ),
-            ],
-          ],
-        ),
-      ),
-      const SizedBox(height: 24),
-    ],
-  ];
-
-  Widget _account() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      const Divider(color: AppTheme.line),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppTheme.sage,
-            foregroundColor: AppTheme.forest,
-            child: Text(
-              widget.user.name.trim().substring(0, 1).toUpperCase(),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              widget.user.email,
-              style: Theme.of(context).textTheme.bodyMedium,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.maize,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Lo principal',
+                    style: TextStyle(
+                      color: AppTheme.ink,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      height: 1.15,
+                      letterSpacing: -.6,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  module.description,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    height: 1.4,
+                    color: Color(0xFFE6EFE2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => _open(module),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.maize,
+                      foregroundColor: AppTheme.ink,
+                      side: const BorderSide(color: AppTheme.ink, width: 2),
+                    ),
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    label: Text('Ver ${module.label.toLowerCase()}'),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-      const SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: () =>
-              Navigator.of(context).pushNamed(AppRoutes.connection),
-          icon: const Icon(Icons.wifi_outlined, size: 18),
-          label: const Text('Comprobar conexión'),
-        ),
-      ),
-    ],
-  );
-}
-
-class _FieldPainter extends CustomPainter {
-  const _FieldPainter();
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawCircle(
-      Offset(size.width * .68, size.height * .18),
-      18,
-      Paint()..color = AppTheme.ochre.withValues(alpha: .9),
     );
-    final far = Path()
-      ..moveTo(0, size.height * .66)
-      ..quadraticBezierTo(
-        size.width * .5,
-        size.height * .2,
-        size.width,
-        size.height * .48,
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(far, Paint()..color = const Color(0xFF63845A));
-    final near = Path()
-      ..moveTo(0, size.height * .86)
-      ..quadraticBezierTo(
-        size.width * .58,
-        size.height * .34,
-        size.width,
-        size.height * .62,
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(near, Paint()..color = const Color(0xFF3B6446));
-    canvas.save();
-    canvas.clipPath(near);
-    for (var i = 0; i < 7; i++) {
-      final row = Path()
-        ..moveTo(size.width * .56 + i * 15, size.height * .55)
-        ..quadraticBezierTo(
-          i * 30 - 30,
-          size.height * .84,
-          i * 34 - 70,
-          size.height * 1.1,
-        );
-      canvas.drawPath(
-        row,
-        Paint()
-          ..color = const Color(0xFF8CA46C)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 5,
-      );
-    }
-    canvas.restore();
   }
 
-  @override
-  bool shouldRepaint(_FieldPainter oldDelegate) => false;
+  Widget _shortcut(AppModule module) {
+    final look = module.look;
+    return PressableCard(
+      onTap: () => _open(module),
+      color: look.tone,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ModuleMark(module, size: 52, solid: true),
+              const Spacer(),
+              Icon(Icons.arrow_forward_rounded, size: 24, color: look.ink),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            module.label,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            look.hint,
+            style: TextStyle(fontSize: 15, height: 1.35, color: look.ink),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _work(Map<String, List<AppModule>> groups) => [
+    Semantics(
+      header: true,
+      child: Text(
+        'Tus accesos',
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+    ),
+    const SizedBox(height: 6),
+    Text(
+      'Encuentra aquí las herramientas de tu trabajo.',
+      style: Theme.of(context).textTheme.bodyLarge,
+    ),
+    const SizedBox(height: 26),
+    for (final group in groups.entries) ...[
+      SectionTitle(group.key, color: group.value.first.look.tone),
+      const SizedBox(height: 14),
+      for (final module in group.value) ...[
+        _workRow(module),
+        const SizedBox(height: 12),
+      ],
+      const SizedBox(height: 18),
+    ],
+  ];
+
+  Widget _workRow(AppModule module) => PressableCard(
+    onTap: () => _open(module),
+    padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+    child: Row(
+      children: [
+        ModuleMark(module, size: _largeText ? 44 : 56),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                module.label,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                module.description,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Icon(Icons.chevron_right_rounded, size: 32, color: AppTheme.ink),
+      ],
+    ),
+  );
+
+  Widget _account() {
+    final initial = widget.user.name.trim().substring(0, 1).toUpperCase();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.line, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ExcludeSemantics(
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppTheme.maize,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.ink, width: 2),
+                  ),
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.ink,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Conectado como',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    Text(
+                      widget.user.email,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () =>
+                  Navigator.of(context).pushNamed(AppRoutes.connection),
+              icon: const Icon(Icons.wifi_rounded),
+              label: const Text('Comprobar conexión'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -6,6 +6,8 @@ import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/module_palette.dart';
+import '../../widgets/field_kit.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
@@ -149,11 +151,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     tooltip: 'Buscar ${widget.module.label.toLowerCase()}',
                     onPressed: loading || snapshot.hasError || !snapshot.hasData
                         ? null
-                        : () {
-                            setState(() {
-                              _searching = true;
-                            });
-                          },
+                        : () => setState(() => _searching = true),
                     icon: const Icon(Icons.search_rounded),
                   ),
                 if (_searching)
@@ -206,32 +204,39 @@ class _ModuleScreenState extends State<ModuleScreen> {
       );
       return terms.every(text.contains);
     }).toList();
+    final look = widget.module.look;
+
+    final compact =
+        MediaQuery.sizeOf(context).height < 520 ||
+        MediaQuery.viewInsetsOf(context).bottom > 0 ||
+        MediaQuery.textScalerOf(context).scale(16) > 22;
 
     return Column(
       children: [
-        if (!_searching)
+        if (!_searching && !compact)
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppTheme.sage,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(widget.module.icon, color: AppTheme.forest),
+                Row(
+                  children: [
+                    ModuleMark(widget.module, size: compact ? 40 : 52),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        widget.module.description,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppTheme.inkSoft,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    widget.module.description,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: AppTheme.muted),
-                  ),
-                ),
+                if (_supportsSearch && page.records.isNotEmpty && !compact) ...[
+                  const SizedBox(height: 14),
+                  _searchTrigger(look),
+                ],
               ],
             ),
           ),
@@ -239,9 +244,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
           child: page.records.isEmpty
               ? AppEmptyState(
                   icon: widget.module.icon,
+                  tone: look.tone,
+                  ink: look.ink,
                   title: 'Todavía no hay ${widget.module.label.toLowerCase()}',
                   message:
-                      'La información disponible para tu cuenta aparecerá aquí. Pulsa Actualizar para volver a consultar.',
+                      '${compact ? '${widget.module.description}\n\n' : ''}La información disponible para tu cuenta aparecerá aquí. Pulsa Actualizar para volver a consultar.',
                   action: OutlinedButton.icon(
                     onPressed: () => _load(1),
                     icon: const Icon(Icons.refresh_rounded),
@@ -251,6 +258,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
               : records.isEmpty
               ? AppEmptyState(
                   icon: Icons.search_off_rounded,
+                  tone: AppTheme.maizeSoft,
+                  ink: const Color(0xFF5F4100),
                   title: 'No encontramos coincidencias',
                   message: 'Prueba con otro nombre o limpia la búsqueda.',
                   action: OutlinedButton.icon(
@@ -262,108 +271,168 @@ class _ModuleScreenState extends State<ModuleScreen> {
               : ListView.builder(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
                   itemCount: records.length,
                   itemBuilder: (context, index) => _recordCard(records[index]),
                 ),
         ),
-        if (page.lastPage > 1)
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              children: [
-                TextButton(
-                  onPressed: page.currentPage > 1
-                      ? () => _load(page.currentPage - 1)
-                      : null,
-                  child: const Text('Anterior'),
-                ),
-                Text('Página ${page.currentPage} de ${page.lastPage}'),
-                TextButton(
-                  onPressed: page.currentPage < page.lastPage
-                      ? () => _load(page.currentPage + 1)
-                      : null,
-                  child: const Text('Siguiente'),
-                ),
-              ],
-            ),
-          ),
+        if (page.lastPage > 1) _pager(page),
       ],
     );
   }
 
-  Widget _recordCard(ModuleRecord record) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    child: Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: AppTheme.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: _supportsSearch ? () => _openRecord(record) : null,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(record.title, style: Theme.of(context).textTheme.titleLarge),
-              if (record.fieldInfo?.status != null) ...[
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: RecordStatusBadge(status: record.fieldInfo!.status!),
-                ),
-              ],
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1, color: AppTheme.line),
+  Widget _searchTrigger(ModuleLook look) {
+    return Semantics(
+      button: true,
+      label: 'Buscar por nombre, cultivo o persona',
+      excludeSemantics: true,
+      child: PressableCard(
+        onTap: () => setState(() => _searching = true),
+        depth: 3,
+        color: Colors.white,
+        radius: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded, size: 26, color: AppTheme.ink),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Buscar por nombre, cultivo o persona',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppTheme.inkSoft),
               ),
-              if (record.fieldInfo != null && record.fieldInfo!.status == null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'Estado: No disponible',
-                    style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pager(ModulePage page) => DecoratedBox(
+    decoration: const BoxDecoration(
+      color: AppTheme.surface,
+      border: Border(top: BorderSide(color: AppTheme.ink, width: 2)),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Página ${page.currentPage} de ${page.lastPage}',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: page.currentPage > 1
+                      ? () => _load(page.currentPage - 1)
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('Anterior'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: page.currentPage < page.lastPage
+                      ? () => _load(page.currentPage + 1)
+                      : null,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('Siguiente'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _recordCard(ModuleRecord record) {
+    final look = widget.module.look;
+    final info = record.fieldInfo;
+    final fields = (info?.summary ?? record.details).entries
+        .where((field) => field.key != 'Identificador')
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: PressableCard(
+        onTap: _supportsSearch ? () => _openRecord(record) : null,
+        padding: EdgeInsets.zero,
+        borderColor: AppTheme.ink,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    record.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  if (info?.status != null) ...[
+                    const SizedBox(height: 10),
+                    RecordStatusBadge(status: info!.status!),
+                  ],
+                  const SizedBox(height: 14),
+                  if (info != null && info.status == null)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: InfoLine(label: 'Estado', value: 'No disponible'),
+                    ),
+                  for (final field in fields)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: InfoLine(label: field.key, value: field.value),
+                    ),
+                ],
+              ),
+            ),
+            if (_supportsSearch)
+              Container(
+                padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
+                decoration: BoxDecoration(
+                  color: look.tone,
+                  border: const Border(
+                    top: BorderSide(color: AppTheme.ink, width: 2),
                   ),
                 ),
-              for (final field
-                  in (record.fieldInfo?.summary ?? record.details).entries)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '${field.key}: ${field.value}',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-              if (_supportsSearch) ...[
-                const SizedBox(height: 12),
-                const Row(
+                child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         'Ver detalle',
                         style: TextStyle(
-                          color: AppTheme.forest,
-                          fontWeight: FontWeight.w700,
+                          color: look.ink,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                     Icon(
                       Icons.arrow_forward_rounded,
-                      color: AppTheme.forest,
-                      size: 20,
+                      color: look.ink,
+                      size: 26,
                     ),
                   ],
                 ),
-              ],
-            ],
-          ),
+              ),
+          ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }

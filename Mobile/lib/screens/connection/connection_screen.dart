@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/api_exception.dart';
 import '../../models/api_health.dart';
 import '../../services/api_health_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 
@@ -51,29 +53,18 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
               );
             }
 
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Conexión disponible',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'El servicio de AgroFusion está disponible.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+            return Semantics(
+              liveRegion: true,
+              child: AppEmptyState(
+                icon: Icons.wifi_rounded,
+                tone: AppTheme.sprout,
+                ink: AppTheme.fieldDeep,
+                title: 'Conexión disponible',
+                message: 'El servicio de AgroFusion está disponible.',
+                action: OutlinedButton.icon(
+                  onPressed: _retry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Volver a comprobar'),
                 ),
               ),
             );
