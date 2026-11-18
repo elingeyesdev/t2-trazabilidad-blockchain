@@ -16,14 +16,16 @@ use App\Models\RegistroProcesoMaquinaPlanta;
 use App\Models\TipoActividad;
 use App\Models\UnidadMedida;
 use App\Models\Usuario;
-use App\Support\AsignacionEtapaPlantaService;
 use App\Support\ActividadSecuenciaService;
+use App\Support\AsignacionEtapaPlantaService;
+use App\Support\EstadoLoteCatalogo;
 use Database\Seeders\CatalogosOperacionAgricolaSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -120,18 +122,22 @@ class FaseCSecuenciaConcurrenciaTest extends TestCase
 
     public function test_opa06_tras_completar_4_se_puede_completar_5(): void
     {
+        Storage::fake('local');
         $jefe = $this->createUser('jefe_agricultor', 'JefeSeq2');
         $opA = $this->createUser('agricultor', 'OpA2', $jefe->usuarioid);
         $opB = $this->createUser('agricultor', 'OpB2', $jefe->usuarioid);
         $lote = $this->crearLote($jefe);
+        $lote->update(['estadolotetipoid' => EstadoLoteCatalogo::idPorSlug('en_crecimiento')]);
+        $this->crearActividad($lote, $opA, 'Siembra', 1)->update(['fechafin' => now()->subDay()]);
 
-        $act4 = $this->crearActividad($lote, $opA, 'Fertilización', 4);
+        $act4 = $this->crearActividad($lote, $opA, 'Riego', 4);
         $act5 = $this->crearActividad($lote, $opB, 'Riego', 5);
 
         $foto = UploadedFile::fake()->image('ev.jpg');
         $this->actingAs($opA)
-            ->post(route('actividades.marcar-realizada', $act4), ['evidencia_foto' => $foto])
-            ->assertRedirect();
+            ->post(route('actividades.marcar-realizada', $act4), ['evidencia_foto' => $foto, 'resultado' => 'Riego realizado'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
         $this->assertNotNull($act4->fresh()->fechafin);
 
@@ -158,8 +164,7 @@ class FaseCSecuenciaConcurrenciaTest extends TestCase
                 'descripcion' => 'Intento saltar',
                 'completar' => '1',
             ])
-            ->assertRedirect()
-            ->assertSessionHas('error');
+            ->assertForbidden();
 
         $this->assertSame(
             1,

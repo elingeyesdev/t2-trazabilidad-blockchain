@@ -15,6 +15,7 @@ use Database\Seeders\CatalogosOperacionAgricolaSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -273,10 +274,14 @@ class ApiConsultaLotesActividadesTest extends TestCase
 
     public function test_campos_api_coinciden_con_el_detalle_web_y_no_exponen_columnas_internas(): void
     {
+        Storage::fake('local');
         $jefe = $this->crearUsuario('jefe_agricultor', 'coherencia');
         $lote = $this->crearLote($jefe, 'Lote coherencia');
         $actividad = $this->crearActividad($lote, $jefe, 'Riego de coherencia');
-        $actividad->update(['evidencia_foto_path' => 'actividades/evidencia-prueba.jpg']);
+        $fotoPath = 'actividades_privadas/'.$actividad->actividadid.'/evidencia-prueba.jpg';
+        $foto = \Illuminate\Http\UploadedFile::fake()->image('evidencia-prueba.jpg');
+        Storage::disk('local')->put($fotoPath, file_get_contents($foto->getRealPath()));
+        $actividad->update(['fechafin' => '2026-08-04 12:00:00', 'evidencia_foto_path' => $fotoPath]);
         $actividad->refresh();
         $this->crearHistorial($lote, $jefe);
 
@@ -290,8 +295,9 @@ class ApiConsultaLotesActividadesTest extends TestCase
             ->assertJsonPath('data.usuario.nombre', 'Usuario coherencia')
             ->assertJsonPath('data.actividades.0.actividadid', $actividad->actividadid)
             ->assertJsonPath('data.actividades.0.fecha_planificada', '2026-08-04')
-            ->assertJsonPath('data.actividades.0.pendiente', true)
-            ->assertJsonPath('data.actividades.0.evidencia_foto_path', 'actividades/evidencia-prueba.jpg')
+            ->assertJsonPath('data.actividades.0.pendiente', false)
+            ->assertJsonPath('data.actividades.0.evidencia_foto_path', null)
+            ->assertJsonPath('data.actividades.0.evidencia_estado', 'disponible')
             ->assertJsonPath('data.actividades.0.tiene_evidencia', true)
             ->assertJsonMissingPath('data.usuario.passwordhash')
             ->assertJsonMissingPath('data.actividades.0.detalle_json');
@@ -299,7 +305,8 @@ class ApiConsultaLotesActividadesTest extends TestCase
         $this->assertStringContainsString('Lote coherencia', $web->getContent());
         $this->assertStringContainsString('Papa', $web->getContent());
         $this->assertSame('2026-08-04', $api->json('data.actividades.0.fecha_planificada'));
-        $this->assertStringEndsWith('/storage/actividades/evidencia-prueba.jpg', $api->json('data.actividades.0.evidencia_foto_url'));
+        $this->assertSame(route('api.actividades.evidencia', $actividad), $api->json('data.actividades.0.evidencia_foto_url'));
+        $this->getJson($api->json('data.actividades.0.evidencia_foto_url'))->assertOk();
         $this->assertNotEmpty($api->json('data.historial'));
     }
 }

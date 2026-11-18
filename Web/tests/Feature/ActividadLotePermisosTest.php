@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Actividad;
+use App\Models\Almacen;
 use App\Models\Cultivo;
 use App\Models\EstadoLoteTipo;
+use App\Models\Insumo;
 use App\Models\Lote;
 use App\Models\Prioridad;
 use App\Models\TipoActividad;
+use App\Models\TipoAlmacen;
+use App\Models\TipoInsumo;
 use App\Models\UnidadMedida;
 use App\Models\Usuario;
 use App\Support\LoteTrazabilidadService;
@@ -214,11 +218,26 @@ class ActividadLotePermisosTest extends TestCase
 
     public function test_agricultor_puede_completar_siembra_asignada_con_evidencia(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
         $tipoSiembra = TipoActividad::create(['nombre' => 'Siembra']);
         $tipoPrep = TipoActividad::create(['nombre' => 'Labranza']);
         $prioridad = Prioridad::query()->firstOrCreate(['nombre' => 'Media']);
-        $agricultor = $this->createUser('agricultor');
+        $jefe = $this->createUser('jefe_agricultor');
+        $agricultor = $this->createUser('agricultor', ['supervisor_usuarioid' => $jefe->usuarioid]);
+        $unidad = UnidadMedida::firstOrCreate(['abreviatura' => 'kg'], ['nombre' => 'Kilogramo', 'categoria' => 'peso']);
+        $almacen = Almacen::create([
+            'nombre' => 'Almacén de siembra', 'ubicacion' => 'Parcela', 'capacidad' => 1000,
+            'unidadmedidaid' => $unidad->unidadmedidaid,
+            'tipoalmacenid' => TipoAlmacen::firstOrCreate(['nombre' => 'Agrícola'])->tipoalmacenid,
+            'ambito' => 'agricola', 'activo' => true, 'responsable_usuarioid' => $jefe->usuarioid,
+        ]);
+        $semilla = Insumo::create([
+            'nombre' => 'Semilla de tomate', 'almacenid' => $almacen->almacenid,
+            'unidadmedidaid' => $unidad->unidadmedidaid,
+            'tipoinsumoid' => TipoInsumo::firstOrCreate(['nombre' => 'Material de siembra'])->tipoinsumoid,
+            'stock' => '10.000000',
+        ]);
         $estado = EstadoLoteTipo::query()->whereRaw('LOWER(nombre) LIKE ?', ['%planif%'])->first()
             ?? EstadoLoteTipo::query()->firstOrFail();
         $lote = Lote::create([
@@ -261,7 +280,8 @@ class ActividadLotePermisosTest extends TestCase
         $this->actingAs($agricultor)
             ->post(route('lotes.siembra.completar.store', $lote), [
                 'evidencia_foto' => $foto,
-                'observaciones' => 'Surcos listos',
+                'resultado' => 'Surcos listos y siembra realizada',
+                'consumos' => [['insumoid' => $semilla->insumoid, 'almacenid' => $almacen->almacenid, 'cantidad' => '2.000']],
                 'return' => route('lotes.trazabilidad', $lote, absolute: false),
             ])
             ->assertRedirect(route('lotes.trazabilidad', $lote))
@@ -270,6 +290,8 @@ class ActividadLotePermisosTest extends TestCase
         $pendiente->refresh();
         $this->assertNotNull($pendiente->fechafin);
         $this->assertNotNull($pendiente->evidencia_foto_path);
+        Storage::disk('local')->assertExists($pendiente->evidencia_foto_path);
+        $this->assertEquals(8, $semilla->fresh()->stock);
 
         $trazabilidad = app(LoteTrazabilidadService::class);
         $this->assertTrue($trazabilidad->siembraCompletada($lote->fresh()));
