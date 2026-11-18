@@ -437,6 +437,42 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 ),
               ),
               if (!_isLote &&
+                  (record.actividadData?.consumos.isNotEmpty ?? false)) ...[
+                const SizedBox(height: 24),
+                SectionTitle('Insumos utilizados', color: look.tone),
+                const SizedBox(height: 14),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(AppTheme.radius),
+                    border: Border.all(color: AppTheme.ink, width: 2),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (
+                        var i = 0;
+                        i < record.actividadData!.consumos.length;
+                        i++
+                      ) ...[
+                        if (i > 0) const Divider(height: 1),
+                        DetailField(
+                          label: record.actividadData!.consumos[i].name,
+                          value: record
+                              .actividadData!
+                              .consumos[i]
+                              .formattedQuantity,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+              if (!_isLote &&
                   ActividadPermissions.canAddObservations(widget.user)) ...[
                 const SizedBox(height: 20),
                 if (_editingObservations)

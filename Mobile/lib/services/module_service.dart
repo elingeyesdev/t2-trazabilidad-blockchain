@@ -462,4 +462,26 @@ class ModuleService {
     }
     return record;
   }
+
+  Future<List<AlmacenOption>> loadAlmacenOptions(AuthUser user) async {
+    if (!user.permissions.contains(AppModule.almacenes.permission)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los almacenes autorizados.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', AppModule.almacenes.endpoint);
+    return AlmacenOption.listFromJson(response);
+  }
+
+  Future<List<InsumoOption>> loadInsumoOptions(AuthUser user) async {
+    if (!user.permissions.contains(AppModule.insumos.permission)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los insumos disponibles.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', AppModule.insumos.endpoint);
+    return InsumoOption.listFromJson(response);
+  }
 }

@@ -205,6 +205,7 @@ class ActividadEditableData {
     this.observations,
     this.resultado,
     this.evidenceUrl,
+    this.consumos = const [],
     this.isCompleted = false,
   });
 
@@ -235,6 +236,7 @@ class ActividadEditableData {
       observations: _asText(row['observaciones']),
       resultado: _asText(row['resultado']),
       evidenceUrl: _asText(row['evidencia_foto_url']),
+      consumos: ActividadConsumoRecord.listFromJson(row['consumos']),
       isCompleted: row['fechafin'] != null,
     );
   }
@@ -247,13 +249,244 @@ class ActividadEditableData {
   final String? observations;
   final String? resultado;
   final String? evidenceUrl;
+  final List<ActividadConsumoRecord> consumos;
   final bool isCompleted;
+}
+
+class AlmacenOption {
+  const AlmacenOption({
+    required this.id,
+    required this.name,
+    this.ambito,
+    this.location,
+  });
+
+  final int id;
+  final String name;
+  final String? ambito;
+  final String? location;
+
+  bool get isAgricultural =>
+      ambito == null || ambito!.toLowerCase() == 'agricola';
+
+  String get displayLabel =>
+      location == null || location!.isEmpty ? name : '$name · $location';
+
+  static List<AlmacenOption> listFromJson(Object? json) {
+    final rows = json is Map<String, dynamic> ? json['data'] : json;
+    if (rows is! List) {
+      throw const ApiException('No pudimos interpretar los almacenes.');
+    }
+    final result = <AlmacenOption>[];
+    for (final row in rows) {
+      if (row is! Map<String, dynamic>) continue;
+      if (row['activo'] == false) continue;
+      final id = _asInt(row['almacenid']);
+      final name = _asText(row['nombre']);
+      if (id == null || id <= 0 || name == null) continue;
+      final option = AlmacenOption(
+        id: id,
+        name: name,
+        ambito: _asText(row['ambito']),
+        location: _asText(row['ubicacion']),
+      );
+      if (!option.isAgricultural) continue;
+      result.add(option);
+    }
+    return result;
+  }
+}
+
+class InsumoOption {
+  const InsumoOption({
+    required this.id,
+    required this.name,
+    required this.stock,
+    required this.unitLabel,
+    this.almacenId,
+    this.unidadMedidaId,
+    this.tipoNombre,
+  });
+
+  final int id;
+  final String name;
+  final double stock;
+  final String unitLabel;
+  final int? almacenId;
+  final int? unidadMedidaId;
+  final String? tipoNombre;
+
+  String get formattedStock => '${formatQuantity(stock)} $unitLabel';
+
+  String get displayLabel => '$name ($formattedStock disp.)';
+
+  static List<InsumoOption> listFromJson(Object? json) {
+    final rows = json is Map<String, dynamic> ? json['data'] : json;
+    if (rows is! List) {
+      throw const ApiException('No pudimos interpretar los insumos.');
+    }
+    final result = <InsumoOption>[];
+    for (final row in rows) {
+      if (row is! Map<String, dynamic>) continue;
+      final id = _asInt(row['insumoid']);
+      final name = _asText(row['nombre']);
+      if (id == null || id <= 0 || name == null) continue;
+      final unitMap = row['unidad_medida'] is Map<String, dynamic>
+          ? row['unidad_medida'] as Map<String, dynamic>
+          : (row['unidadMedida'] is Map<String, dynamic>
+                ? row['unidadMedida'] as Map<String, dynamic>
+                : null);
+      final unitLabel =
+          _asText(unitMap?['abreviatura']) ??
+          _asText(unitMap?['nombre']) ??
+          _asText(row['unidad']) ??
+          'u';
+      final tipoMap = row['tipo'] is Map<String, dynamic>
+          ? row['tipo'] as Map<String, dynamic>
+          : null;
+      result.add(
+        InsumoOption(
+          id: id,
+          name: name,
+          stock: _asDouble(row['stock']) ?? 0,
+          unitLabel: unitLabel,
+          almacenId: _asInt(row['almacenid']),
+          unidadMedidaId:
+              _asInt(row['unidadmedidaid']) ??
+              _asInt(unitMap?['unidadmedidaid']),
+          tipoNombre: _asText(tipoMap?['nombre']),
+        ),
+      );
+    }
+    return result;
+  }
+}
+
+class ActividadConsumoRecord {
+  const ActividadConsumoRecord({
+    required this.insumoId,
+    required this.cantidad,
+    required this.name,
+    this.almacenId,
+    this.unidadMedidaId,
+    this.unitLabel,
+  });
+
+  final int insumoId;
+  final int? almacenId;
+  final double cantidad;
+  final String name;
+  final int? unidadMedidaId;
+  final String? unitLabel;
+
+  String get formattedQuantity {
+    final qty = formatQuantity(cantidad);
+    return unitLabel == null || unitLabel!.isEmpty ? qty : '$qty $unitLabel';
+  }
+
+  static List<ActividadConsumoRecord> listFromJson(Object? json) {
+    if (json is! List) return const [];
+    final result = <ActividadConsumoRecord>[];
+    for (final row in json) {
+      if (row is! Map<String, dynamic>) continue;
+      final insumoId = _asInt(row['insumoid']);
+      final cantidad = _asDouble(row['cantidad']);
+      if (insumoId == null || insumoId <= 0 || cantidad == null) continue;
+      result.add(
+        ActividadConsumoRecord(
+          insumoId: insumoId,
+          almacenId: _asInt(row['almacenid']),
+          cantidad: cantidad,
+          name: _asText(row['nombre']) ?? 'Insumo #$insumoId',
+          unidadMedidaId: _asInt(row['unidadmedidaid']),
+          unitLabel: _asText(row['unidad']),
+        ),
+      );
+    }
+    return result;
+  }
+}
+
+class ActividadConsumoInput {
+  const ActividadConsumoInput({
+    required this.insumoId,
+    required this.almacenId,
+    required this.quantityText,
+    this.unidadMedidaId,
+  });
+
+  final int insumoId;
+  final int almacenId;
+  final String quantityText;
+  final int? unidadMedidaId;
+
+  Map<String, Object?> toPayload() => {
+    'insumoid': insumoId,
+    'almacenid': almacenId,
+    'cantidad': quantityText,
+    'unidadmedidaid': ?unidadMedidaId,
+  };
+}
+
+final RegExp _quantityPattern = RegExp(
+  r'^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$',
+);
+
+String normalizeQuantityInput(String raw) => raw.trim().replaceAll(',', '.');
+
+double? parseQuantityInput(String raw) {
+  final normalized = normalizeQuantityInput(raw);
+  if (normalized.isEmpty || !_quantityPattern.hasMatch(normalized)) {
+    return null;
+  }
+  final parsed = double.tryParse(normalized);
+  if (parsed == null || parsed <= 0) return null;
+  return parsed;
+}
+
+String formatQuantity(num value) {
+  final rounded = (value * 1000).round() / 1000;
+  final fixed = rounded.toStringAsFixed(3);
+  return fixed.replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
+String? validateConsumptionQuantity(
+  String? raw, {
+  required double availableStock,
+  required String unitLabel,
+}) {
+  final normalized = normalizeQuantityInput(raw ?? '');
+  if (normalized.isEmpty) {
+    return 'Indica la cantidad utilizada en $unitLabel.';
+  }
+  if (!_quantityPattern.hasMatch(normalized)) {
+    return 'Indica una cantidad positiva con hasta tres decimales.';
+  }
+  final parsed = double.tryParse(normalized);
+  if (parsed == null || parsed <= 0) {
+    return 'La cantidad utilizada debe ser mayor que cero.';
+  }
+  final availableScaled = (availableStock * 1000).round();
+  final requestedScaled = (parsed * 1000).round();
+  if (requestedScaled > availableScaled) {
+    return 'Existencias insuficientes: hay ${formatQuantity(availableStock)} $unitLabel disponibles. Corrige la cantidad.';
+  }
+  return null;
 }
 
 int? _asInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   if (value is String) return int.tryParse(value.trim());
+  return null;
+}
+
+double? _asDouble(Object? value) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    return double.tryParse(value.trim().replaceAll(',', '.'));
+  }
   return null;
 }
 
