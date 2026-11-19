@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Procesamiento de Lote | AgroFusion')
 @section('page_title', 'Procesamiento de Lote')
@@ -10,17 +11,6 @@
 
 @push('styles')
 <style>
-.pl-stats .pl-stat {
-    border-radius: 14px; color: #fff; padding: 18px 20px;
-    box-shadow: 0 6px 18px rgba(0,0,0,.08);
-}
-.pl-stats .pl-stat h3 { font-size: 1.75rem; font-weight: 800; margin: 0 0 2px; }
-.pl-stats .pl-stat p { margin: 0; font-size: .78rem; opacity: .92; text-transform: uppercase; letter-spacing: .04em; }
-.pl-stats .bg-total { background: linear-gradient(135deg, #0e7490, #06b6d4); }
-.pl-stats .bg-pend { background: linear-gradient(135deg, #b45309, #f59e0b); }
-.pl-stats .bg-proc { background: linear-gradient(135deg, #1d4ed8, #3b82f6); }
-.pl-stats .bg-done { background: linear-gradient(135deg, #065f46, #10b981); }
-
 #modalNuevoLote .modal-content { border: 0; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.18); }
 #modalNuevoLote .modal-dialog.modal-dialog-scrollable .modal-content > form {
     display: flex;
@@ -84,19 +74,10 @@
 @endpush
 
 @section('content')
-<div class="row mb-4 pl-stats">
-    @foreach([
-        ['total', 'Total lotes', 'bg-total'],
-        ['pendientes', 'Pendientes', 'bg-pend'],
-        ['en_proceso', 'En proceso', 'bg-proc'],
-        ['completados', 'Completados', 'bg-done'],
-    ] as [$key, $label, $bg])
-    <div class="col-6 col-md-3 mb-2">
-        <div class="pl-stat {{ $bg }}">
-            <h3>{{ $stats[$key] ?? 0 }}</h3>
-            <p>{{ $label }}</p>
-        </div>
-    </div>
+<x-operacion.encabezado titulo="Lotes de producción" descripcion="Consulta el estado de cada lote, sus materias primas y las etapas asignadas a tu equipo." />
+<div class="op-metricas">
+    @foreach([['total', 'Total de lotes'], ['pendientes', 'Pendientes'], ['en_proceso', 'En proceso'], ['completados', 'Completados']] as [$key, $label])
+        <x-operacion.metrica :valor="$stats[$key] ?? 0" :etiqueta="$label" />
     @endforeach
 </div>
 
@@ -128,8 +109,8 @@
                 <label class="small text-muted mb-1">Hasta</label>
                 <input type="date" name="hasta" class="form-control form-control-sm" value="{{ $hasta }}">
             </div>
-            <div class="col-md-1 mb-2 mb-md-0">
-                <button type="submit" class="btn btn-success btn-sm btn-block"><i class="fas fa-filter"></i></button>
+            <div class="col-md-2 col-lg-1 mb-2 mb-md-0">
+                <button type="submit" class="btn btn-success btn-sm btn-block">Filtrar</button>
             </div>
         </form>
         @if($productoFiltro || $estadoFiltro || $busqueda || $desde || $hasta)
@@ -142,18 +123,13 @@
 </div>
 
 <div class="card border-0 shadow-sm" style="border-radius:14px;">
-    <div class="card-header bg-white py-3" style="border-radius:14px 14px 0 0;">
-        <div class="d-flex flex-wrap justify-content-between align-items-center">
-            <h3 class="card-title mb-2 mb-md-0 font-weight-bold"><i class="fas fa-industry text-success mr-2"></i>Lotes de producción</h3>
-            <div>
-                @can('lote_produccion.create')
-                <button type="button" class="btn btn-success btn-sm px-3" data-toggle="modal" data-target="#modalNuevoLote">
-                    <i class="fas fa-plus mr-1"></i>Nuevo lote
-                </button>
-                @endcan
-            </div>
-        </div>
-    </div>
+    <x-modulo-index-header titulo="Lotes de producción" :registros="$lotes->total()">
+        <x-slot:tools>
+            @can('lote_produccion.create')
+            <button type="button" class="btn btn-success btn-sm ml-2" data-toggle="modal" data-target="#modalNuevoLote">Nuevo lote</button>
+            @endcan
+        </x-slot:tools>
+    </x-modulo-index-header>
     <div class="card-body p-0 table-responsive">
         <table class="table table-hover mb-0">
             <thead class="thead-light">
@@ -187,7 +163,7 @@
                         </td>
                         <td>
                             @foreach($lote->materiasPrimas as $mp)
-                                <span class="badge badge-light border mr-1">{{ $mp->insumo?->nombre ?? 'MP' }}: {{ number_format((float) $mp->cantidad_usada, 2) }}</span>
+                                <span class="badge badge-light border mr-1">{{ $mp->insumo?->nombre ?? 'MP' }}: <x-operacion.cantidad :valor="$mp->cantidad_usada" :unidad="$mp->insumo?->unidadMedida?->abreviatura ?? $mp->insumo?->unidadMedida?->nombre" /></span>
                             @endforeach
                         </td>
                         <td class="text-muted">{{ optional($lote->fecha_creacion)->format('d/m/Y') }}</td>
@@ -195,7 +171,7 @@
                             <a href="{{ route('procesamiento.show', $lote) }}" class="btn btn-sm btn-outline-info" title="Ver fases"><i class="fas fa-eye"></i></a>
                             @can('lote_produccion.create')
                                 <a href="{{ route('procesamiento.edit', $lote) }}" class="btn btn-sm btn-outline-warning" title="Editar"><i class="fas fa-edit"></i></a>
-                                @if($lote->estado_operativo === 'pendiente')
+                                @if(app(\App\Services\LoteProduccionPlantaService::class)->puedeEliminar($lote))
                                 <form action="{{ route('procesamiento.destroy', $lote) }}" method="POST" class="d-inline m-0">
                                     @csrf
                                     @method('DELETE')
@@ -211,7 +187,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x mb-2 d-block opacity-25"></i>No hay lotes. Cree uno con «Nuevo lote».</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-5"><i class="fas fa-inbox mb-2 d-block text-muted"></i>No hay lotes disponibles para estos filtros.</td></tr>
                 @endforelse
             </tbody>
         </table>

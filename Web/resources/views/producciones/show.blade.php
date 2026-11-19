@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 
 
@@ -38,9 +39,9 @@
 
         : null;
 
-    $umAbbr = $produccion->unidadMedida->abreviatura ?? 'kg';
+    $umAbbr = $produccion->unidadMedida->abreviatura ?? 'Unidad sin registrar';
 
-    $umNombre = $produccion->unidadMedida->nombre ?? 'Kilogramo';
+    $umNombre = $produccion->unidadMedida->nombre ?? 'Unidad sin registrar';
 
     $fotoUrl = \App\Support\EvidenciaFoto::urlDesdeImagenUrl($produccion->imagenurl);
 

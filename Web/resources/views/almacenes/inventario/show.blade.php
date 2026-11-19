@@ -1,10 +1,11 @@
 @php
     $rutaPrefijo = $rutaPrefijo ?? 'almacen-mayorista';
     $tituloModulo = $tituloModulo ?? 'Almacén mayorista';
-    $unidad = $producto->unidadMedida?->abreviatura ?? $producto->unidadMedida?->nombre ?? '';
+    $unidad = $producto->unidadMedida?->abreviatura ?? $producto->unidadMedida?->nombre ?? 'Unidad sin registrar';
 @endphp
 
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', $producto->nombre.' | Inventario')
 @section('page_title', 'Producto en almacén')
@@ -147,9 +148,9 @@
                             <div class="inv-stock-card estado-{{ $estadoStock['clase'] }} mb-3">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
-                                        <div class="dato-label">Disponible en depósito</div>
+                                        <div class="dato-label">Existencia física en depósito</div>
                                         <div class="inv-stock-valor">
-                                            {{ number_format($producto->stock, 2) }}
+                                            {{ \App\Support\CosechaDecimal::mostrar($producto->stock) }}
                                             <span style="font-size:1rem;font-weight:600;">{{ $unidad }}</span>
                                         </div>
                                     </div>
@@ -162,6 +163,7 @@
                                         {{ $estadoStock['etiqueta'] }}
                                     </span>
                                 </div>
+                                <p class="small mt-2"><a href="{{ route($rutaPrefijo.'.existencias.index', $almacen) }}">Consultar disponible, reservado y vencido</a></p>
                                 <div class="inv-progress mb-2">
                                     <span class="bar-{{ $estadoStock['clase'] }}" style="width: {{ $estadoStock['porcentaje'] }}%;"></span>
                                 </div>
@@ -169,9 +171,12 @@
                             </div>
 
                             <div class="inv-minimo-hint mb-3">
-                                <i class="fas fa-bell mr-1 text-success"></i>
-                                <strong>Stock mínimo:</strong> {{ number_format($estadoStock['umbral'], 2) }} {{ $unidad }}.
-                                Cuando el disponible baje de ese valor, el producto se marcará en <strong>stock bajo</strong>.
+                                @if($estadoStock['umbral'] === null)
+                                    <strong>Mínimo sin configurar.</strong> Configura el mínimo para activar el aviso de este almacén.
+                                @else
+                                    <strong>Mínimo:</strong> <x-operacion.cantidad :valor="$estadoStock['umbral']" :unidad="$unidad" />.
+                                    Se avisa cuando el disponible es igual o menor a este valor.
+                                @endif
                             </div>
 
                             @if(($empaquetajes ?? collect())->isNotEmpty())
@@ -194,7 +199,7 @@
                                                     <td>{{ $p->nombre }}</td>
                                                     <td>{{ $p->tipoEmpaque?->nombre ?? ucfirst($p->tipo_envase ?? '—') }}</td>
                                                     <td class="text-right font-weight-bold">{{ number_format($row['unidades'], 0) }} {{ $p->etiquetaUnidad() }}</td>
-                                                    <td class="text-right">{{ number_format($row['kg'], 2) }} kg</td>
+                                                    <td class="text-right">{{ \App\Support\CosechaDecimal::mostrar($row['kg']) }} kg</td>
                                                 </tr>
                                             @endforeach
                                         </tbody>
@@ -259,12 +264,16 @@
                         <i class="fas fa-edit mr-1"></i> Editar producto
                     </a>
                     @endcan
+                    @can('almacen.ingresos.create')
                     <a href="{{ route($rutaPrefijo.'.movimientos.create', 'ingreso') }}?almacenid={{ $almacen->almacenid }}" class="btn btn-outline-success btn-block mb-2">
                         <i class="fas fa-plus-circle mr-1"></i> Registrar ingreso
                     </a>
+                    @endcan
+                    @can('almacen.salidas.create')
                     <a href="{{ route($rutaPrefijo.'.movimientos.create', 'salida') }}?almacenid={{ $almacen->almacenid }}" class="btn btn-outline-secondary btn-block">
                         <i class="fas fa-minus-circle mr-1"></i> Registrar salida
                     </a>
+                    @endcan
                 </div>
             </div>
         </div>

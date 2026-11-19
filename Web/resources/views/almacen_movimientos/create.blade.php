@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', ucfirst($naturaleza) . ' de almacén')
 @section('page_title', ucfirst($naturaleza) . ' de almacén')

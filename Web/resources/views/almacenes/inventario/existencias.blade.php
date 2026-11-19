@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 @section('title', 'Existencias | '.$almacen->nombre)
 @section('page_title', 'Existencias por almacén')
 @push('styles')<style>.existencias-tabla tbody td { vertical-align: top !important; }</style>@endpush
@@ -7,13 +8,10 @@
     $estados = ['bajo' => 'Existencias bajas', 'vencido' => 'Vencido', 'proximo_a_vencer' => 'Próximo a vencer', 'vigente' => 'Vigente', 'sin_fecha_registrada' => 'Sin fecha registrada'];
     $tipos = \App\Models\TipoMovimientoAlmacen::where('activo', true)->orderBy('nombre')->get();
 @endphp
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-3" style="gap:.75rem">
-    <div><div class="text-muted small">{{ $tituloModulo }}</div><h2 class="h4 mb-0">{{ $almacen->nombre }}</h2></div>
-    <div class="d-flex flex-wrap" style="gap:.5rem">
-        @can('almacen.movimientos.view')<a class="btn btn-outline-secondary" href="{{ route($rutaPrefijo.'.existencias.movimientos', $almacen) }}">Movimientos de este almacén</a>@endcan
-        <a class="btn btn-outline-secondary" href="{{ route($rutaPrefijo.'.show', $almacen) }}">Volver al almacén</a>
-    </div>
-</div>
+<x-operacion.encabezado :titulo="$almacen->nombre" :descripcion="$tituloModulo.' · Consulta saldos, vencimientos y partidas de cada producto.'">
+    @can('almacen.movimientos.view')<a class="btn btn-outline-secondary" href="{{ route($rutaPrefijo.'.existencias.movimientos', $almacen) }}">Ver movimientos</a>@endcan
+    <a class="btn btn-outline-secondary" href="{{ route($rutaPrefijo.'.show', $almacen) }}">Volver al almacén</a>
+</x-operacion.encabezado>
 @if($errors->any())<div class="alert alert-danger"><strong>No se guardaron los cambios.</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 @if(session('success'))<div class="alert alert-success" role="status">{{ session('success') }}</div>@endif
 <div class="card mb-3"><div class="card-body">
@@ -28,12 +26,12 @@
         <thead><tr><th>Producto / unidad</th><th>Físico</th><th>Reservado</th><th>Vencido / bloqueado</th><th>Disponible para uso</th><th>Mínimo y aviso</th><th>Partidas y acciones</th></tr></thead>
         <tbody>@forelse($productos as $producto)
         <tr>
-            <td><strong>{{ $producto['nombre'] }}</strong><div class="text-muted small">{{ $producto['unidad'] }}</div></td>
-            <td class="text-nowrap">{{ \App\Support\CosechaDecimal::mostrar($producto['cantidad_fisica']) }}</td>
-            <td>{{ \App\Support\CosechaDecimal::mostrar($producto['cantidad_reservada']) }}</td>
-            <td>{{ \App\Support\CosechaDecimal::mostrar($producto['cantidad_vencida']) }} / {{ \App\Support\CosechaDecimal::mostrar($producto['cantidad_bloqueada']) }}</td>
-            <td><strong>{{ \App\Support\CosechaDecimal::mostrar($producto['cantidad_disponible']) }}</strong>@unless($producto['saldo_coherente'])<div class="text-danger small">Revisar desglose de partidas</div>@endunless</td>
-            <td>{{ $producto['minimo'] === null ? 'Sin configurar' : \App\Support\CosechaDecimal::mostrar($producto['minimo']) }}
+            <td><a class="font-weight-bold" href="{{ route($rutaPrefijo.'.inventario.show', [$almacen, $producto['insumoid']]) }}">{{ $producto['nombre'] }}</a><div class="text-muted small">{{ $producto['unidad'] }}</div></td>
+            <td class="text-nowrap"><x-operacion.cantidad :valor="$producto['cantidad_fisica']" :unidad="$producto['unidad']" /></td>
+            <td><x-operacion.cantidad :valor="$producto['cantidad_reservada']" :unidad="$producto['unidad']" /></td>
+            <td><div><x-operacion.cantidad :valor="$producto['cantidad_vencida']" :unidad="$producto['unidad']" /> <span class="small text-muted">vencido</span></div><div><x-operacion.cantidad :valor="$producto['cantidad_bloqueada']" :unidad="$producto['unidad']" /> <span class="small text-muted">bloqueado</span></div></td>
+            <td><strong><x-operacion.cantidad :valor="$producto['cantidad_disponible']" :unidad="$producto['unidad']" /></strong>@unless($producto['saldo_coherente'])<div class="text-danger small">Revisar desglose de partidas</div>@endunless</td>
+            <td>@if($producto['minimo'] === null)<span class="text-muted">Sin configurar</span>@else<x-operacion.cantidad :valor="$producto['minimo']" :unidad="$producto['unidad']" />@endif
                 @if($producto['existencias_bajas'])<div><span class="badge badge-warning">Existencias bajas</span></div>@endif
             </td>
             <td style="min-width:260px;max-width:420px"><details @if($errors->any() && (string) old('existencia_form', old('insumoid')) === (string) $producto['insumoid']) open @endif><summary class="text-success">Ver partidas{{ $puedeConfigurar ? ' y gestionar' : '' }}</summary>
@@ -49,7 +47,7 @@
                     @if($puedeConfigurar)
                     <form action="{{ route($rutaPrefijo.'.existencias.minimo', [$almacen, $producto['insumoid']]) }}" method="POST" class="mb-3">@csrf @method('PATCH')
                         <input type="hidden" name="existencia_form" value="{{ $producto['insumoid'] }}">
-                        <label for="minimo-{{ $producto['insumoid'] }}">Mínimo de este almacén</label>
+                        <label for="minimo-{{ $producto['insumoid'] }}">Mínimo de este almacén ({{ $producto['unidad'] ?: 'unidad sin registrar' }})</label>
                         <input id="minimo-{{ $producto['insumoid'] }}" name="stockminimo" inputmode="decimal" class="form-control form-control-sm" value="{{ old('stockminimo', $producto['minimo']) }}">
                         <small class="text-muted d-block mb-2">Vacío: sin configurar. 0 es un mínimo válido. Se avisa cuando el disponible es igual o menor.</small><button class="btn btn-sm btn-outline-success">Guardar mínimo</button>
                     </form>

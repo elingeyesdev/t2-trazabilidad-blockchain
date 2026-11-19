@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Editar lote — '.$loteProduccion->nombre.' | AgroFusion')
 @section('page_title', 'Editar lote de producción')

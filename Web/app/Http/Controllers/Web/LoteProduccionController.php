@@ -64,7 +64,7 @@ class LoteProduccionController extends Controller
         $this->aplicarFiltroOperarioPlanta($baseQuery, $user);
 
         $lotesQuery = (clone $baseQuery)
-            ->with(['pedido', 'unidadMedida', 'materiasPrimas.insumo', 'procesoPlanta', 'evaluacionesFinales', 'almacenajes'])
+            ->with(['pedido', 'unidadMedida', 'materiasPrimas.insumo.unidadMedida', 'procesoPlanta', 'evaluacionesFinales', 'almacenajes'])
             ->orderByDesc('fecha_creacion');
 
         if ($productoFiltro !== '') {

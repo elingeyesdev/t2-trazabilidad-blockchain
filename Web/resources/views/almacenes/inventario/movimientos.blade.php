@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 @section('title', 'Movimientos | '.$almacen->nombre)
 @section('page_title', 'Movimientos por almacén')
 @section('content')
@@ -15,7 +16,7 @@
     <td>{{ \App\Support\CosechaDecimal::mostrar($movimiento->cantidad) }} {{ $movimiento->unidadMedida?->abreviatura }}@unless($movimiento->unidadmedidaid)<div class="text-muted small">Unidad histórica sin registrar</div>@endunless</td>
     <td>{{ $movimiento->usuario?->nombre ?? 'Sin responsable histórico' }} {{ $movimiento->usuario?->apellido }}</td>
     <td>{{ $movimiento->destino_motivo }}<div class="text-muted small">{{ $movimiento->referencia }}</div></td>
-    <td>{{ $movimiento->saldo_anterior === null ? 'Sin registro' : \App\Support\CosechaDecimal::mostrar($movimiento->saldo_anterior) }} / {{ $movimiento->saldo_posterior === null ? 'Sin registro' : \App\Support\CosechaDecimal::mostrar($movimiento->saldo_posterior) }}</td>
+    <td><div>Antes: <x-operacion.cantidad :valor="$movimiento->saldo_anterior" :unidad="$movimiento->unidadMedida?->abreviatura ?? $movimiento->unidadMedida?->nombre" /></div><div>Después: <x-operacion.cantidad :valor="$movimiento->saldo_posterior" :unidad="$movimiento->unidadMedida?->abreviatura ?? $movimiento->unidadMedida?->nombre" /></div></td>
 </tr>@empty<tr><td colspan="6" class="text-center text-muted py-4">No hay movimientos para estos filtros.</td></tr>@endforelse
 </tbody></table></div><div class="card-footer">{{ $movimientos->links() }}</div></div>
 @endsection

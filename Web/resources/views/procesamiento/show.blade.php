@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Trazabilidad — '.$lote->nombre.' | AgroFusion')
 @section('page_title', $lote->nombre)
@@ -294,11 +295,11 @@
                 @if($lote->producto) Producto: {{ $lote->producto }} · @endif
                 Pedido: {{ $lote->pedido?->numero_solicitud ?? '—' }}
                 @if(!empty($produccionEstimada['entrada_kg']))
-                    · MP: {{ number_format($produccionEstimada['entrada_kg'], 2) }} kg
-                    → {{ number_format($produccionEstimada['cantidad'], 0) }} {{ $produccionEstimada['unidad'] }}
+                    · Estimación de materia prima: {{ \App\Support\CosechaDecimal::mostrar($produccionEstimada['entrada_kg']) }} kg
+                    → {{ \App\Support\CosechaDecimal::mostrar($produccionEstimada['cantidad']) }} {{ $produccionEstimada['unidad'] }}
                     (~{{ number_format($produccionEstimada['kg'], 2) }} kg)
                 @elseif($lote->cantidad_objetivo)
-                    · Objetivo: {{ number_format((float) $lote->cantidad_objetivo, 2) }} {{ $lote->unidadMedida?->abreviatura ?? '' }}
+                    · Objetivo: <x-operacion.cantidad :valor="$lote->cantidad_objetivo" :unidad="$lote->unidadMedida?->abreviatura ?? $lote->unidadMedida?->nombre" />
                 @endif
             </p>
         </div>
@@ -351,8 +352,14 @@
                         {{ $step['label'] }}
                         @if($step['estado'] === 'skipped')
                             <span class="d-block small mt-1 text-muted">Omitido</span>
-                        @elseif(!empty($step['fase_unica']) && !empty($step['completada']))
-                            <span class="d-block small mt-1"><i class="fas fa-check"></i></span>
+                        @elseif($step['estado'] === 'done' || (!empty($step['fase_unica']) && !empty($step['completada'])))
+                            <span class="d-block small mt-1">Completada</span>
+                        @elseif($step['estado'] === 'active')
+                            <span class="d-block small mt-1">Actual</span>
+                        @elseif($step['estado'] === 'next')
+                            <span class="d-block small mt-1">Próxima</span>
+                        @else
+                            <span class="d-block small mt-1">Pendiente</span>
                         @endif
                     </div>
                 @endforeach
@@ -924,8 +931,7 @@
                         <div class="lp-resumen-item">
                             <span class="nombre">{{ $mp->insumo?->nombre ?? 'Materia prima' }}</span>
                             <span class="dato">
-                                {{ number_format((float) $mp->cantidad_usada, 2) }}
-                                <small class="text-muted font-weight-normal">{{ $mp->insumo?->unidadMedida?->abreviatura ?? $mp->insumo?->unidadMedida?->nombre ?? 'ud' }}</small>
+                                <x-operacion.cantidad :valor="$mp->cantidad_usada" :unidad="$mp->insumo?->unidadMedida?->abreviatura ?? $mp->insumo?->unidadMedida?->nombre" />
                             </span>
                         </div>
                     @empty
