@@ -20,6 +20,7 @@
 @endphp
 
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 
 

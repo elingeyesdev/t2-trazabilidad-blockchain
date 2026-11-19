@@ -172,7 +172,8 @@ class LoteProduccionPlantaService
         $unidadesAntes = $presentacionLoteId ? \App\Models\InventarioPresentacionLote::whereKey($presentacionLoteId)->value('cantidad_unidades') : null;
         $insumo->decrementarStock($cantidad, $partidaId, false, null, $presentacionLoteId);
         $unidadesConsumidas = $presentacionLoteId ? \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($unidadesAntes) - \App\Support\InventarioDecimal::unidades(\App\Models\InventarioPresentacionLote::whereKey($presentacionLoteId)->value('cantidad_unidades'))) : null;
-        AlmacenMovimiento::create([
+        $movimiento = AlmacenMovimiento::create([
+            'loteproduccionpedidoid' => $lote->getKey(),
             'almacenid' => $almacen->almacenid,
             'insumoid' => $insumo->insumoid,
             'tipo_movimiento_almacenid' => $tipoSalida->tipo_movimiento_almacenid,
@@ -192,6 +193,7 @@ class LoteProduccionPlantaService
             'insumoid' => $insumo->insumoid,
             'inventario_presentacion_loteid' => $presentacionLoteId,
             'cantidad_unidades_consumidas' => $unidadesConsumidas,
+            'almacen_movimientoid' => $movimiento->getKey(),
             'cantidad_planificada' => $cantidad,
             'cantidad_usada' => $cantidad,
         ];
@@ -428,6 +430,9 @@ class LoteProduccionPlantaService
                 ->where('loteproduccionpedidoid', $loteId)
                 ->delete();
         }
+
+        // El consumo ya fue revertido; liberar su referencia antes de eliminar los movimientos del lote.
+        $lote->materiasPrimas()->delete();
 
         if (\Illuminate\Support\Facades\Schema::hasTable('almacen_movimiento')
             && \Illuminate\Support\Facades\Schema::hasColumn('almacen_movimiento', 'loteproduccionpedidoid')) {

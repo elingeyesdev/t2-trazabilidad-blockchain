@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Registrar insumo | AgroFusion')
 @section('page_title', 'Registrar insumo')

@@ -44,7 +44,7 @@
         {{-- END TOPBAR --}}
 
         {{-- CONTENT --}}
-        <main class="ag-content">
+        <main class="ag-content @yield('content_class')">
             <div class="content-header">
                 <div class="row align-items-center">
                     <div class="col">

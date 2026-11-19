@@ -14,6 +14,9 @@ class Pedido extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'solicitud_id', 'solicitud_huella',
+        'creado_por_usuarioid',
+
         'numero_solicitud',
         'nombre_planta',
         'origen_latitud',
@@ -43,6 +46,16 @@ class Pedido extends Model
     ];
 
     /* ================= RELACIONES ================= */
+
+    public function decisiones()
+    {
+        return $this->hasMany(PedidoDecision::class, 'pedidoid', 'pedidoid');
+    }
+
+    public function ultimaDecision()
+    {
+        return $this->hasOne(PedidoDecision::class, 'pedidoid', 'pedidoid')->ofMany('secuencia', 'max');
+    }
 
     public function detalles()
     {

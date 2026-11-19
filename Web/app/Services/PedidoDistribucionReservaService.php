@@ -7,6 +7,8 @@ use App\Models\DetallePedidoDistribucion;
 use App\Models\Insumo;
 use App\Models\PedidoDistribucion;
 use App\Support\PedidoDistribucionCatalogo;
+use App\Support\InventarioDecimal;
+use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -42,7 +44,6 @@ class PedidoDistribucionReservaService
         }
 
         $pedido->loadMissing(['detalles.presentacion', 'detalles.insumo']);
-
         $almacenIds = $pedido->detalles
             ->map(fn (DetallePedidoDistribucion $d) => $this->almacenDeLinea($d, $pedido))
             ->filter()
@@ -53,6 +54,9 @@ class PedidoDistribucionReservaService
         if ($almacenIds === []) {
             return;
         }
+
+        // Adquirir los locks compartidos de existencias antes de consultar disponibilidad.
+        app(InventarioExistenciaService::class)->bloquear($pedido->detalles->pluck('insumoid')->filter()->unique()->values()->all());
 
         // Mutex por almacén: serializa reservas que compiten por el mismo stock.
         Almacen::query()->whereIn('almacenid', $almacenIds)->orderBy('almacenid')->lockForUpdate()->get();
@@ -74,6 +78,33 @@ class PedidoDistribucionReservaService
                 );
             }
         }
+
+        // Las líneas legadas sin presentación expresan cantidad en la unidad del producto.
+        // Acumularlas: comprobar cada línea por separado permitiría comprometer dos veces el saldo.
+        $legadas = $pedido->detalles->filter(fn ($d) => ! $d->es_solicitud_custom && $d->insumoid && ! $d->insumo_presentacionid)
+            ->groupBy(fn ($d) => $this->almacenDeLinea($d, $pedido).':'.$d->insumoid);
+        foreach ($legadas as $lineas) {
+            $detalle = $lineas->first();
+            $origen = Insumo::with(['almacen', 'unidadMedida'])->findOrFail($detalle->insumoid);
+            $existencias = app(InventarioExistenciaService::class);
+            $resumen = $existencias->resumen($origen);
+            $stock = BigDecimal::of($resumen['cantidad_fisica'])->minus($resumen['cantidad_vencida'])->minus($resumen['cantidad_bloqueada'])
+                ->minus(InventarioDecimal::texto($existencias->reservado($origen, (int) $pedido->getKey())));
+            $cantidad = BigDecimal::zero();
+            foreach ($lineas as $linea) {
+                $cantidad = $cantidad->plus((string) $linea->getRawOriginal('cantidad'));
+            }
+            if (! $resumen['saldo_coherente'] || $cantidad->isGreaterThan($stock)) {
+                throw new InvalidArgumentException('Las líneas acumuladas superan las existencias sin reservar del producto.');
+            }
+        }
+
+        // Mantener el error de dominio histórico antes de validar acumulados y vencimientos.
+        app(PedidoEntradaService::class)->distribucion(request(), $pedido->detalles->filter(fn ($d) => !$d->es_solicitud_custom && $d->insumo_presentacionid)->map(fn ($d) => [
+            'insumoid' => $d->insumoid, 'insumo_presentacionid' => $d->insumo_presentacionid,
+            'inventario_presentacion_loteid' => $d->inventario_presentacion_loteid,
+            'cantidad' => (string) $d->getRawOriginal('cantidad'), 'datos_solicitud' => $d->datos_solicitud,
+        ])->all(), (int) $pedido->getKey(), false);
     }
 
     /** Stock de la línea menos lo ya reservado por OTROS pedidos confirmados del mismo almacén. */

@@ -195,7 +195,7 @@ class ProductoPlantaCatalogo
         if ((float) ($lote->cantidad_objetivo ?? 0) > 0) {
             $unidad = $lote->unidadMedida?->abreviatura ?? $lote->unidadMedida?->nombre ?? '';
 
-            return number_format((float) $lote->cantidad_objetivo, 2).' '.$unidad;
+            return \App\Support\CosechaDecimal::mostrar($lote->cantidad_objetivo).' '.($unidad ?: 'Unidad sin registrar');
         }
 
         return null;

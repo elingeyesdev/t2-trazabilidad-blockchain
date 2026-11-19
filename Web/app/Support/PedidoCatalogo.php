@@ -1008,6 +1008,15 @@ final class PedidoCatalogo
      */
     public static function presentacionDetalle(DetallePedido $detalle): array
     {
+        if ($detalle->datos_solicitud !== null) {
+            $kg = CosechaDecimal::mostrar((string)$detalle->getRawOriginal('cantidad'));
+            $etiqueta = $detalle->datos_solicitud['presentacion'] ?? null;
+            $linea = ($etiqueta ? $etiqueta.' · ' : '').$kg.' kg';
+            return ['kg' => (float)$detalle->getRawOriginal('cantidad'), 'kg_fmt' => $kg,
+                'empaque' => $etiqueta, 'empaques' => null, 'unidades' => null, 'unidades_fmt' => null,
+                'linea' => $linea, 'linea_corta' => $linea];
+        }
+
         $detalle->loadMissing([
             'cosechaAlmacen.catalogoTamanoConteo.tipoEmpaque',
             'insumo',

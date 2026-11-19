@@ -1014,6 +1014,8 @@
             const cant = fila.querySelector('[data-field="cantidad"]');
             const obs = fila.querySelector('[data-field="observaciones"]');
             if (hidden) hidden.setAttribute('name', 'detalles[' + idx + '][producto_ref]');
+            const partida = fila.querySelector('.pedido-partida-material select');
+            if (partida) partida.name = 'detalles[' + idx + '][materiaprimaloteid]';
             if (cant) cant.setAttribute('name', 'detalles[' + idx + '][cantidad]');
             if (obs) obs.setAttribute('name', 'detalles[' + idx + '][observaciones]');
         });
@@ -5263,4 +5265,8 @@
     });
 })();
 </script>
+@endpush
+
+@push('scripts')
+@include('pedidos.partials.partida-material')
 @endpush

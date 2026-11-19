@@ -5,7 +5,29 @@
     $pollingAsignacion = $pollingAsignacion ?? null;
 @endphp
 
-@if($qrUrl)
+@if(!empty($resumen['qr_recepciones']))
+<div class="card border mb-3"><div class="card-body">
+    <h3 class="h6">Recepción por destinatario</h3>
+    <p class="small text-muted">Cada destinatario confirma únicamente sus productos con su cuenta y su código.</p>
+    <div class="d-flex flex-wrap" style="gap:1.5rem">
+    @foreach($resumen['qr_recepciones'] as $qrDestino)
+        <div><strong class="d-block mb-2">{{ $qrDestino['destinatario'] }}</strong>
+        @if($qrDestino['utilizado'])
+            <span class="badge badge-success">Código utilizado</span><a class="d-block small mt-2" href="{{ $qrDestino['comprobante'] }}">Ver comprobante</a>
+        @else
+            <div class="js-qr-destinatario" data-qr-url="{{ $qrDestino['url'] }}"></div>
+            <a class="d-block small mt-2" href="{{ $qrDestino['url'] }}" target="_blank" rel="noopener">Abrir recepción</a>
+        @endif</div>
+    @endforeach
+    </div>
+</div></div>
+@once
+@push('scripts')
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>document.querySelectorAll('.js-qr-destinatario').forEach(function(box){ if(typeof QRCode !== 'undefined') new QRCode(box,{text:box.dataset.qrUrl,width:180,height:180,colorDark:'#263442',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.L}); });</script>
+@endpush
+@endonce
+@elseif($qrUrl)
 <div class="cierre-ag-qr-recepcion" id="cierre-qr-recepcion"
      data-polling-url="{{ $pollingUrl }}"
      @if($pollingRuta) data-polling-ruta="{{ $pollingRuta }}" @endif

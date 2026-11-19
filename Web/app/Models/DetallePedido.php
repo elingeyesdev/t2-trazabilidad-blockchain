@@ -15,6 +15,9 @@ class DetallePedido extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'materiaprimaloteid',
+        'datos_solicitud',
+
         'pedidoid',
         'insumoid',
         'producto_ref',
@@ -26,6 +29,7 @@ class DetallePedido extends Model
     ];
 
     protected $casts = [
+        'datos_solicitud' => 'array',
         'detallepedidoid' => 'integer',
         'pedidoid'        => 'integer',
         'insumoid'        => 'integer',
@@ -41,6 +45,11 @@ class DetallePedido extends Model
     public function insumo(): BelongsTo
     {
         return $this->belongsTo(Insumo::class, 'insumoid', 'insumoid');
+    }
+
+    public function materiaPrimaLote(): BelongsTo
+    {
+        return $this->belongsTo(MateriaPrimaLote::class, 'materiaprimaloteid', 'materiaprimaloteid');
     }
 
     /** Alias legado para vistas y PDFs que usan «producto». */

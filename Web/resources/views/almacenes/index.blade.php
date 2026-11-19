@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Almacenes | AgroFusion')
 @section('page_title', $tituloModulo ?? 'Almacén')

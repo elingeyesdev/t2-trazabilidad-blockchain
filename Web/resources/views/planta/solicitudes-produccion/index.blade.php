@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Solicitudes de producción')
 @section('page_title', 'Solicitudes de producción (mayorista → planta)')

@@ -97,6 +97,11 @@ class LoteProduccionPedido extends Model
         return $this->hasMany(AlmacenajeLoteProduccion::class, 'loteproduccionpedidoid', 'loteproduccionpedidoid');
     }
 
+    public function partidasObtenidas(): HasMany
+    {
+        return $this->hasMany(InventarioPresentacionLote::class, 'loteproduccionpedidoid', 'loteproduccionpedidoid');
+    }
+
     public function asignacionesEtapa(): HasMany
     {
         return $this->hasMany(AsignacionEtapaPlanta::class, 'loteproduccionpedidoid', 'loteproduccionpedidoid');

@@ -16,6 +16,7 @@ class LoteProduccionMateriaPrima extends Model
         'insumoid',
         'inventario_presentacion_loteid',
         'cantidad_unidades_consumidas',
+        'almacen_movimientoid',
         'cantidad_planificada',
         'cantidad_usada',
     ];
@@ -25,6 +26,11 @@ class LoteProduccionMateriaPrima extends Model
         'cantidad_usada'       => 'decimal:6',
         'cantidad_unidades_consumidas' => 'decimal:6',
     ];
+
+    public function movimientoConsumo(): BelongsTo
+    {
+        return $this->belongsTo(AlmacenMovimiento::class, 'almacen_movimientoid', 'almacen_movimientoid');
+    }
 
     public function presentacionLote(): BelongsTo
     {

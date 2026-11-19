@@ -63,8 +63,22 @@ $recursoProtegido = function (string $uri, string $controller, string $modulo, ?
 
 Route::name('api.')->group(function () use ($recursoProtegido) {
 
+    Route::middleware('auth:sanctum')->group(function () {
+        $controller = \App\Http\Controllers\Api\EnvioMovilController::class;
+        Route::post('envios/qr/resolver', [$controller, 'resolver']);
+        Route::get('envios/{tipo}', [$controller, 'index'])->where('tipo', 'agricola|distribucion|traslado');
+        Route::get('envios/{tipo}/{envio}', [$controller, 'show'])->whereNumber('envio')->where('tipo', 'agricola|distribucion|traslado');
+        Route::post('envios/{tipo}/{envio}/codigos', [$controller, 'codigos'])->whereNumber('envio')->where('tipo', 'agricola|distribucion|traslado');
+        Route::post('envios/{tipo}/{envio}/recepcion', [$controller, 'confirmar'])->whereNumber('envio')->where('tipo', 'agricola|distribucion|traslado');
+        Route::get('recepciones-envio/{recepcion}', [$controller, 'recepcion'])->whereNumber('recepcion');
+        Route::get('recepciones-envio/{recepcion}/firma', [$controller, 'firma'])->whereNumber('recepcion');
+        Route::get('recepciones-envio/{recepcion}/comprobante', [$controller, 'comprobante'])->whereNumber('recepcion');
+    });
+
     Route::prefix('planta')->middleware('auth:sanctum')->group(function () {
         $controller = \App\Http\Controllers\Api\PlantaTrabajoController::class;
+        Route::get('lotes-produccion/{loteProduccion}', [\App\Http\Controllers\Api\ProduccionPlantaRecorridoController::class, 'show'])->whereNumber('loteProduccion')->middleware('action.permission:lote_produccion,read');
+        Route::get('lotes-produccion/{loteProduccion}/tareas/{asignacion}', [$controller, 'tareaAnidada'])->whereNumber(['loteProduccion', 'asignacion'])->middleware('action.permission:lote_produccion,read');
         Route::get('tareas', [$controller, 'tareas'])->middleware('action.permission:lote_produccion,read');
         Route::get('tareas/{asignacion}', [$controller, 'tarea'])->whereNumber('asignacion')->middleware('action.permission:lote_produccion,read');
         Route::post('lotes-produccion/{loteProduccion}/tareas/{asignacion}/completar', [$controller, 'completar'])
@@ -190,6 +204,16 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     // ========================================================
     // GRUPO: PEDIDOS (CLIENTE EXTERNO) - control granular API
     // ========================================================
+    foreach (['pedidos-agricolas' => ['agricola', 'pedidos'], 'pedidos-distribucion' => ['distribucion', 'pedidos_distribucion']] as $prefijo => [$tipo, $permiso]) {
+        Route::prefix($prefijo)->middleware('auth:sanctum')->group(function () use ($tipo, $permiso) {
+            $controller = \App\Http\Controllers\Api\PedidoMovilController::class;
+            Route::get('', [$controller, 'index'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',read');
+            Route::post('', [$controller, 'store'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',create');
+            Route::get('{pedido}', [$controller, 'show'])->whereNumber('pedido')->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',read');
+            Route::post('{pedido}/transiciones', [$controller, 'transicion'])->whereNumber('pedido')->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',update');
+        });
+    }
+
     Route::get('pedidos', [PedidoController::class, 'index'])
         ->middleware(['auth:sanctum', 'action.permission:pedidos,read']);
     Route::post('pedidos', [PedidoController::class, 'store'])
