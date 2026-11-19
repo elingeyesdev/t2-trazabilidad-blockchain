@@ -65,6 +65,8 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
 
     Route::prefix('planta')->middleware('auth:sanctum')->group(function () {
         $controller = \App\Http\Controllers\Api\PlantaTrabajoController::class;
+        Route::get('lotes-produccion/{loteProduccion}', [\App\Http\Controllers\Api\ProduccionPlantaRecorridoController::class, 'show'])->whereNumber('loteProduccion')->middleware('action.permission:lote_produccion,read');
+        Route::get('lotes-produccion/{loteProduccion}/tareas/{asignacion}', [$controller, 'tareaAnidada'])->whereNumber(['loteProduccion', 'asignacion'])->middleware('action.permission:lote_produccion,read');
         Route::get('tareas', [$controller, 'tareas'])->middleware('action.permission:lote_produccion,read');
         Route::get('tareas/{asignacion}', [$controller, 'tarea'])->whereNumber('asignacion')->middleware('action.permission:lote_produccion,read');
         Route::post('lotes-produccion/{loteProduccion}/tareas/{asignacion}/completar', [$controller, 'completar'])

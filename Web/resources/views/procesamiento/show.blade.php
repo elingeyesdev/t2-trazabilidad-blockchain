@@ -293,8 +293,8 @@
             <h4 class="mb-1 font-weight-bold">{{ $lote->nombre }}</h4>
             <p class="mb-0 small opacity-90">
                 @if($lote->producto) Producto: {{ $lote->producto }} · @endif
-                Pedido: {{ $lote->pedido?->numero_solicitud ?? '—' }}
-                @if(!empty($produccionEstimada['entrada_kg']))
+                Lote de producción #{{ $lote->getKey() }}
+                @if(!$recorridoProduccion['restricciones']['origenes'] && !empty($produccionEstimada['entrada_kg']))
                     · Estimación de materia prima: {{ \App\Support\CosechaDecimal::mostrar($produccionEstimada['entrada_kg']) }} kg
                     → {{ \App\Support\CosechaDecimal::mostrar($produccionEstimada['cantidad']) }} {{ $produccionEstimada['unidad'] }}
                     (~{{ number_format($produccionEstimada['kg'], 2) }} kg)
@@ -839,14 +839,7 @@
         </div>
         <div class="card-body {{ $panelActivo === 'almacenaje' && !$almacenaje ? 'p-0' : '' }}">
             @if($almacenaje && $panelActivo !== 'almacenaje')
-                <div class="lp-historial-readonly">
-                    <p class="mb-1"><strong>{{ $almacenaje->ubicacion }}</strong></p>
-                    <p class="small text-muted mb-0">
-                        {{ \App\Support\ProductoPlantaCatalogo::formatearCantidadAlmacenaje((float) ($cantidadAlmacenajeMostrar ?? $almacenaje->cantidad), $lote) }} {{ $unidadProductoAlmacen ?? 'kg' }}
-                        · {{ $almacenaje->condicion }}
-                        · {{ optional($almacenaje->fecha_almacenaje)->format('d/m/Y H:i') }}
-                    </p>
-                </div>
+                <p class="small text-muted mb-0">Consulte los ingresos y destinos registrados en el recorrido del lote.</p>
             @elseif($panelActivo === 'almacenaje')
             @if(!empty($produccionEstimada['entrada_kg']))
             <div class="alert alert-light border small mx-3 mt-3 mb-0">
@@ -918,34 +911,8 @@
 
     </div>{{-- #lp-fases-workspace --}}
 
+    @include('procesamiento.partials.origen-destino')
     <div class="row mb-3">
-        <div class="col-12 mb-2">
-            <h5 class="font-weight-bold text-success mb-0"><i class="fas fa-clipboard-list mr-2"></i>Resumen del lote</h5>
-            <p class="small text-muted mb-0">Materias consumidas, certificación y almacenaje registrados</p>
-        </div>
-        <div class="col-md-4 mb-3 mb-md-0">
-            <div class="lp-resumen-card lp-resumen-mp">
-                <div class="lp-resumen-head"><i class="fas fa-boxes"></i> Materias primas usadas</div>
-                <div class="lp-resumen-body">
-                    @forelse($lote->materiasPrimas as $mp)
-                        <div class="lp-resumen-item">
-                            <span class="nombre">{{ $mp->insumo?->nombre ?? 'Materia prima' }}</span>
-                            <span class="dato">
-                                <x-operacion.cantidad :valor="$mp->cantidad_usada" :unidad="$mp->insumo?->unidadMedida?->abreviatura ?? $mp->insumo?->unidadMedida?->nombre" />
-                            </span>
-                        </div>
-                    @empty
-                        <p class="lp-resumen-empty mb-0"><i class="fas fa-inbox d-block mb-2 opacity-25"></i>Sin materias registradas</p>
-                    @endforelse
-                    @php $estimadosMp = \App\Support\ProductoPlantaCatalogo::estimadosUnidadesMateriaPrimaUsadas($lote, app(\App\Services\AlmacenCapacidadService::class)); @endphp
-                    @foreach($estimadosMp as $estMp)
-                        <p class="small text-success font-weight-bold mb-0 mt-2 border-top pt-2">
-                            <i class="fas fa-seedling mr-1"></i>Cantidad estimada usada: {{ number_format($estMp['cantidad'], 0) }} {{ $estMp['etiqueta'] }}
-                        </p>
-                    @endforeach
-                </div>
-            </div>
-        </div>
         <div class="col-md-4 mb-3 mb-md-0">
             <div class="lp-resumen-card lp-resumen-cert">
                 <div class="lp-resumen-head"><i class="fas fa-certificate"></i> Certificación</div>
@@ -971,45 +938,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="lp-resumen-card lp-resumen-alm">
-                <div class="lp-resumen-head"><i class="fas fa-warehouse"></i> Almacenaje</div>
-                <div class="lp-resumen-body">
-                    @if(!empty($lote_rechazado))
-                        <p class="lp-resumen-empty mb-0">
-                            <i class="fas fa-ban d-block mb-2 text-warning"></i>
-                            Sin ingreso a almacén<br><small class="text-muted">Lote no conforme</small>
-                        </p>
-                    @elseif($almacenaje)
-                        <div class="lp-resumen-item">
-                            <span class="nombre"><i class="fas fa-map-marker-alt text-warning mr-1"></i>{{ $almacenaje->ubicacion }}</span>
-                        </div>
-                        <div class="lp-resumen-item">
-                            <span class="nombre">Producto almacenado</span>
-                            <span class="dato">{{ \App\Support\ProductoPlantaCatalogo::formatearCantidadAlmacenaje((float) ($cantidadAlmacenajeMostrar ?? $almacenaje->cantidad), $lote) }} {{ $unidadProductoAlmacen ?? 'kg' }}</span>
-                        </div>
-                        <div class="lp-resumen-item">
-                            <span class="nombre">Condición</span>
-                            <span class="dato" style="white-space:normal;font-size:.8rem">{{ $almacenaje->condicion }}</span>
-                        </div>
-                        <small class="text-muted d-block mt-2 text-center">
-                            <i class="far fa-clock mr-1"></i>{{ optional($almacenaje->fecha_almacenaje)->format('d/m/Y H:i') }}
-                        </small>
-                        @if($almacenaje->almacenid)
-                        <a href="{{ route('almacen-planta.show', $almacenaje->almacenid) }}" class="btn btn-outline-warning btn-sm btn-block mt-3 font-weight-bold">
-                            <i class="fas fa-external-link-alt mr-1"></i>Ir al almacén
-                        </a>
-                        @endif
-                    @else
-                        <p class="lp-resumen-empty mb-0">
-                            <i class="fas fa-warehouse d-block mb-2"></i>
-                            Sin ingreso a almacén
-                        </p>
-                    @endif
-                </div>
-            </div>
-        </div>
     </div>
+
 </div>
 
 @include('partials.modal-confirmar-accion')

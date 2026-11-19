@@ -56,7 +56,14 @@ class PlantaTrabajoController extends Controller
             'puede_completar' => $bloqueo === null, 'requisito_pendiente' => $bloqueo,
             'maquinas_elegibles' => $bloqueo === null ? [(int) $asignacion->maquinaplantaid] : [],
             'parametros_requeridos' => app(LoteProduccionParametrosService::class)->parametrosRequeridosParaAsignacion($asignacion),
-            'permite_parciales' => false]]);
+            'permite_parciales' => false],
+            'origen_destino' => app(\App\Services\ProduccionPlantaRecorridoService::class)->consultar($asignacion->loteProduccion, $request->user())]);
+    }
+
+    public function tareaAnidada(Request $request, LoteProduccionPedido $loteProduccion, AsignacionEtapaPlanta $asignacion, AsignacionEtapaPlantaService $service)
+    {
+        abort_unless((int) $asignacion->loteproduccionpedidoid === (int) $loteProduccion->getKey(), 404);
+        return $this->tarea($request, $asignacion, $service);
     }
 
     public function completar(PlantaEtapaRequest $request, LoteProduccionPedido $loteProduccion, AsignacionEtapaPlanta $asignacion, AsignacionEtapaPlantaService $service)

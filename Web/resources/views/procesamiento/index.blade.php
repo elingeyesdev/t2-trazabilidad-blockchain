@@ -162,9 +162,11 @@
                             @else — @endif
                         </td>
                         <td>
-                            @foreach($lote->materiasPrimas as $mp)
+                            @forelse($lote->materiasPrimas as $mp)
                                 <span class="badge badge-light border mr-1">{{ $mp->insumo?->nombre ?? 'MP' }}: <x-operacion.cantidad :valor="$mp->cantidad_usada" :unidad="$mp->insumo?->unidadMedida?->abreviatura ?? $mp->insumo?->unidadMedida?->nombre" /></span>
-                            @endforeach
+                            @empty
+                                <span class="small text-muted">Sin materias visibles según sus permisos</span>
+                            @endforelse
                         </td>
                         <td class="text-muted">{{ optional($lote->fecha_creacion)->format('d/m/Y') }}</td>
                         <td class="text-center pl-actions text-nowrap">
