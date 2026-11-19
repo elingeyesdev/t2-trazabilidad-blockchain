@@ -60,7 +60,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
   bool get _supportsSearch =>
       widget.module == AppModule.lotes ||
       widget.module == AppModule.actividades ||
-      widget.module == AppModule.producciones;
+      widget.module == AppModule.producciones ||
+      widget.module == AppModule.almacenes;
 
   bool get _canCreateLote =>
       widget.module == AppModule.lotes &&
@@ -186,7 +187,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   void _openRecord(ModuleRecord record) {
     FocusScope.of(context).unfocus();
-    Navigator.of(context).pushNamed('${widget.module.route}/${record.id}');
+    Navigator.of(context).pushNamed(
+      '${widget.module.route}/${record.id}',
+      arguments: widget.module == AppModule.almacenes ? record.title : null,
+    );
   }
 
   String _normalize(String value) {

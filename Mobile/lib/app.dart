@@ -15,6 +15,7 @@ import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
+import 'screens/modules/almacen_detail_screen.dart';
 import 'screens/modules/cosecha_form_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/lote_form_screen.dart';
@@ -325,6 +326,27 @@ class _AgroFusionAppState extends State<AgroFusionApp>
               ),
               requiresAuthentication: true,
               module: AppModule.lotes,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'almacenes', final rawId]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => AlmacenDetailScreen(
+                key: ValueKey(_auth.user),
+                almacenId: id,
+                almacenName: settings.arguments is String
+                    ? settings.arguments as String
+                    : null,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.almacenes,
             ),
           );
         }
