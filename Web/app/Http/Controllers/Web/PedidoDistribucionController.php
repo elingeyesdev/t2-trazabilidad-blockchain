@@ -479,10 +479,13 @@ class PedidoDistribucionController extends Controller
         $data = request()->validate(['motivo_rechazo' => ['nullable', 'string', 'max:500']]);
         try {
             app(\App\Services\PedidoTransicionService::class)->ejecutar($pedido, auth()->user(), 'aceptar', $data['motivo_rechazo'] ?? null);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            if ($e->getStatusCode() !== 409) { throw $e; }
+            return back()->withInput()->with('error', $e->getMessage());
         } catch (InvalidArgumentException $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->withInput()->with('error', $e->getMessage());
         } catch (ValidationException $e) {
-            return back()->withErrors($e->errors())->with('error', implode(' ', \Illuminate\Support\Arr::flatten($e->errors())));
+            return back()->withInput()->withErrors($e->errors())->with('error', implode(' ', \Illuminate\Support\Arr::flatten($e->errors())));
         }
         return back()->with('success', 'Pedido actualizado correctamente.');
     }
@@ -498,7 +501,12 @@ class PedidoDistribucionController extends Controller
     {
         MayoristaAccess::asegurarPuedeVerPedido(auth()->user(), $pedido);
         $data = request()->validate(['motivo_rechazo' => ['nullable', 'string', 'max:500']]);
-        app(\App\Services\PedidoTransicionService::class)->ejecutar($pedido, auth()->user(), 'rechazar', $data['motivo_rechazo'] ?? null);
+        try {
+            app(\App\Services\PedidoTransicionService::class)->ejecutar($pedido, auth()->user(), 'rechazar', $data['motivo_rechazo'] ?? null);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            if ($e->getStatusCode() !== 409) { throw $e; }
+            return back()->withInput()->with('error', $e->getMessage());
+        }
         return back()->with('success', 'Pedido actualizado correctamente.');
     }
 
@@ -614,6 +622,7 @@ class PedidoDistribucionController extends Controller
 
     public function update(Request $request, PedidoDistribucion $pedido): RedirectResponse
     {
+        $request->validate(['estado' => ['missing'], 'decision' => ['missing'], 'motivo_rechazo' => ['missing'], 'aceptado_por_usuarioid' => ['missing'], 'fecha_aceptacion' => ['missing']]);
         abort_unless(PuntoVentaAccess::puedeVerPedido(auth()->user(), $pedido), 403);
 
         $user = $request->user();

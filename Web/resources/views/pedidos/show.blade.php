@@ -25,6 +25,7 @@
 @endpush
 
 @section('content')
+@include('pedidos.partials.decision-registrada', ['pedidoDecision' => $pedido])
 @include('recepcion.enlace-pedido', ['pedido' => $pedido])
 @php
     $itemsCount = $pedido->detalles?->count() ?? 0;

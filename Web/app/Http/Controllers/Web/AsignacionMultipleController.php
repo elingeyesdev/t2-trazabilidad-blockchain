@@ -81,7 +81,7 @@ class AsignacionMultipleController extends Controller
             'erroresStock' => $pendienteAgricola && $pedido
                 ? app(PedidoReservaService::class)->verificarDisponibilidad($pedido)
                 : [],
-            'puedeAceptarAgricola' => $pendienteAgricola && auth()->user()?->can('pedidos.update'),
+            'puedeAceptarAgricola' => $asignacion->pedido && in_array('aceptar', app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($asignacion->pedido, auth()->user()), true),
         ]);
     }
 
@@ -655,7 +655,14 @@ class AsignacionMultipleController extends Controller
     ): RedirectResponse {
         $data = $request->validate(['motivo_rechazo' => ['nullable', 'string', 'max:500']]);
         abort_unless($asignacion->pedido, 404);
-        app(\App\Services\PedidoTransicionService::class)->ejecutar($asignacion->pedido, $request->user(), 'aceptar', $data['motivo_rechazo'] ?? null);
+        try {
+            app(\App\Services\PedidoTransicionService::class)->ejecutar($asignacion->pedido, $request->user(), 'aceptar');
+        } catch (\InvalidArgumentException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            if ($e->getStatusCode() !== 409) { throw $e; }
+            return back()->withInput()->with('error', $e->getMessage());
+        }
         return back()->with('success', 'Pedido aceptado correctamente.');
     }
 
@@ -663,7 +670,12 @@ class AsignacionMultipleController extends Controller
     {
         $data = $request->validate(['motivo_rechazo' => ['nullable', 'string', 'max:500']]);
         abort_unless($asignacion->pedido, 404);
-        app(\App\Services\PedidoTransicionService::class)->ejecutar($asignacion->pedido, $request->user(), 'rechazar', $data['motivo_rechazo'] ?? null);
+        try {
+            app(\App\Services\PedidoTransicionService::class)->ejecutar($asignacion->pedido, $request->user(), 'rechazar', $data['motivo_rechazo'] ?? null);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            if ($e->getStatusCode() !== 409) { throw $e; }
+            return back()->withInput()->with('error', $e->getMessage());
+        }
         return back()->with('success', 'Pedido rechazado correctamente.');
     }
 

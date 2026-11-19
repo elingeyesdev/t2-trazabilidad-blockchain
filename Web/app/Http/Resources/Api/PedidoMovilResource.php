@@ -32,6 +32,9 @@ class PedidoMovilResource extends JsonResource
             'destino' => $agricola ? ['latitud' => $this->latitud, 'longitud' => $this->longitud, 'direccion' => $this->direccion_texto]
                 : ['puntoventaid' => (int) $this->puntoventaid, 'nombre' => $this->puntoVenta?->nombre],
             'observaciones' => $this->observaciones,
+            'decision' => $this->ultimaDecision?->only(['accion', 'estado_resultante', 'motivo', 'usuarioid', 'fecha']),
+            'motivo_rechazo' => $this->estado === 'rechazado' ? $this->ultimaDecision?->motivo : null,
+            'acciones_disponibles' => app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($this->resource, $request->user()),
             'detalles' => $this->detalles->map(fn ($d) => [
                 'id' => (int) $d->getKey(), 'producto_ref' => $agricola ? $d->producto_ref : null,
                 'insumoid' => $d->insumoid ? (int) $d->insumoid : null,

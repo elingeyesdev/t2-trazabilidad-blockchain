@@ -7,6 +7,8 @@ use App\Models\DetallePedidoDistribucion;
 use App\Models\Insumo;
 use App\Models\PedidoDistribucion;
 use App\Support\PedidoDistribucionCatalogo;
+use App\Support\InventarioDecimal;
+use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -74,6 +76,26 @@ class PedidoDistribucionReservaService
                     "Stock insuficiente para «{$nombre}»: solicitado ".number_format($solicitado, 2)
                     .', disponible sin reservar '.number_format(max(0, $disponible), 2).'.'
                 );
+            }
+        }
+
+        // Las líneas legadas sin presentación expresan cantidad en la unidad del producto.
+        // Acumularlas: comprobar cada línea por separado permitiría comprometer dos veces el saldo.
+        $legadas = $pedido->detalles->filter(fn ($d) => ! $d->es_solicitud_custom && $d->insumoid && ! $d->insumo_presentacionid)
+            ->groupBy(fn ($d) => $this->almacenDeLinea($d, $pedido).':'.$d->insumoid);
+        foreach ($legadas as $lineas) {
+            $detalle = $lineas->first();
+            $origen = Insumo::with(['almacen', 'unidadMedida'])->findOrFail($detalle->insumoid);
+            $existencias = app(InventarioExistenciaService::class);
+            $resumen = $existencias->resumen($origen);
+            $stock = BigDecimal::of($resumen['cantidad_fisica'])->minus($resumen['cantidad_vencida'])->minus($resumen['cantidad_bloqueada'])
+                ->minus(InventarioDecimal::texto($existencias->reservado($origen, (int) $pedido->getKey())));
+            $cantidad = BigDecimal::zero();
+            foreach ($lineas as $linea) {
+                $cantidad = $cantidad->plus((string) $linea->getRawOriginal('cantidad'));
+            }
+            if (! $resumen['saldo_coherente'] || $cantidad->isGreaterThan($stock)) {
+                throw new InvalidArgumentException('Las líneas acumuladas superan las existencias sin reservar del producto.');
             }
         }
 

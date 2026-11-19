@@ -191,7 +191,7 @@ class ApiPedidosMovilTest extends TestCase
         $this->assertEquals('95.000000', $this->f['cosechas'][0]->fresh()->getRawOriginal('cantidad'));
         $this->postJson('/api/pedidos-agricolas/'.$a.'/transiciones', ['accion' => 'aceptar'])->assertOk();
         $this->assertEquals('95.000000', $this->f['cosechas'][0]->fresh()->getRawOriginal('cantidad'));
-        $this->postJson('/api/pedidos-agricolas/'.$a.'/transiciones', ['accion' => 'rechazar'])->assertConflict();
+        $this->postJson('/api/pedidos-agricolas/'.$a.'/transiciones', ['accion' => 'rechazar', 'motivo_rechazo' => 'No debe rechazar un confirmado'])->assertConflict();
         $b = $this->crear('agricolas')->assertCreated()->json('data.id');
         $this->f['cosechas'][0]->update(['cantidad' => 1]);
         $this->postJson('/api/pedidos-agricolas/'.$b.'/transiciones', ['accion' => 'aceptar'])->assertUnprocessable();

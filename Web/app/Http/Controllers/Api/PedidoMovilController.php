@@ -35,7 +35,7 @@ class PedidoMovilController extends Controller
     {
         $filtros = $request->validate(['per_page' => ['sometimes', 'integer', 'between:1,50'], 'page' => ['sometimes', 'integer', 'min:1'],
             'estado' => ['sometimes', 'string', 'max:40'], 'usuarioid' => ['missing'], 'creado_por_usuarioid' => ['missing']]);
-        $query = $this->consulta($request)->with($this->modelo($request) === Pedido::class ? ['detalles', 'envioAsignacion'] : ['detalles', 'puntoVenta']);
+        $query = $this->consulta($request)->with($this->modelo($request) === Pedido::class ? ['detalles.cosechaAlmacen.almacen', 'detalles.insumo.almacen', 'envioAsignacion.firmaTransportista', 'envioAsignacion.firmaRecepcion', 'ultimaDecision'] : ['detalles.insumo.almacen', 'puntoVenta', 'ultimaDecision']);
         if (isset($filtros['estado'])) {
             $query->where('estado', $filtros['estado']);
         }
@@ -52,7 +52,7 @@ class PedidoMovilController extends Controller
 
     private function recurso($pedido): PedidoMovilResource
     {
-        return new PedidoMovilResource($pedido->load($pedido instanceof Pedido ? ['detalles', 'envioAsignacion'] : ['detalles', 'puntoVenta']));
+        return new PedidoMovilResource($pedido->load($pedido instanceof Pedido ? ['detalles.cosechaAlmacen.almacen', 'detalles.insumo.almacen', 'envioAsignacion.firmaTransportista', 'envioAsignacion.firmaRecepcion', 'ultimaDecision'] : ['detalles.insumo.almacen', 'puntoVenta', 'ultimaDecision']));
     }
 
     public function store(Request $request)
@@ -69,8 +69,8 @@ class PedidoMovilController extends Controller
 
     public function transicion(Request $request, string $pedido, PedidoTransicionService $service)
     {
-        $data = $request->validate(['accion' => ['required', 'string', 'in:aceptar,rechazar,reabrir-revision,confirmar-envio-mayorista'], 'motivo_rechazo' => ['nullable', 'string', 'max:500'],
-            'estado' => ['missing'], 'detalles' => ['missing'], 'puntoventaid' => ['missing'], 'creado_por_usuarioid' => ['missing'], 'aceptado_por_usuarioid' => ['missing'], 'cantidad' => ['missing']]);
+        $data = $request->validate(['accion' => ['required', 'string', 'in:aceptar,rechazar,reabrir-revision,confirmar-envio-mayorista'], 'motivo_rechazo' => ['required_if:accion,rechazar', 'nullable', 'string', 'max:500'],
+            'usuarioid' => ['missing'], 'fecha' => ['missing'], 'fecha_aceptacion' => ['missing'], 'fecha_aceptacion_agricola' => ['missing'], 'decision' => ['missing'], 'reservado' => ['missing'], 'acciones_disponibles' => ['missing'], 'estado' => ['missing'], 'detalles' => ['missing'], 'puntoventaid' => ['missing'], 'creado_por_usuarioid' => ['missing'], 'aceptado_por_usuarioid' => ['missing'], 'cantidad' => ['missing']]);
         $actual = $this->consulta($request)->findOrFail($pedido);
         try {
             return $this->recurso($service->ejecutar($actual, $request->user(), $data['accion'], $data['motivo_rechazo'] ?? null));

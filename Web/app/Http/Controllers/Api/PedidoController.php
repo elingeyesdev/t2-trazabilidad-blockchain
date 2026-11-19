@@ -12,6 +12,9 @@ class PedidoController extends PedidoMovilController
     private function fila(Pedido $pedido): array
     {
         return $pedido->only(['pedidoid', 'numero_solicitud', 'nombre_planta', 'origen_latitud', 'origen_longitud', 'origen_direccion', 'latitud', 'longitud', 'direccion_texto', 'estado', 'fechapedido', 'fechaEntregaDeseada', 'observaciones', 'fecha_aceptacion_agricola', 'aceptado_por_usuarioid']) + [
+            'decision' => $pedido->ultimaDecision?->only(['accion', 'estado_resultante', 'motivo', 'usuarioid', 'fecha']),
+            'motivo_rechazo' => $pedido->estado === 'rechazado' ? $pedido->ultimaDecision?->motivo : null,
+            'acciones_disponibles' => app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($pedido, request()->user()),
             'detalles' => $pedido->detalles->map(fn ($d) => $d->only(['detallepedidoid', 'pedidoid', 'insumoid', 'producto_ref', 'produccionalmacenamientoid', 'nombre_planta', 'cultivo_personalizado', 'cantidad', 'observaciones']))->all()];
     }
 

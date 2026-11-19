@@ -97,6 +97,16 @@ class PedidoDistribucion extends Model
         return $this->belongsTo(Usuario::class, 'registrado_manual_por_usuarioid', 'usuarioid');
     }
 
+    public function decisiones()
+    {
+        return $this->hasMany(PedidoDecision::class, 'pedidodistribucionid', 'pedidodistribucionid');
+    }
+
+    public function ultimaDecision()
+    {
+        return $this->hasOne(PedidoDecision::class, 'pedidodistribucionid', 'pedidodistribucionid')->ofMany('secuencia', 'max');
+    }
+
     public function detalles(): HasMany
     {
         return $this->hasMany(DetallePedidoDistribucion::class, 'pedidodistribucionid', 'pedidodistribucionid');

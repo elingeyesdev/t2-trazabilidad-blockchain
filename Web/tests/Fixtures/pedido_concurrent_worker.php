@@ -22,8 +22,10 @@ while (! is_file($argv[2])) {
     usleep(10000);
 }
 try {
-    $pedido = app(App\Services\PedidoTransicionService::class)->ejecutar($pedido, $user, 'aceptar');
+    $pedido = app(App\Services\PedidoTransicionService::class)->ejecutar($pedido, $user, $argv[7] ?? 'aceptar', $argv[8] ?? null);
     echo json_encode(['status' => 200, 'estado' => $pedido->estado]);
+} catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
+    echo json_encode(['status' => $e->getStatusCode(), 'message' => $e->getMessage()]);
 } catch (InvalidArgumentException|Illuminate\Validation\ValidationException $e) {
     echo json_encode(['status' => 422, 'message' => $e->getMessage()]);
 }

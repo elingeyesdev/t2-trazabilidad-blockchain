@@ -382,6 +382,7 @@
 @endpush
 
 @section('content')
+@include('pedidos.partials.decision-registrada', ['pedidoDecision' => $pedido])
 @include('recepcion.enlace-pedido', ['pedido' => $pedido])
     @php
         $det = $pedido->detalles->first();
@@ -757,7 +758,7 @@
             </div>
 
             <div class="pdv-sidebar-paso" data-sidebar-paso="2">
-            @if(($puedeGestionarMayorista ?? false) && $pendienteMayorista)
+            @if(in_array('aceptar', app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($pedido, auth()->user()), true))
             <div class="card pdv-card card-outline card-success mb-3">
                 <div class="card-header bg-white py-2">
                     <h3 class="card-title mb-0 font-weight-bold"><i class="fas fa-warehouse text-success mr-1"></i> Decisión mayorista</h3>
@@ -771,18 +772,19 @@
                             Al aceptar se confirmará el almacén mayorista de origen y podrá asignar transporte.
                         @endif
                     </p>
-                    <form method="POST" action="{{ route('punto-venta.pedidos.aceptar', $pedido) }}" class="mb-3">
+                    <form data-pedido-decision method="POST" action="{{ route('punto-venta.pedidos.aceptar', $pedido) }}" class="mb-3">
                         @csrf
-                        <button type="submit" class="btn btn-success btn-block btn-lg">
+                        <button type="button" class="btn btn-success btn-block btn-lg" data-confirm-modal data-confirm-tone="success" data-confirm-title="Aceptar pedido" data-confirm-message="Se reservarán las existencias disponibles para este pedido. ¿Desea continuar?">
                             <i class="fas fa-check mr-1"></i> Aceptar y preparar envío
                         </button>
                     </form>
                     <hr>
-                    <form method="POST" action="{{ route('punto-venta.pedidos.rechazar', $pedido) }}">
+                    <form data-pedido-decision method="POST" action="{{ route('punto-venta.pedidos.rechazar', $pedido) }}">
                         @csrf
                         <div class="form-group mb-2">
-                            <label class="small text-muted">Motivo (opcional)</label>
-                            <textarea name="motivo_rechazo" class="form-control form-control-sm" rows="2" maxlength="500" placeholder="Ej: stock insuficiente"></textarea>
+                            <label class="small text-muted">Motivo del rechazo (obligatorio)</label>
+                            <textarea required aria-label="Motivo del rechazo" name="motivo_rechazo" class="form-control form-control-sm" rows="2" maxlength="500" placeholder="Ej: stock insuficiente">{{ old('motivo_rechazo') }}</textarea>
+                            @error('motivo_rechazo')<span class="text-danger small d-block">{{ $message }}</span>@enderror
                         </div>
                         <button type="button" class="btn btn-outline-danger btn-block"
                                 data-confirm-modal

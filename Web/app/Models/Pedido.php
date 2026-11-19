@@ -47,6 +47,16 @@ class Pedido extends Model
 
     /* ================= RELACIONES ================= */
 
+    public function decisiones()
+    {
+        return $this->hasMany(PedidoDecision::class, 'pedidoid', 'pedidoid');
+    }
+
+    public function ultimaDecision()
+    {
+        return $this->hasOne(PedidoDecision::class, 'pedidoid', 'pedidoid')->ofMany('secuencia', 'max');
+    }
+
     public function detalles()
     {
         return $this->hasMany(DetallePedido::class, 'pedidoid', 'pedidoid');

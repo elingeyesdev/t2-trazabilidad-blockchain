@@ -27,7 +27,7 @@ class PedidoEntradaService
         $reglas = [];
         foreach (['estado', 'creado_por_usuarioid', 'usuarioid', 'propietario', 'organizacionid', 'aceptado_por_usuarioid',
             'fecha_aceptacion', 'fecha_aceptacion_agricola', 'fechapedido', 'solicitud_huella', 'datos_solicitud', 'envio_iniciado_mayorista',
-            'fecha_confirmacion_minorista', 'numero_solicitud', 'registrado_manual_por_usuarioid', 'responsable_usuarioid'] as $campo) {
+            'fecha_confirmacion_minorista', 'numero_solicitud', 'registrado_manual_por_usuarioid', 'responsable_usuarioid', 'decision', 'motivo_rechazo', 'acciones_disponibles', 'reservado'] as $campo) {
             $reglas[$campo] = ['missing'];
         }
         foreach (['cantidad_kg', 'cantidad_base', 'equivalencia', 'peso_neto_kg', 'datos_solicitud', 'unidadmedidaid', 'pedidoid', 'pedidodistribucionid', 'detallepedidoid', 'detallepedidodistribucionid'] as $campo) {
