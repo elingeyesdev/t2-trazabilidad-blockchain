@@ -666,7 +666,7 @@ class LoteProduccionController extends Controller
         );
     }
 
-    public function certificar(Request $request, LoteProduccionPedido $loteProduccion): RedirectResponse
+    public function certificar(\App\Http\Requests\EmisionCertificadoRequest $request, LoteProduccionPedido $loteProduccion): RedirectResponse
     {
         abort_unless(UsuarioRol::gestionaPlanta($request->user()), 403);
 
@@ -684,24 +684,10 @@ class LoteProduccionController extends Controller
             return back()->withErrors(['observaciones' => 'Indique el motivo del no conforme.'])->withInput();
         }
 
-        EvaluacionFinalLoteProduccion::updateOrCreate(
-            ['loteproduccionpedidoid' => $loteProduccion->loteproduccionpedidoid],
-            [
-                'inspector_usuarioid' => $request->user()->usuarioid,
-                'razon' => $data['razon'],
-                'observaciones' => $data['observaciones'] ?? null,
-                'recomendaciones' => $data['recomendaciones'] ?? null,
-                'fecha_evaluacion' => now(),
-            ]
-        );
-
-        if ($data['razon'] === EvaluacionFinalLoteProduccion::RAZON_NO_CONFORME) {
-            $loteProduccion->almacenajes()->delete();
-            $loteProduccion->update(['hora_fin' => now()]);
-            $mensaje = 'Lote marcado como no conforme. No puede ingresar a almacén; el lote queda cerrado.';
-        } else {
-            $mensaje = 'Lote certificado. Ya puede registrar el almacenaje del producto terminado.';
-        }
+        app(\App\Services\CertificadoEmisionService::class)->emitirPlanta($request->user(), $loteProduccion, [
+            ...$data, 'solicitud_id' => $request->validated('solicitud_id'),
+        ]);
+        $mensaje = 'Nueva evaluación registrada. Las emisiones anteriores se conservan en el historial.';
 
         $redirect = $request->input('redirect_to') === 'certificaciones-planta'
             ? route('certificaciones-planta.index')

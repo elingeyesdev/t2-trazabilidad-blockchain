@@ -453,6 +453,11 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
             ->whereNumber('ruta');
     });
 
+    Route::get('lotes/{lote}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialCampo'])->name('lotes.certificados.index')->middleware('action.permission:certificaciones,read');
+    Route::get('procesamiento/{loteProduccion}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialPlanta'])->name('procesamiento.certificados.index')->middleware('action.permission:lote_produccion,read');
+    Route::get('certificaciones/{certificacion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoCampo'])->name('certificaciones.archivo')->middleware('action.permission:certificaciones,read');
+    Route::get('certificaciones-planta/{evaluacionFinalLoteProduccion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoPlanta'])->name('certificaciones-planta.archivo')->middleware('action.permission:lote_produccion,read');
+
     Route::get('/certificaciones', [CertificacionController::class, 'index'])->name('certificaciones.index')->middleware('action.permission:certificaciones,read');
     Route::post('/certificaciones/masivo', [CertificacionController::class, 'storeBatch'])->name('certificaciones.store-bulk')->middleware('action.permission:certificaciones,create');
     Route::post('/certificaciones', [CertificacionController::class, 'store'])->name('certificaciones.store')->middleware('action.permission:certificaciones,create');

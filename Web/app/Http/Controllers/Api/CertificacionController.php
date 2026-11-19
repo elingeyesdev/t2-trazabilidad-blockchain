@@ -3,84 +3,29 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\EmisionCertificadoRequest;
+use App\Http\Resources\Api\CertificadoEmisionResource;
 use App\Models\CertificacionLote;
-use App\Models\EstadoLoteTipo;
-use App\Models\HistorialEstadoLote;
 use App\Models\Lote;
-use Illuminate\Http\JsonResponse;
+use App\Services\CertificadoEmisionService;
+use App\Support\LoteAcceso;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class CertificacionController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request)
     {
-        return response()->json(
-            CertificacionLote::with(['lote', 'usuario'])
-                ->orderByDesc('fecha_certificacion')
-                ->get()
-        );
+        $certificados = CertificacionLote::with(['lote', 'usuario'])->whereHas('lote', function ($q) use ($request) {
+            LoteAcceso::aplicarScopeVisibles($q, $request->user());
+        })->orderByDesc('fecha_certificacion')->orderByDesc('certificacionid')->get();
+
+        return response()->json($certificados->map(fn ($c) => (new CertificadoEmisionResource($c))->resolve($request)));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(EmisionCertificadoRequest $request, CertificadoEmisionService $service)
     {
-        $data = $request->validate([
-            'loteid' => 'required|exists:lote,loteid',
-            'resultado' => ['nullable', 'string', Rule::in(CertificacionLote::RAZONES)],
-            'observaciones' => 'nullable|string|max:1000',
-        ]);
+        $cert = $service->emitirCampo($request->user(), Lote::findOrFail($request->validated('loteid')), $request->validated());
 
-        $resultado = $data['resultado'] ?? CertificacionLote::RAZON_CERTIFICADO;
-
-        if ($resultado === CertificacionLote::RAZON_NO_CONFORME && blank($data['observaciones'] ?? null)) {
-            return response()->json([
-                'message' => 'Indique el motivo del no conforme (daños, plagas, calidad, etc.).',
-                'errors' => ['observaciones' => ['El campo observaciones es obligatorio para No conforme.']],
-            ], 422);
-        }
-
-        $lote = Lote::findOrFail($data['loteid']);
-
-        $prefijo = $resultado === CertificacionLote::RAZON_NO_CONFORME ? 'NCONF' : 'CERT';
-        $codigo = $prefijo.'-'.now()->format('Y').'-'.str_pad((string) $lote->loteid, 4, '0', STR_PAD_LEFT);
-
-        $estadoNombre = $resultado === CertificacionLote::RAZON_CERTIFICADO
-            ? 'Certificado'
-            : 'No conforme';
-        $estadoDescripcion = $resultado === CertificacionLote::RAZON_CERTIFICADO
-            ? 'Lote validado para despacho y trazabilidad'
-            : 'Lote no apto para ingreso a almacén';
-
-        $estado = EstadoLoteTipo::firstOrCreate(
-            ['nombre' => $estadoNombre],
-            ['descripcion' => $estadoDescripcion]
-        );
-
-        $cert = CertificacionLote::updateOrCreate(
-            ['loteid' => $lote->loteid],
-            [
-                'usuarioid' => auth()->id(),
-                'codigo_certificado' => $codigo,
-                'resultado' => $resultado,
-                'observaciones' => $data['observaciones'] ?? null,
-                'fecha_certificacion' => now(),
-            ]
-        );
-
-        $lote->update(['estadolotetipoid' => $estado->estadolotetipoid]);
-
-        HistorialEstadoLote::create([
-            'loteid' => $lote->loteid,
-            'estadolotetipoid' => $estado->estadolotetipoid,
-            'fecha_cambio' => now(),
-            'observaciones' => $resultado.': '.$cert->codigo_certificado
-                .(($data['observaciones'] ?? null) ? ' — '.$data['observaciones'] : ''),
-            'usuarioid' => auth()->id(),
-        ]);
-
-        app(\App\Services\Blockchain\CertificacionBlockchainService::class)
-            ->encolarSiCorresponde($cert->fresh());
-
-        return response()->json($cert->fresh()->load(['lote', 'usuario']), 201);
+        return response()->json((new CertificadoEmisionResource($cert))->resolve($request), 201);
     }
 }

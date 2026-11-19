@@ -202,6 +202,16 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
         ->middleware(['auth:sanctum', 'action.permission:pedidos,delete']);
 
     // CERTIFICACIONES - control granular API
+    Route::get('certificaciones/{certificacion}', [\App\Http\Controllers\CertificadoHistorialController::class, 'campo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('certificaciones/{certificacion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoCampo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('lotes/{lote}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialCampo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('lotes/{lote}/certificados/{certificacion}', [\App\Http\Controllers\CertificadoHistorialController::class, 'campoAnidado'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('lotes/{lote}/antecedentes', [\App\Http\Controllers\CertificadoHistorialController::class, 'recorridoCampo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('planta/lotes-produccion/{loteProduccion}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialPlanta'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+    Route::get('planta/lotes-produccion/{loteProduccion}/certificados/{evaluacionFinalLoteProduccion}', [\App\Http\Controllers\CertificadoHistorialController::class, 'plantaAnidado'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+    Route::get('planta/lotes-produccion/{loteProduccion}/antecedentes', [\App\Http\Controllers\CertificadoHistorialController::class, 'recorridoPlanta'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+    Route::get('planta/certificados/{evaluacionFinalLoteProduccion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoPlanta'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+
     Route::get('certificaciones', [CertificacionController::class, 'index'])
         ->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
     Route::post('certificaciones', [CertificacionController::class, 'store'])

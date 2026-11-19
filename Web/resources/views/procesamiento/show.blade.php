@@ -789,6 +789,7 @@
                 <div class="col-lg-6 mb-3">
                     <form action="{{ route('procesamiento.certificar', $lote) }}" method="POST" class="border rounded p-3 h-100" style="background:#f0fdf4;border-color:#bbf7d0!important">
                         @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                         <input type="hidden" name="razon" value="{{ \App\Models\EvaluacionFinalLoteProduccion::RAZON_CERTIFICADO }}">
                         <h6 class="font-weight-bold text-success mb-2"><i class="fas fa-check-circle mr-1"></i>Conforme</h6>
                         <input type="text" name="observaciones" class="form-control form-control-sm mb-2" maxlength="500" placeholder="Observación (opcional)">
@@ -800,6 +801,7 @@
                 <div class="col-lg-6 mb-3">
                     <form action="{{ route('procesamiento.certificar', $lote) }}" method="POST" class="border rounded p-3 h-100" style="background:#fffbeb;border-color:#fde68a!important" onsubmit="return confirm('¿Marcar este lote como no conforme? No podrá almacenarse.');">
                         @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                         <input type="hidden" name="razon" value="{{ \App\Models\EvaluacionFinalLoteProduccion::RAZON_NO_CONFORME }}">
                         <h6 class="font-weight-bold text-warning mb-2"><i class="fas fa-times-circle mr-1"></i>No conforme</h6>
                         <input type="text" name="observaciones" class="form-control form-control-sm mb-2" maxlength="500" placeholder="Motivo obligatorio: daños, calidad…" required>

@@ -12,6 +12,9 @@ class LoteEliminacionService
 {
     public function eliminar(Lote $lote): void
     {
+        if ($lote->certificaciones()->exists()) {
+            throw new \App\Exceptions\EliminacionBloqueadaException('No se puede eliminar un lote con certificados emitidos.');
+        }
         $lote->loadMissing('estadoTipo');
         $nombre = (string) $lote->nombre;
 
@@ -78,10 +81,6 @@ class LoteEliminacionService
 
         if (Schema::hasTable('historial_estados_lote')) {
             DB::table('historial_estados_lote')->where('loteid', $loteId)->delete();
-        }
-
-        if (Schema::hasTable('certificacion_lote')) {
-            DB::table('certificacion_lote')->where('loteid', $loteId)->delete();
         }
 
         if (Schema::hasTable('estadolote')) {

@@ -26,6 +26,11 @@ class MateriaPrimaLote extends Model
         'conformidad_recepcion' => 'boolean',
     ];
 
+    public function detallePedido(): BelongsTo
+    {
+        return $this->belongsTo(DetallePedido::class, 'detallepedidoid', 'detallepedidoid');
+    }
+
     public function materiaBase(): BelongsTo
     {
         return $this->belongsTo(MateriaPrimaBase::class, 'materiaprimabaseid', 'materiaprimabaseid');

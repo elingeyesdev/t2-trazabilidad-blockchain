@@ -382,7 +382,7 @@ class LoteProduccionPlantaService
 
     public function eliminar(Usuario $usuario, LoteProduccionPedido $lote): void
     {
-        if (! $this->puedeEliminar($lote)) {
+        if ($lote->evaluacionesFinales()->exists() || ! $this->puedeEliminar($lote)) {
             throw new \InvalidArgumentException(
                 'Solo puede eliminar lotes en fase «Lote creado», sin transformación iniciada.'
             );
@@ -407,12 +407,6 @@ class LoteProduccionPlantaService
 
         if (\Illuminate\Support\Facades\Schema::hasTable('registro_proceso_maquina_planta')) {
             \Illuminate\Support\Facades\DB::table('registro_proceso_maquina_planta')
-                ->where('loteproduccionpedidoid', $loteId)
-                ->delete();
-        }
-
-        if (\Illuminate\Support\Facades\Schema::hasTable('evaluacion_final_lote_produccion')) {
-            \Illuminate\Support\Facades\DB::table('evaluacion_final_lote_produccion')
                 ->where('loteproduccionpedidoid', $loteId)
                 ->delete();
         }

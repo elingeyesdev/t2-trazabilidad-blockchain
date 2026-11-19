@@ -48,7 +48,8 @@ class CertificacionIndexService
             return true;
         };
 
-        $lotes = LoteProduccionPedido::query()
+        $usuario = auth()->user();
+        $lotes = ($usuario ? CertificadoAcceso::scopePlanta(LoteProduccionPedido::query(), $usuario) : LoteProduccionPedido::whereRaw('1 = 0'))
             ->with([
                 'evaluacionesFinales',
                 'plantillaTransformacion',
@@ -70,7 +71,8 @@ class CertificacionIndexService
                 'loteProduccionPedido.plantillaTransformacion',
                 'inspector',
             ])
-            ->orderByDesc('fecha_evaluacion');
+            ->whereHas('loteProduccionPedido', fn ($q) => $usuario ? CertificadoAcceso::scopePlanta($q, $usuario) : $q->whereRaw('1 = 0'))
+            ->orderByDesc('fecha_evaluacion')->orderByDesc('evaluacionfinalloteid');
 
         if ($resultado === 'certificado') {
             $evaluacionesQuery->where('razon', EvaluacionFinalLoteProduccion::RAZON_CERTIFICADO);
@@ -108,13 +110,13 @@ class CertificacionIndexService
         $evaluaciones = $evaluacionesQuery->limit(50)->get();
 
         $certificadosOk = $lotes->filter(function (LoteProduccionPedido $lote) {
-            $ultima = $lote->evaluacionesFinales->sortByDesc('fecha_evaluacion')->first();
+            $ultima = $lote->evaluacionesFinales->sortBy([['fecha_evaluacion', 'desc'], ['evaluacionfinalloteid', 'desc']])->first();
 
             return $ultima && $ultima->esCertificado();
         });
 
         $noConformes = $lotes->filter(function (LoteProduccionPedido $lote) {
-            $ultima = $lote->evaluacionesFinales->sortByDesc('fecha_evaluacion')->first();
+            $ultima = $lote->evaluacionesFinales->sortBy([['fecha_evaluacion', 'desc'], ['evaluacionfinalloteid', 'desc']])->first();
 
             return $ultima && $ultima->esNoConforme();
         });
@@ -178,7 +180,7 @@ class CertificacionIndexService
 
         $evaluacionesQuery = CertificacionLote::query()
             ->with(['lote.cultivo', 'usuario'])
-            ->orderByDesc('fecha_certificacion');
+            ->orderByDesc('fecha_certificacion')->orderByDesc('certificacionid');
 
         if ($user && UsuarioRol::debeAcotarPorAsignacion($user)) {
             $evaluacionesQuery->whereHas('lote', fn ($l) => $l->where('usuarioid', (int) $user->usuarioid));
@@ -186,24 +188,11 @@ class CertificacionIndexService
             $evaluacionesQuery->whereHas('lote', fn ($l) => $l->whereIn('usuarioid', UsuarioRol::idsUsuariosBajoJefeAgricultor($user)));
         }
 
-        $evaluaciones = $evaluacionesQuery->limit(20)->get();
+        $evaluaciones = (clone $evaluacionesQuery)->limit(20)->get();
 
-        $certificadosQuery = CertificacionLote::query()
-            ->where('resultado', CertificacionLote::RAZON_CERTIFICADO);
-        $noConformesQuery = CertificacionLote::query()
-            ->where('resultado', CertificacionLote::RAZON_NO_CONFORME);
-
-        if ($user && UsuarioRol::debeAcotarPorAsignacion($user)) {
-            $certificadosQuery->whereHas('lote', fn ($l) => $l->where('usuarioid', (int) $user->usuarioid));
-            $noConformesQuery->whereHas('lote', fn ($l) => $l->where('usuarioid', (int) $user->usuarioid));
-        } elseif ($user && UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user)) {
-            $ids = UsuarioRol::idsUsuariosBajoJefeAgricultor($user);
-            $certificadosQuery->whereHas('lote', fn ($l) => $l->whereIn('usuarioid', $ids));
-            $noConformesQuery->whereHas('lote', fn ($l) => $l->whereIn('usuarioid', $ids));
-        }
-
-        $totalCertificados = $certificadosQuery->distinct('loteid')->count('loteid');
-        $totalNoConformes = $noConformesQuery->distinct('loteid')->count('loteid');
+        $ultimas = (clone $evaluacionesQuery)->without(['lote', 'usuario'])->get(['certificacionid', 'loteid', 'resultado'])->unique('loteid');
+        $totalCertificados = $ultimas->where('resultado', CertificacionLote::RAZON_CERTIFICADO)->count();
+        $totalNoConformes = $ultimas->where('resultado', CertificacionLote::RAZON_NO_CONFORME)->count();
 
         return [
             'ambito' => 'campo',
