@@ -134,6 +134,7 @@ final class DocumentoEntregaArchivo
             return true;
         }
 
+        $limiteAnterior = (int) ini_get('max_execution_time');
         @set_time_limit(120);
 
         try {
@@ -168,6 +169,8 @@ final class DocumentoEntregaArchivo
             ]);
 
             return false;
+        } finally {
+            @set_time_limit($limiteAnterior);
         }
     }
 
@@ -388,6 +391,11 @@ final class DocumentoEntregaArchivo
         $operacionChecklistIncidente = $envio?->checklistIncidente ?? $rutaOperacion?->checklistIncidente;
         $operacionFirmaTransportista = $envio?->firmaTransportista ?? $rutaOperacion?->firmaTransportista;
         $operacionFirmaRecepcion = $envio?->firmaRecepcion ?? $rutaOperacion?->firmaRecepcion;
+        // El comprobante EDT 5.2 incluye su firma únicamente mediante la ruta privada autorizada.
+        // No volver a incrustarla en las guías históricas almacenadas en el disco público.
+        $firmaRecepcionPrivada = ($envio || $rutaOperacion) && \App\Models\RecepcionQrEnvio::whereNotNull('utilizado_en')
+            ->when($envio, fn ($q) => $q->where('envioasignacionmultipleid', $envio->getKey()),
+                fn ($q) => $q->where('rutadistribucionid', $rutaOperacion->getKey()))->exists();
         $operacionLlegadaAt = $envio?->llegada_confirmada_at ?? $rutaOperacion?->llegada_confirmada_at;
 
         $transportistaNombre = trim((string) ($operacionFirmaTransportista?->nombrefirmante ?? ''));
@@ -474,7 +482,7 @@ final class DocumentoEntregaArchivo
             'observacionPersonalCondiciones' => self::extraerObservacionManual($operacionChecklistCondicion?->observaciones),
             'observacionPersonalIncidentes' => self::extraerObservacionManual($operacionChecklistIncidente?->observaciones),
             'firmaTransportistaImg' => self::firmaParaPdf($operacionFirmaTransportista?->imagenfirma),
-            'firmaRecepcionImg' => self::firmaParaPdf($operacionFirmaRecepcion?->imagenfirma),
+            'firmaRecepcionImg' => $firmaRecepcionPrivada ? null : self::firmaParaPdf($operacionFirmaRecepcion?->imagenfirma),
             'firmaRecepcionEtiqueta' => $firmaRecepcionEtiqueta,
             'llegadaConfirmadaAt' => $operacionLlegadaAt,
         ];

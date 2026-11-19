@@ -5,14 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Lote;
 use App\Models\Usuario;
-use App\Http\Resources\Api\ActividadConsultaResource;
 use App\Http\Resources\Api\LoteConsultaResource;
 use App\Support\ActividadPermisos;
 use App\Support\LoteAcceso;
-use App\Support\LoteCultivoResolver;
-use App\Support\LoteDefaults;
 use App\Support\LoteTrazabilidadService;
-use App\Support\UbicacionGpsParser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -113,83 +109,74 @@ class LoteController extends Controller
         return $relations;
     }
 
+    /** Reuses web seed, stock, geography and history rules. */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'usuarioid' => 'required|exists:usuario,usuarioid',
-            'nombre' => 'required|string|max:100',
-            'ubicacion' => 'nullable|string|max:200',
-            'superficie' => 'required|numeric|min:0.01',
-            'insumosemallaid' => 'nullable|exists:insumo,insumoid',
-            'cantidad_semilla_planificada' => 'nullable|numeric|min:0',
-            'latitud' => 'nullable|numeric|between:-90,90',
-            'longitud' => 'nullable|numeric|between:-180,180',
-            'imagen' => 'nullable|image|max:2048',
-        ]);
-
-        $data['cultivoid'] = LoteCultivoResolver::resolver($data['insumosemallaid'] ?? null);
-
-        $data['ubicacion'] = UbicacionGpsParser::normalizarUbicacionLote(
-            $data['ubicacion'] ?? null,
-            isset($data['latitud']) ? (float) $data['latitud'] : null,
-            isset($data['longitud']) ? (float) $data['longitud'] : null
+        $this->prepararEscritura($request);
+        $request->merge(['usuarioid' => $request->user()->usuarioid]);
+        $lote = \Illuminate\Support\Facades\DB::transaction(
+            fn () => app(\App\Http\Controllers\Web\LoteController::class)->store($request, true)
         );
-
-        if ($request->hasFile('imagen')) {
-            try {
-                $file = $request->file('imagen');
-                $filename = 'lote_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                $supabase = new \App\Services\SupabaseStorage();
-                $response = $supabase->upload($filename, file_get_contents($file), $file->getMimeType());
-                if ($response->successful()) {
-                    $data['imagenurl'] = $supabase->getPublicUrl($filename);
-                }
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Supabase upload error: ' . $e->getMessage());
-            }
-        }
-
-        unset($data['imagen']);
-        $data = LoteDefaults::enrich($data, true);
-        $lote = Lote::create($data);
-        LoteDefaults::registrarHistorialInicial($lote);
-
-        return response()->json(
-            $lote->load(['usuario', 'cultivo', 'estadoTipo', 'insumoSemilla'])
-                ->makeVisible(['usuario', 'cultivo', 'estadoTipo', 'insumoSemilla']),
-            201
-        );
+        return (new LoteConsultaResource($lote->load($this->relacionesConsulta($request->user()))))
+            ->response()->setStatusCode(201);
     }
 
+    /** PUT and PATCH retain omitted fields, preserving the existing mobile contract. */
     public function update(Request $request, $lote)
     {
-        $lote = $lote instanceof Lote ? $lote : Lote::query()->findOrFail($lote);
+        $lote = Lote::query()->findOrFail($lote);
         abort_unless(LoteAcceso::puedeGestionar($request->user(), $lote), 403, 'No tienes acceso a este lote.');
-
-        $data = $request->validate([
-            'usuarioid' => 'sometimes|exists:usuario,usuarioid',
-            'nombre' => 'sometimes|string|max:100',
-            'ubicacion' => 'nullable|string|max:200',
-            'superficie' => 'sometimes|numeric|min:0.01',
-            'insumosemallaid' => 'nullable|exists:insumo,insumoid',
-            'cantidad_semilla_planificada' => 'nullable|numeric|min:0',
-            'latitud' => 'nullable|numeric|between:-90,90',
-            'longitud' => 'nullable|numeric|between:-180,180',
-        ]);
-
-        if (isset($data['insumosemallaid'])) {
-            $data['cultivoid'] = LoteCultivoResolver::resolver($data['insumosemallaid'] ?? null);
+        $this->prepararEscritura($request, true);
+        $fields = ['nombre', 'ubicacion', 'superficie', 'insumosemillaid', 'cantidad_semilla_planificada', 'latitud', 'longitud'];
+        $request->attributes->set('lote_campos_enviados', array_keys($request->only($fields)));
+        $data = array_replace($lote->only($fields), $request->only($fields));
+        if (array_intersect(['latitud', 'longitud'], $request->attributes->get('lote_campos_enviados'))) {
+            $this->validarCoordenadas($data);
         }
-
-        $data = LoteDefaults::enrich($data, false);
-        $lote->update($data);
-
-        return response()->json(
-            $lote->load(['usuario', 'cultivo', 'estadoTipo', 'insumoSemilla'])
-                ->makeVisible(['usuario', 'cultivo', 'estadoTipo', 'insumoSemilla'])
+        $request->replace($data + ['usuarioid' => $lote->usuarioid]);
+        $lote = \Illuminate\Support\Facades\DB::transaction(
+            fn () => app(\App\Http\Controllers\Web\LoteController::class)->update($request, $lote, true)
         );
+        return new LoteConsultaResource($lote->load($this->relacionesConsulta($request->user())));
     }
 
+    private function prepararEscritura(Request $request, bool $parcial = false): void
+    {
+        $request->headers->set('Accept', 'application/json');
+        $rules = [];
+        foreach (['usuarioid', 'cultivoid', 'actorid', 'estadolotetipoid', 'unidadsuperficieid', 'codigo_trazabilidad', 'fechasiembra', 'fechacreacion', 'fechamodificacion', 'imagenurl', 'organizacionid', 'role', 'insumosemallaid'] as $field) {
+            $rules[$field] = ['missing'];
+        }
+        $rules['insumosemillaid'] = [$parcial ? 'sometimes' : 'required', 'required', 'integer', 'exists:insumo,insumoid'];
+        $rules['superficie'] = [$parcial ? 'sometimes' : 'required', 'required', 'numeric', 'min:0.01'];
+        $rules['latitud'] = ['sometimes', 'nullable', 'numeric', 'between:-90,90'];
+        $rules['longitud'] = ['sometimes', 'nullable', 'numeric', 'between:-180,180'];
+        $request->validate($rules, ['missing' => 'El campo :attribute se establece en el servidor.', 'required' => 'El campo :attribute es obligatorio.']);
+        if (! $parcial) {
+            $this->validarCoordenadas($request->only(['latitud', 'longitud']));
+        }
+        if ($request->filled('insumosemillaid')) {
+            $ids = \App\Support\AlmacenAcceso::idsVisibles($request->user());
+            $insumo = \App\Models\Insumo::with('almacen')->find($request->input('insumosemillaid'));
+            $visible = $insumo && ($insumo->almacenid === null || ($insumo->almacen
+                && (\App\Support\AlmacenAmbito::resolverAmbito($insumo->almacen) === \App\Support\AlmacenAmbito::AGRICOLA
+                    ? \App\Support\CampoAccess::puedeVerAlmacen($request->user(), $insumo->almacen)
+                    : in_array($insumo->almacenid, $ids, true))));
+            if (! $visible) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['insumosemillaid' => 'Seleccione una semilla de su ámbito autorizado.']);
+            }
+        }
+    }
+
+    private function validarCoordenadas(array $data): void
+    {
+        if (($data['latitud'] ?? null) === null xor ($data['longitud'] ?? null) === null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'latitud' => 'Indique ambas coordenadas o deje ambas vacías.',
+                'longitud' => 'Indique ambas coordenadas o deje ambas vacías.',
+            ]);
+        }
+    }
     public function destroy(Request $request, $lote)
     {
         $lote = $lote instanceof Lote ? $lote : Lote::query()->findOrFail($lote);

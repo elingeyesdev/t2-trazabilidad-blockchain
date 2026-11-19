@@ -234,6 +234,9 @@
 @endpush
 
 @section('content')
+@if(!empty($resumen['qr_recepciones']) && !($resumen['esperando_firma_qr'] ?? false))
+    @include('logistica.partials.cierre-firma-recepcion-qr', ['resumen' => $resumen])
+@endif
 @php
     use App\Support\EnvioCierreAgricolaCatalogo as CierreCat;
     $paso = $pasoVista ?? ($resumen['paso_actual'] ?? CierreCat::PASO_CONDICIONES);

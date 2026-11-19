@@ -17,12 +17,41 @@ class RecepcionQrPublicaController extends Controller
         private readonly RecepcionQrFirmaService $recepcionQr,
     ) {}
 
-    public function show(Request $request, string $token): View
+    public function show(Request $request, string $token): View|RedirectResponse
     {
         $qr = $this->recepcionQr->resolverPorToken($token);
         $operacion = $this->recepcionQr->resolverOperacion($qr);
         $operacion->loadMissing('firmaTransportista', 'firmaRecepcion');
         $usuario = $request->user();
+
+        // Los enlaces previos siguen identificando el envío, pero se reciben con el código propio.
+        if (! $qr->clave_operacion && $usuario) {
+            $consulta = app(\App\Services\EnvioMovilConsultaService::class);
+            $tieneLineas = $operacion instanceof EnvioAsignacionMultiple
+                ? $operacion->pedido?->detalles()->exists()
+                : ($operacion->esTrasladoPlantaMayorista() ? $operacion->detallesTraslado()->exists() : $operacion->pedidos()->exists());
+            if ($tieneLineas && $consulta->permiso($consulta->tipo($operacion), $usuario)) {
+                $service = app(\App\Services\EnvioRecepcionQrService::class);
+                $service->autorizarConsulta($qr, $usuario);
+                $simulado = (new \App\Models\RecepcionQrEnvio)->forceFill(['destinatario_usuarioid' => $usuario->getKey()]);
+                if ($service->puedeConfirmar($simulado, $usuario, $operacion)) {
+                    foreach ($service->emitir($operacion) as $propio) {
+                        if ($service->puedeConfirmar($propio, $usuario, $operacion)) {
+                            return redirect()->route('recepcion.publica', $propio->token);
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($qr->clave_operacion && $usuario) {
+            $service = app(\App\Services\EnvioRecepcionQrService::class);
+            $operacion = $service->autorizarConsulta($qr, $usuario);
+            $consulta = app(\App\Services\EnvioMovilConsultaService::class);
+            return view('recepcion.confirmar', ['qr' => $qr, 'token' => $token,
+                'envio' => $consulta->datos($operacion, $usuario),
+                'puedeConfirmar' => $service->puedeConfirmar($qr, $usuario, $operacion)]);
+        }
 
         // Tras iniciar sesión, el receptor vuelve a esta misma pantalla para firmar.
         if ($usuario === null) {
@@ -42,7 +71,7 @@ class RecepcionQrPublicaController extends Controller
             'sinFirmaTransportista' => $operacion->firmaTransportista === null,
             'requiereSesion' => $usuario === null,
             // MAY-14: el mayorista indica lo que realmente recibió por línea.
-            'lineasTraslado' => $operacion instanceof RutaDistribucion && $operacion->esTrasladoPlantaMayorista()
+            'lineasTraslado' => $usuario && $this->recepcionQr->esReceptorAutorizado($operacion, $usuario) && $operacion instanceof RutaDistribucion && $operacion->esTrasladoPlantaMayorista()
                 ? $operacion->detallesTraslado()->get()
                 : collect(),
             'puedeFirmar' => $this->recepcionQr->esReceptorAutorizado($operacion, $usuario),
@@ -52,6 +81,25 @@ class RecepcionQrPublicaController extends Controller
 
     public function firmar(Request $request, string $token): RedirectResponse|JsonResponse
     {
+        $qr = $this->recepcionQr->resolverPorToken($token);
+        $operacion = $this->recepcionQr->resolverOperacion($qr);
+        if (! $qr->clave_operacion && ($operacion instanceof EnvioAsignacionMultiple
+            ? $operacion->pedido?->detalles()->exists()
+            : ($operacion->esTrasladoPlantaMayorista() ? $operacion->detallesTraslado()->exists() : $operacion->pedidos()->exists()))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['codigo' => 'Abra el enlace de recepción para utilizar el código específico del destinatario.']);
+        }
+        if ($qr->clave_operacion) {
+            $data = $request->validate(['imagen_firma' => ['required', 'string', 'max:1400000'], 'lineas' => ['required', 'array', 'min:1', 'max:500'], 'lineas.*' => ['required', 'array'],
+                'firmante_usuarioid' => ['missing'], 'usuarioid' => ['missing'], 'fecha' => ['missing'], 'estado' => ['missing']]);
+            try {
+                app(\App\Services\EnvioRecepcionQrService::class)->confirmar($qr, $request->user(), $data['lineas'], $data['imagen_firma']);
+            } catch (\InvalidArgumentException $e) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['recepcion' => $e->getMessage()]);
+            }
+            return $request->expectsJson()
+                ? response()->json(['mensaje' => 'Recepción registrada correctamente.'])
+                : redirect()->route('recepcion.publica', $token)->with('exito', 'Recepción registrada correctamente.');
+        }
         $validated = $request->validate([
             'imagen_firma' => ['required', 'string'],
             'recepcion' => ['nullable', 'array'],

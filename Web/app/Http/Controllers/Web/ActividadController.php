@@ -87,47 +87,36 @@ class ActividadController extends Controller
      */
     public function calendario(Request $request)
     {
-        $baseQuery = $this->queryActividadesVisibles($request)->whereNotNull('fechainicio');
+        if (! $request->expectsJson() && ! $request->hasAny(['start', 'end'])) {
+            return view('actividades.calendario');
+        }
+        $data = $request->validate([
+            'start' => 'required|date_format:Y-m-d',
+            'end' => 'required|date_format:Y-m-d|after:start',
+        ]);
+        $inicio = Carbon::createFromFormat('!Y-m-d', $data['start']);
+        $fin = Carbon::createFromFormat('!Y-m-d', $data['end']);
+        if ($inicio->diffInDays($fin) > 62) {
+            throw ValidationException::withMessages(['end' => 'El intervalo no puede superar 62 días.']);
+        }
+        $query = Actividad::query();
+        ActividadPermisos::aplicarScopeVisibles($query, $request->user());
+        $query->whereHas('lote', fn ($q) => \App\Support\LoteAcceso::aplicarScopeVisibles($q, $request->user()));
+        $sinFecha = (clone $query)->whereNull('fecha_planificada')->whereNull('fechainicio')->count();
+        $query->where(function ($q) use ($data, $inicio, $fin) {
+            $q->where(function ($plan) use ($data) {
+                $plan->where('fecha_planificada', '>=', $data['start'])->where('fecha_planificada', '<', $data['end']);
+            })->orWhere(function ($real) use ($inicio, $fin) {
+                $real->whereNull('fecha_planificada')->where('fechainicio', '>=', $inicio)->where('fechainicio', '<', $fin);
+            });
+        });
+        $eventos = $query->with(['lote:loteid,nombre', 'usuario:usuarioid,nombre,apellido', 'tipoActividad:tipoactividadid,nombre'])
+            ->orderBy('fecha_planificada')->orderBy('fechainicio')->orderBy('actividadid')->get()
+            ->map(fn ($actividad) => $this->formatEventoCalendario($actividad))->values();
 
-        $stats = [
-            'total' => (clone $baseQuery)->count(),
-            'mes' => (clone $baseQuery)
-                ->whereMonth('fechainicio', now()->month)
-                ->whereYear('fechainicio', now()->year)
-                ->count(),
-            'hoy' => (clone $baseQuery)->whereDate('fechainicio', now()->toDateString())->count(),
-            'pendientes' => (clone $baseQuery)->whereNull('fechafin')->count(),
-            'completadas' => (clone $baseQuery)->whereNotNull('fechafin')->count(),
-        ];
-
-        $actividades = (clone $baseQuery)
-            ->with(['lote.cultivo', 'usuario', 'tipoActividad'])
-            ->orderBy('fechainicio')
-            ->get();
-
-        $eventos = $actividades->map(fn ($act) => $this->formatEventoCalendario($act))->values();
-
-        $user = $request->user();
-        $lotes = $this->queryLotesParaActividad($request)->get();
-        $usuarios = $this->usuariosResponsablesActividad($request);
-        $puedeDesignarResponsable = $this->puedeDesignarResponsableActividad($user);
-        $esJefeAgricultorDesignando = $user && UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user);
-        $responsableSelectorParams = $this->paramsSelectorResponsableActividad($user);
-
-        $tiposActividad = TipoActividad::orderBy('nombre')->get();
-
-        return view('actividades.calendario', compact(
-            'stats',
-            'eventos',
-            'lotes',
-            'usuarios',
-            'tiposActividad',
-            'puedeDesignarResponsable',
-            'esJefeAgricultorDesignando',
-            'responsableSelectorParams',
-        ));
+        return response()->json(['eventos' => $eventos, 'sin_fecha' => $sinFecha])
+            ->header('Cache-Control', 'private, no-store');
     }
-
     public function create(Request $request)
     {
         abort_unless(
@@ -357,10 +346,7 @@ class ActividadController extends Controller
     {
         $this->autorizarLoteParaActividad($request, $lote);
 
-        $validator = Validator::make($request->all(), [
-            'evidencia_foto' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
-            'observaciones' => 'nullable|string|max:250',
-        ], [
+        $validator = Validator::make($request->all(), \App\Services\ActividadCierreService::reglas(), [
             'evidencia_foto.required' => 'Debe subir una foto del trabajo realizado en campo.',
             'evidencia_foto.image' => 'El archivo debe ser una imagen.',
             'evidencia_foto.max' => 'La imagen no puede superar 5 MB.',
@@ -382,7 +368,8 @@ class ActividadController extends Controller
                 $lote,
                 $request->user(),
                 $request->file('evidencia_foto'),
-                $request->input('observaciones')
+                $request->input('resultado'),
+                $request->input('consumos')
             );
         } catch (ValidationException $e) {
             return redirect()
@@ -399,6 +386,9 @@ class ActividadController extends Controller
     public function storeSiembra(Request $request, Lote $lote)
     {
         $this->autorizarLoteParaActividad($request, $lote);
+        if ($request->boolean('completar')) {
+            return $this->storeCompletarSiembra($request, $lote);
+        }
 
         $tipoSiembra = $this->tipoActividadSiembra();
         $bloqueo = $this->trazabilidad->mensajeActividadNoPermitida($lote, $tipoSiembra->nombre);
@@ -467,8 +457,9 @@ class ActividadController extends Controller
             ->with('success', 'Siembra asignada. El agricultor responsable podrá marcarla como realizada con una foto.');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, bool $devolverModelo = false)
     {
+        abort_if($request->boolean('completar'), 403, 'El trabajador asignado debe cerrar su tarea con resultado y fotografía.');
         abort_unless(
             UsuarioRol::gestionaCampo($request->user()) || $request->user()?->hasRole('admin'),
             403,
@@ -494,6 +485,9 @@ class ActividadController extends Controller
 
         $noPermitida = $this->trazabilidad->mensajeActividadNoPermitida($lote, $tipo->nombre ?? null);
         if ($noPermitida !== null) {
+            if ($devolverModelo) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['tipoactividadid' => $noPermitida]);
+            }
             return back()->withInput()->with('error', $noPermitida);
         }
 
@@ -603,6 +597,10 @@ class ActividadController extends Controller
             $lote->save();
         }
 
+        if ($devolverModelo) {
+            return $actividad->fresh();
+        }
+
         $mensaje = "Actividad de {$tipo->nombre} registrada para el lote {$lote->nombre}.{$msgEstado}";
 
         $returnUrl = $this->validReturnUrl($request->input('return'));
@@ -626,30 +624,11 @@ class ActividadController extends Controller
     public function show(Request $request, Actividad $actividad)
     {
         $this->autorizarActividadAsignada($request, $actividad);
-        $actividad->load(['lote', 'tipoActividad', 'usuario']);
+        $actividad->load(['lote', 'tipoActividad', 'usuario', 'ejecutor', 'prioridad', 'consumos.insumo.unidadMedida']);
+        abort_unless($actividad->lote && \App\Support\LoteAcceso::puedeVer($request->user(), $actividad->lote), 403);
+        $consulta = \App\Support\ActividadConsulta::presentar($actividad);
 
-        if ($actividad->lote && $actividad->fechafin === null) {
-            $tipo = mb_strtolower(trim($actividad->tipoActividad->nombre ?? ''));
-            if (str_contains($tipo, 'siembra')
-                && (int) $actividad->usuarioid === (int) $request->user()?->usuarioid) {
-                return redirect()->route('lotes.siembra.completar', $actividad->lote);
-            }
-
-            return redirect()
-                ->route('lotes.trazabilidad', $actividad->lote)
-                ->withFragment('historial-eventos');
-        }
-
-        if ($actividad->lote) {
-            return redirect()
-                ->route('lotes.trazabilidad', $actividad->lote)
-                ->withFragment('historial-eventos');
-        }
-
-        $actividad->load(['usuario', 'tipoActividad', 'prioridad']);
-        $puedeMarcarCompletada = ActividadPermisos::puedeMarcarCompletada($request->user(), $actividad);
-
-        return view('actividades.show', compact('actividad', 'puedeMarcarCompletada'));
+        return view('actividades.show', compact('actividad', 'consulta'));
     }
 
     public function edit(Request $request, Actividad $actividad)
@@ -683,6 +662,10 @@ class ActividadController extends Controller
 
     public function update(Request $request, Actividad $actividad)
     {
+        if ($actividad->fechafin !== null) {
+            return back()->with('error', 'El cierre confirmado de esta actividad no puede modificarse.');
+        }
+        $request->validate(['fechafin' => 'nullable|prohibited']);
         $this->autorizarActividadAsignada($request, $actividad);
 
         $data = $request->validate([
@@ -728,6 +711,7 @@ class ActividadController extends Controller
 
     public function destroy(Actividad $actividad)
     {
+        abort_if($actividad->fechafin !== null, 409, 'No se puede eliminar una actividad con cierre confirmado.');
         $actividad->delete();
 
         return redirect()->route('actividades.index')->with('success', 'Actividad eliminada.');
@@ -752,101 +736,22 @@ class ActividadController extends Controller
      */
     public function marcarRealizada(Request $request, Actividad $actividad)
     {
-        $this->autorizarMarcarActividadCompletada($request, $actividad);
-
-        if ($actividad->fechafin !== null) {
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', 'Esta actividad ya está completada.');
-        }
-
-        $bloqueoOrden = app(\App\Support\ActividadSecuenciaService::class)->mensajeBloqueoOrden($actividad);
-        if ($bloqueoOrden !== null) {
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', $bloqueoOrden);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'evidencia_foto' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120',
-        ], [
-            'evidencia_foto.required' => 'Debe subir una foto que demuestre que la actividad fue realizada.',
-            'evidencia_foto.image' => 'El archivo debe ser una imagen.',
-            'evidencia_foto.max' => 'La imagen no puede superar 5 MB.',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->redirectDespuesDeMarcar($request, $actividad)
-                ->withErrors($validator)
-                ->withInput();
-        }
-
         try {
-            DB::transaction(function () use ($request, $actividad) {
-                /** @var Actividad $locked */
-                $locked = Actividad::query()
-                    ->whereKey($actividad->actividadid)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                if ($locked->fechafin !== null) {
-                    throw new \InvalidArgumentException('Esta actividad ya está completada.');
-                }
-
-                app(\App\Support\ActividadSecuenciaService::class)->asegurarEnTurnoParaCompletar($locked);
-
-                $locked->evidencia_foto_path = EvidenciaFoto::guardar(
-                    $request->file('evidencia_foto'),
-                    'actividades_evidencia'
-                );
-                $locked->fechafin = now();
-                $completador = $request->user();
-                if ($completador) {
-                    $locked->usuarioid_ejecutor = (int) $completador->usuarioid;
-                }
-                $locked->save();
-
-                if ($locked->detalle_json) {
-                    $detalle = json_decode($locked->detalle_json, true);
-                    if (is_array($detalle)) {
-                        $this->actividadInsumos->aplicarStockSiCorresponde($locked, $detalle);
-                    }
-                }
-
-                $this->loteEstadoPorActividad->aplicarDesdeActividad($locked);
-
-                $locked->loadMissing(['lote', 'tipoActividad']);
-                $tipoNombre = mb_strtolower(trim($locked->tipoActividad->nombre ?? ''));
-                if (str_contains($tipoNombre, 'siembra') && $locked->lote && ! $locked->lote->fechasiembra) {
-                    $locked->lote->fechasiembra = now()->toDateString();
-                    $locked->lote->fechamodificacion = now();
-                    $locked->lote->save();
-                }
-
-                $this->notificaciones->descartarActividadAsignada((int) $locked->actividadid);
-            });
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $msg = collect($e->errors())->flatten()->first() ?? 'No puede completar esta actividad aún.';
-
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', $msg);
-        } catch (\InvalidArgumentException $e) {
+            $actividad = app(\App\Services\ActividadCierreService::class)->cerrar($request, $actividad);
+        } catch (ValidationException $e) {
+            return $this->redirectDespuesDeMarcar($request, $actividad)->withErrors($e->errors())->withInput();
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            if ($e->getStatusCode() !== 409) {
+                throw $e;
+            }
             return $this->redirectDespuesDeMarcar($request, $actividad, 'error', $e->getMessage());
-        } catch (\Exception $e) {
-            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', 'Error: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Fallo de cierre web', ['actividadid' => $actividad->actividadid, 'exception' => $e]);
+            return $this->redirectDespuesDeMarcar($request, $actividad, 'error', 'No se pudo cerrar la actividad. No se confirmaron cambios.');
         }
 
-        $actividad->refresh();
-        $estadoAplicado = $actividad->lote
-            ? ($actividad->lote->estadoTipo->nombre ?? null)
-            : null;
-        $mensajeEstado = $estadoAplicado
-            ? " El lote «{$actividad->lote->nombre}» cambió a «{$estadoAplicado}»."
-            : '';
-
-        return $this->redirectDespuesDeMarcar(
-            $request,
-            $actividad,
-            'success',
-            "Actividad marcada como realizada.{$mensajeEstado}"
-        );
+        return $this->redirectDespuesDeMarcar($request, $actividad, 'success', 'Actividad marcada como realizada.');
     }
-
     private function redirectDespuesDeMarcar(Request $request, Actividad $actividad, ?string $flashKey = null, ?string $message = null)
     {
         $actividad->loadMissing('lote');
@@ -1056,42 +961,23 @@ class ActividadController extends Controller
 
     private function formatEventoCalendario(Actividad $act): array
     {
-        $tipo = $act->tipoActividad->nombre ?? 'Actividad';
-        $lote = $act->lote->nombre ?? 'Sin lote';
         $pendiente = $act->fechafin === null;
-        $inicio = Carbon::parse($act->fechainicio);
-        $plan = $act->fecha_planificada
-            ? Carbon::parse($act->fecha_planificada)
-            : $inicio;
-        $hora = $inicio->format('H:i');
+        $fecha = $act->fecha_planificada ?? $act->fechainicio;
 
         return [
             'id' => (string) $act->actividadid,
-            'title' => $tipo.' — '.$lote,
-            'start' => $plan->format('Y-m-d'),
+            'title' => $act->descripcion ?: ($act->tipoActividad?->nombre ?? 'Actividad'),
+            'start' => $fecha->format('Y-m-d'),
             'allDay' => true,
+            'url' => route('actividades.show', $act),
+            'classNames' => [$pendiente ? 'actividad-pendiente' : 'actividad-completada'],
             'extendedProps' => [
-                'id' => $act->actividadid,
-                'tipo' => $tipo,
-                'tipoSlug' => Str::slug($tipo, '-', 'es'),
-                'lote' => $lote,
-                'loteid' => $act->loteid,
-                'responsable' => trim(($act->usuario->nombre ?? '').' '.($act->usuario->apellido ?? '')),
-                'usuarioid' => $act->usuarioid,
-                'hora' => $hora,
-                'horaTimestamp' => $inicio->timestamp,
-                'fechainicioFmt' => $inicio->format('d/m/Y H:i'),
-                'fechaPlanificadaFmt' => $act->fecha_planificada
-                    ? Carbon::parse($act->fecha_planificada)->format('d/m/Y')
-                    : null,
-                'fechafin' => $pendiente ? null : Carbon::parse($act->fechafin)->format('d/m/Y H:i'),
-                'pendiente' => $pendiente,
-                'observaciones' => $act->observaciones ?: $act->descripcion,
+                'responsable' => trim(($act->usuario?->nombre ?? '').' '.($act->usuario?->apellido ?? '')) ?: 'Sin asignar',
+                'lote' => $act->lote?->nombre,
+                'estado' => $pendiente ? 'Pendiente' : 'Completada',
             ],
-            'classNames' => $pendiente ? ['event-pendiente'] : ['event-completada'],
         ];
     }
-
     private function validReturnUrl(mixed $return): ?string
     {
         if (! is_string($return) || trim($return) === '') {

@@ -87,7 +87,7 @@ final class PuntoVentaAccess
 
         $ruta->loadMissing('pedidos.puntoVenta');
 
-        return $ruta->pedidos->contains(
+        return $ruta->pedidos->isNotEmpty() && $ruta->pedidos->every(
             fn (PedidoDistribucion $pedido) => $pedido->puntoVenta !== null
                 && (int) $pedido->puntoVenta->usuarioid === (int) $user->usuarioid
         );

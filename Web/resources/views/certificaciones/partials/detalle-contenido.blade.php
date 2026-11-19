@@ -1,3 +1,8 @@
+@if($cert->datos_emision)
+    @include('certificados.partials.instantanea', ['datos' => $cert->datos_emision])
+    @include('certificados.partials.integracion', ['cert' => $cert])
+@else
+    <div class="alert alert-light border">Sin instantánea histórica. Los datos del lote y los nombres que se muestran a continuación son actuales.</div>
 @php
     $lote = $cert->lote;
     $emitidoPor = $cert->usuario
@@ -331,3 +336,5 @@
         </div>
     @endif
 </div>
+
+@endif

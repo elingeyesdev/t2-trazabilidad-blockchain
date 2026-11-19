@@ -399,6 +399,9 @@
                                     <small class="text-secondary"><i class="ti ti-calendar me-1"></i>{{ $evento['fecha_fmt'] }}</small>
                                 </div>
                                 <strong class="d-block mt-2">{{ $evento['titulo'] }}</strong>
+                                @if(!empty($evento['actividadid']))
+                                    <a class="small" href="{{ route('actividades.show', $evento['actividadid']) }}">Ver detalle de actividad</a>
+                                @endif
                                 @php
                                     $descEvento = trim((string) ($evento['descripcion'] ?? ''));
                                     $tituloEvento = trim((string) ($evento['titulo'] ?? ''));

@@ -6,6 +6,9 @@ use App\Models\CatalogoTamanoConteo;
 use App\Models\Lote;
 use App\Models\Produccion;
 use App\Models\ProduccionAlmacenamiento;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Convierte kg de cosecha en unidades y cajas según el calibre planificado.
@@ -71,12 +74,14 @@ class CosechaPresentacionService
     }
 
     /** @return array<string, mixed> */
-    public function desdeKg(float $kg, ?CatalogoTamanoConteo $calibre): array
+    public function desdeKg(string|int|float $kg, ?CatalogoTamanoConteo $calibre): array
     {
-        if (! $calibre || (float) $calibre->peso_promedio_kg <= 0) {
+        $kg = BigDecimal::of((string) $kg)->toScale(6, RoundingMode::HALF_UP);
+        if (! $calibre || ! BigDecimal::of((string) $calibre->peso_promedio_kg)->isPositive()
+            || (int) $calibre->conteo_por_empaque <= 0) {
             return [
                 'ok' => false,
-                'kg' => round($kg, 2),
+                'kg' => (string) $kg,
                 'unidades' => null,
                 'empaques' => null,
                 'empaque_label' => 'Cajas',
@@ -84,17 +89,23 @@ class CosechaPresentacionService
             ];
         }
 
-        $pesoUnit = max(0.0001, (float) $calibre->peso_promedio_kg);
-        $conteo = max(1, (int) $calibre->conteo_por_empaque);
-        $unidades = (int) round($kg / $pesoUnit);
-        $empaques = (int) ceil($unidades / $conteo);
+        $pesoUnit = (string) $calibre->peso_promedio_kg;
+        $conteo = (int) $calibre->conteo_por_empaque;
+        $unidadesDecimal = $kg->dividedBy($pesoUnit, 0, RoundingMode::HALF_UP);
+        $empaquesDecimal = $unidadesDecimal->dividedBy($conteo, 0, RoundingMode::CEILING);
+        // unsignedInteger is a signed INTEGER on PostgreSQL; keep both channels portable.
+        if ($unidadesDecimal->isGreaterThan('2147483647') || $empaquesDecimal->isGreaterThan('2147483647')) {
+            throw ValidationException::withMessages(['cantidad' => 'La equivalencia en unidades o empaques supera la capacidad de almacenamiento.']);
+        }
+        $unidades = $unidadesDecimal->toInt();
+        $empaques = $empaquesDecimal->toInt();
         $empaqueLabel = self::etiquetaEmpaquePlural(
             self::tipoEmpaqueParaCosechaEnCampo($calibre->tipoEmpaque?->nombre)
         );
 
         return [
             'ok' => true,
-            'kg' => round($kg, 2),
+            'kg' => (string) $kg,
             'unidades' => $unidades,
             'empaques' => $empaques,
             'empaque_label' => $empaqueLabel,
@@ -113,21 +124,27 @@ class CosechaPresentacionService
     /** @return array<string, mixed> */
     public function paraProduccion(Produccion $produccion, ?Lote $lote = null): array
     {
-        $produccion->loadMissing(['unidadMedida', 'lote.catalogoTamanoConteo.tipoEmpaque']);
-        $lote = $lote ?? $produccion->lote;
-        $lote?->loadMissing('catalogoTamanoConteo.tipoEmpaque');
-
-        $kg = (float) ($produccion->cantidad_base ?? $this->capacidadService->convertirAKg(
-            (float) $produccion->cantidad,
-            $produccion->unidadMedida
-        ));
-
-        $calibre = $lote?->catalogoTamanoConteo;
-        if (! $calibre && $lote?->insumosemillaid) {
-            $calibre = $this->resolverCalibrePorDefecto((int) $lote->insumosemillaid);
+        if (is_array($produccion->presentacion_cosecha)) {
+            return $produccion->presentacion_cosecha + ['historica_sin_factor' => false];
         }
 
-        return $this->desdeKg($kg, $calibre);
+        // Historical records keep only what was persisted. Never reconstruct missing
+        // quantities/factors using the lot's or catalog's current configuration.
+        $completa = $produccion->cantidad_unidades !== null && $produccion->cantidad_empaques !== null;
+
+        return [
+            'ok' => $completa,
+            'kg' => $produccion->cantidad_base,
+            'unidades' => $produccion->cantidad_unidades,
+            'empaques' => $produccion->cantidad_empaques,
+            'calibre_id' => $produccion->catalogotamanoconteoid,
+            'calibre_nombre' => null,
+            'empaque_label' => 'Empaques',
+            'peso_promedio_kg' => null,
+            'conteo_por_empaque' => null,
+            'historica_sin_factor' => true,
+            'resumen' => $completa ? $produccion->cantidad_empaques.' empaques · '.$produccion->cantidad_unidades.' unidades' : null,
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -165,17 +182,4 @@ class CosechaPresentacionService
         return $this->paraProduccion($row->produccion, $row->produccion?->lote);
     }
 
-    private function resolverCalibrePorDefecto(int $insumoSemillaId): ?CatalogoTamanoConteo
-    {
-        $ctx = $this->planificacion->contexto($insumoSemillaId);
-        $calibreId = $ctx['calibre_default_id'] ?? null;
-
-        if (! $calibreId) {
-            return null;
-        }
-
-        return CatalogoTamanoConteo::query()
-            ->with('tipoEmpaque')
-            ->find((int) $calibreId);
-    }
 }

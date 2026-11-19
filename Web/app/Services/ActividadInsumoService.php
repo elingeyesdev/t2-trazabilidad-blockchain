@@ -152,78 +152,101 @@ class ActividadInsumoService
      */
     public function aplicarStockSiCorresponde(Actividad $actividad, array &$detalle): void
     {
-        if (($detalle['modo'] ?? '') !== 'insumos' || ! empty($detalle['stock_aplicado'])) {
+        if (($detalle['modo'] ?? '') !== 'insumos') {
             return;
         }
-
-        $actividad->loadMissing('lote');
-        $lote = $actividad->lote;
-        if ($lote === null) {
-            throw ValidationException::withMessages([
-                'detalle_actividad_json' => 'La actividad no tiene lote para resolver el almacén de insumos.',
-            ]);
-        }
-
-        $almacen = CampoAccess::almacenAgricolaParaLote($lote);
-        $tipoSalida = $this->tipoMovimientoSalidaConsumoActividad();
-        $ejecutorId = (int) ($actividad->usuarioid_ejecutor ?: $actividad->usuarioid);
-
-        DB::transaction(function () use ($actividad, &$detalle, $almacen, $tipoSalida, $ejecutorId) {
+        DB::transaction(function () use ($actividad, &$detalle) {
+            if (DB::getDriverName() === 'sqlite') {
+                DB::table('actividad')->where('actividadid', $actividad->actividadid)->update(['descripcion' => DB::raw('descripcion')]);
+            }
+            $locked = Actividad::query()->whereKey($actividad->actividadid)->lockForUpdate()->firstOrFail();
+            $persistido = json_decode($locked->detalle_json ?? '', true) ?: [];
+            if (! empty($persistido['stock_aplicado'])) {
+                $detalle = $persistido;
+                return;
+            }
+            $locked->loadMissing(['lote', 'tipoActividad']);
+            $almacen = CampoAccess::almacenAgricolaParaLote($locked->lote);
+            $filas = $detalle['insumos'] ?? [];
+            $max = ActividadDetalleCatalogo::maxInsumosPorTipo($locked->tipoActividad?->nombre);
+            if (count($filas) > $max) {
+                throw ValidationException::withMessages(['consumos' => "Se admiten como máximo $max insumos para esta actividad."]);
+            }
+            $ids = array_map(fn ($f) => (int) $f['insumoid'], $filas);
+            if (count($ids) !== count(array_unique($ids))) {
+                throw ValidationException::withMessages(['consumos' => 'No repitas el mismo insumo; registra su cantidad total.']);
+            }
+            $existencias = app(InventarioExistenciaService::class)->bloquear($ids);
+            $normalizados = [];
+            foreach ($filas as $i => $fila) {
+                $indice = $fila['_indice'] ?? $i;
+                $insumo = $existencias->get((int) $fila['insumoid']);
+                if (! $insumo || ! InsumoCatalogo::esInsumoOperativo($insumo)) {
+                    throw ValidationException::withMessages(["consumos.$indice.insumoid" => 'Selecciona un insumo operativo válido.']);
+                }
+                if ((int) $insumo->almacenid !== (int) $almacen->almacenid
+                    || (isset($fila['almacenid']) && (int) $fila['almacenid'] !== (int) $almacen->almacenid)) {
+                    throw ValidationException::withMessages(["consumos.$indice.almacenid" => 'El insumo no pertenece al almacén agrícola del lote.']);
+                }
+                $slug = ActividadDetalleCatalogo::slugInsumoParaTipoActividad($locked->tipoActividad?->nombre);
+                if ($slug === null || InsumoCatalogo::slugFromNombreTipo($insumo->tipo?->nombre) !== $slug) {
+                    throw ValidationException::withMessages(["consumos.$indice.insumoid" => 'El tipo de insumo no corresponde a esta actividad.']);
+                }
+                try {
+                    $cantidad = \App\Support\InventarioDecimal::consumo($fila['cantidad']);
+                } catch (\InvalidArgumentException $e) {
+                    throw ValidationException::withMessages(["consumos.$indice.cantidad" => $e->getMessage()]);
+                }
+                if (isset($fila['unidadmedidaid']) && (int) $fila['unidadmedidaid'] !== (int) $insumo->unidadmedidaid) {
+                    throw ValidationException::withMessages(["consumos.$indice.unidadmedidaid" => 'Usa la unidad del insumo sin conversiones.']);
+                }
+                if (\App\Support\InventarioDecimal::unidades($insumo->getRawOriginal('stock')) < \App\Support\InventarioDecimal::unidades($cantidad)) {
+                    throw ValidationException::withMessages(["consumos.$indice.cantidad" => 'Stock insuficiente en el almacén autorizado.']);
+                }
+                $normalizados[] = ['insumoid' => (int) $insumo->insumoid, 'almacenid' => (int) $almacen->almacenid,
+                    'materiaprimaloteid' => isset($fila['materiaprimaloteid']) ? (int) $fila['materiaprimaloteid'] : null,
+                    'inventario_presentacion_loteid' => isset($fila['inventario_presentacion_loteid']) ? (int) $fila['inventario_presentacion_loteid'] : null,
+                    'cantidad' => $cantidad, 'nombre' => $insumo->nombre, 'unidadmedidaid' => (int) $insumo->unidadmedidaid,
+                    'unidad' => $insumo->unidadMedida?->abreviatura ?? $insumo->unidadMedida?->nombre ?? 'ud'];
+            }
+            // All current stocks were checked while locked; write in the same deterministic order.
+            usort($normalizados, fn ($a, $b) => $a['insumoid'] <=> $b['insumoid']);
+            $tipoSalida = $this->tipoMovimientoSalidaConsumoActividad();
             $estadoId = $this->idEstadoAplicado();
-
-            foreach ($detalle['insumos'] as $fila) {
-                /** @var Insumo $insumo */
-                $insumo = Insumo::query()->lockForUpdate()->findOrFail((int) $fila['insumoid']);
-                $this->assertInsumoDeAlmacenOperativo($insumo, $almacen);
-
-                $cantidad = (float) $fila['cantidad'];
-                if ($cantidad <= 0) {
-                    continue;
+            foreach ($normalizados as $fila) {
+                $insumo = $existencias->get($fila['insumoid']);
+                $saldoAnterior = $insumo->getRawOriginal('stock');
+                try {
+                    $insumo->decrementarStock($fila['cantidad'], $fila['materiaprimaloteid'], false, null, $fila['inventario_presentacion_loteid']);
+                } catch (ValidationException $e) {
+                    $indice = array_search($fila['insumoid'], array_column($filas, 'insumoid'));
+                    throw ValidationException::withMessages(collect($e->errors())->mapWithKeys(fn ($mensajes, $campo) => ["consumos.$indice.$campo" => $mensajes])->all());
                 }
-
-                if ((float) $insumo->stock < $cantidad) {
-                    throw ValidationException::withMessages([
-                        'detalle_actividad_json' => 'Stock insuficiente de «'.$insumo->nombre.'» en el almacén «'.$almacen->nombre.'». Disponible: '
-                            .number_format((float) $insumo->stock, 2).' '.($fila['unidad'] ?? ''),
-                    ]);
-                }
-
-                $insumo->decrementarStock($cantidad);
-
                 AlmacenMovimiento::create([
-                    'almacenid' => (int) $almacen->almacenid,
-                    'insumoid' => (int) $insumo->insumoid,
-                    'tipo_movimiento_almacenid' => (int) $tipoSalida->tipo_movimiento_almacenid,
-                    'usuarioid' => $ejecutorId,
-                    'fecha' => now()->toDateString(),
-                    'cantidad' => $cantidad,
-                    'referencia' => 'ACT-'.$actividad->actividadid,
-                    'destino_motivo' => 'Lote #'.$actividad->loteid,
-                    'observaciones' => '[Consumo actividad #'.$actividad->actividadid
-                        .'] lote #'.$actividad->loteid
-                        .' · '.$insumo->nombre,
+                    'almacenid' => $almacen->almacenid, 'insumoid' => $insumo->insumoid,
+                    'tipo_movimiento_almacenid' => $tipoSalida->tipo_movimiento_almacenid,
+                    'usuarioid' => $actividad->usuarioid_ejecutor ?: $actividad->usuarioid,
+                    'fecha' => now()->toDateString(), 'cantidad' => $fila['cantidad'],
+                    'materiaprimaloteid' => $fila['materiaprimaloteid'] ?: null,
+                    'inventario_presentacion_loteid' => $fila['inventario_presentacion_loteid'],
+                    'unidadmedidaid' => $insumo->unidadmedidaid, 'saldo_anterior' => $saldoAnterior, 'saldo_posterior' => $insumo->getRawOriginal('stock'),
+                    'referencia' => 'ACT-'.$actividad->actividadid, 'destino_motivo' => 'Lote #'.$actividad->loteid,
+                    'observaciones' => '[Consumo actividad #'.$actividad->actividadid.'] '.$insumo->nombre,
                 ]);
-
                 LoteInsumo::create([
-                    'loteid' => $actividad->loteid,
-                    'actividadid' => $actividad->actividadid,
-                    'insumoid' => $insumo->insumoid,
-                    'usuarioid' => $actividad->usuarioid,
-                    'cantidadusada' => $cantidad,
-                    'fechauo' => now(),
-                    'costototal' => 0,
-                    'estadoloteinsumoid' => $estadoId,
-                    'observaciones' => 'Actividad #'.$actividad->actividadid,
+                    'loteid' => $actividad->loteid, 'actividadid' => $actividad->actividadid,
+                    'insumoid' => $insumo->insumoid, 'usuarioid' => $actividad->usuarioid,
+                    'cantidadusada' => $fila['cantidad'], 'fechauo' => now(), 'costototal' => 0,
+                    'estadoloteinsumoid' => $estadoId, 'observaciones' => 'Actividad #'.$actividad->actividadid,
                 ]);
             }
-
+            $detalle['modo'] = 'insumos';
+            $detalle['insumos'] = $normalizados;
             $detalle['stock_aplicado'] = true;
             $detalle['almacenid'] = (int) $almacen->almacenid;
-            $actividad->detalle_json = json_encode($detalle, JSON_UNESCAPED_UNICODE);
-            $actividad->save();
+            $locked->update(['detalle_json' => json_encode($detalle, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
         });
     }
-
     /**
      * @return array<int, array<string, mixed>>
      */

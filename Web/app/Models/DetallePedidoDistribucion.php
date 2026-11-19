@@ -14,6 +14,8 @@ class DetallePedidoDistribucion extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'datos_solicitud',
+
         'pedidodistribucionid',
         'almacen_mayorista_origenid',
         'insumoid',
@@ -29,6 +31,7 @@ class DetallePedidoDistribucion extends Model
     ];
 
     protected $casts = [
+        'datos_solicitud' => 'array',
         'detallepedidodistribucionid' => 'integer',
         'pedidodistribucionid' => 'integer',
         'almacen_mayorista_origenid' => 'integer',

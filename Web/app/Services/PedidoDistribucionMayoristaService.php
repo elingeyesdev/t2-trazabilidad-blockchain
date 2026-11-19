@@ -37,6 +37,17 @@ class PedidoDistribucionMayoristaService
     {
 
         $pedido->loadMissing('detalles.insumo.unidadMedida', 'almacenMayoristaOrigen');
+        if (!$pedido->requiere_coordinacion_planta && $pedido->detalles->isNotEmpty() && $pedido->detalles->every(fn ($d) => $d->insumo_presentacionid && !$d->es_solicitud_custom)) {
+            try {
+                app(PedidoEntradaService::class)->distribucion(request(), $pedido->detalles->map(fn ($d) => [
+                    'insumoid' => $d->insumoid, 'insumo_presentacionid' => $d->insumo_presentacionid,
+                    'inventario_presentacion_loteid' => $d->inventario_presentacion_loteid,
+                    'datos_solicitud' => $d->datos_solicitud, 'cantidad' => (string)$d->getRawOriginal('cantidad'),
+                ])->all(), (int)$pedido->getKey(), false);
+                return [];
+            } catch (\Illuminate\Validation\ValidationException $e) { return array_merge(...array_values($e->errors())); }
+        }
+
 
         $errores = [];
 
@@ -488,7 +499,7 @@ class PedidoDistribucionMayoristaService
             throw new InvalidArgumentException('No tiene permiso para editar esta solicitud.');
         }
 
-        $cantidad = (float) $data['cantidad'];
+        $cantidad = \App\Support\CosechaDecimal::cantidad($data['cantidad']);
         if ($cantidad <= 0) {
             throw new InvalidArgumentException('La cantidad debe ser mayor que cero.');
         }
@@ -537,6 +548,18 @@ class PedidoDistribucionMayoristaService
         }
 
         return DB::transaction(function () use ($pedido, $data, $cantidad, $insumo, $almacenId, $puntoId) {
+            $pedido = PedidoDistribucion::whereKey($pedido->getKey())->lockForUpdate()->firstOrFail();
+            if (!PedidoDistribucionCatalogo::puedeEditarSolicitudMinorista($pedido)) { throw new InvalidArgumentException('El pedido ya no admite edición.'); }
+            $pedido->load('detalles.presentacion');
+            $lineas = $pedido->detalles->map(function ($d, $i) use ($cantidad) {
+                return ['insumoid' => $d->insumoid, 'insumo_presentacionid' => $d->insumo_presentacionid,
+                    'inventario_presentacion_loteid' => $d->inventario_presentacion_loteid,
+                    'datos_solicitud' => $d->datos_solicitud, 'cantidad' => $i === 0 ? $cantidad : (string)$d->getRawOriginal('cantidad')];
+            });
+            if ($lineas->every(fn ($l) => $l['insumo_presentacionid'])) {
+                app(PedidoEntradaService::class)->distribucion(request(), $lineas->all(), (int)$pedido->getKey());
+            }
+
             if (PedidoDistribucionCatalogo::tieneTransportistaDesignado($pedido)) {
                 $this->liberarAsignacionLogistica($pedido);
             }
@@ -550,6 +573,11 @@ class PedidoDistribucionMayoristaService
 
             $detalle = $pedido->detalles->first();
             if ($detalle) {
+                if ($detalle->datos_solicitud) {
+                    $datos = $detalle->datos_solicitud;
+                    $datos['cantidad_kg'] = \App\Support\CosechaDecimal::kg($cantidad, (string)($datos['peso_neto_kg'] ?? $detalle->presentacion->getRawOriginal('peso_neto_kg')));
+                    $detalle->update(['datos_solicitud' => $datos]);
+                }
                 $detalle->update([
                     'insumoid' => $insumo->insumoid,
                     'producto_nombre' => $insumo->nombre,

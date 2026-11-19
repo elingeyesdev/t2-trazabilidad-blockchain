@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Registrar cosecha | AgroFusion')
 @section('page_title', 'Registrar Cosecha')
@@ -184,7 +185,7 @@
                     <div class="form-group">
                         <label><i class="fas fa-balance-scale mr-1 text-success"></i> Cantidad cosechada <span class="text-danger">*</span></label>
                         <div class="guia-campo mb-2">
-                            <strong>Kilogramos cosechados.</strong> Se sugiere la meta planificada; puede ajustar el valor si la cosecha real fue distinta.
+                            Registra el peso real en la unidad seleccionada. Usa punto decimal, hasta seis decimales y ningún separador de miles (ejemplo: 1250.75).
                         </div>
 
                         <div id="cosechaMetaPlanificada" class="d-none mb-3">
@@ -195,11 +196,12 @@
 
                         <div class="row cantidad-cosecha-row">
                             <div class="col-md-8">
-                                <label class="d-block small font-weight-bold mb-1">Kilogramos cosechados <span class="text-danger">*</span></label>
-                                <input type="number" step="0.01" name="cantidad" id="cantidad"
-                                       class="form-control" min="0.01" required
+                                <label for="cantidad" class="d-block small font-weight-bold mb-1">Cantidad cosechada <span class="text-danger">*</span></label>
+                                <input type="text" inputmode="decimal" name="cantidad" id="cantidad"
+                                       class="form-control @error('cantidad') is-invalid @enderror" required
                                        value="{{ old('cantidad', $estimacionLoteInicial['kg_cosecha_estimados'] ?? '') }}"
                                        placeholder="Ej: 18000">
+                                @error('cantidad')<small class="text-danger">{{ $message }}</small>@enderror
                             </div>
                             <div class="col-md-4">
                                 <label class="d-block small font-weight-bold mb-1">Unidad <span class="text-danger">*</span></label>
@@ -215,6 +217,22 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-8 form-group">
+                            <label for="catalogotamanoconteoid">Presentación / calibre <span class="text-danger">*</span></label>
+                            <select name="catalogotamanoconteoid" id="catalogotamanoconteoid" class="form-control @error('catalogotamanoconteoid') is-invalid @enderror" required>
+                                <option value="">Selecciona primero un lote</option>
+                            </select>
+                            @error('catalogotamanoconteoid')<small class="text-danger">{{ $message }}</small>@enderror
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label for="fechacosecha">Fecha de cosecha <span class="text-danger">*</span></label>
+                            <input type="date" name="fechacosecha" id="fechacosecha" class="form-control @error('fechacosecha') is-invalid @enderror" required value="{{ old('fechacosecha', now()->toDateString()) }}">
+                            @error('fechacosecha')<small class="text-danger">{{ $message }}</small>@enderror
+                        </div>
+                    </div>
+                    <p id="cosechaEquivalencia" class="text-muted small" role="status" aria-live="polite">La equivalencia se calcula en el servidor al indicar cantidad y presentación.</p>
 
                     <div class="alert alert-light border small mb-0 mt-3">
                         <i class="fas fa-info-circle text-success mr-1"></i>
@@ -317,6 +335,7 @@
         }
 
         function onLoteProduccionSeleccionado(extra) {
+            document.dispatchEvent(new CustomEvent('cosecha:lote-cambiado'));
             if (extra && (extra.cultivo || extra.responsable)) {
                 $('#infoCultivo').text(extra.cultivo || '—');
                 $('#infoResponsable').text(extra.responsable || '—');
@@ -360,103 +379,90 @@
             mostrarMetaPlanificada(estimacionActual);
         @endif
 
-        $('#cantidad, #unidadmedidaid').on('change keyup blur', checkSmartConversion);
-        function checkSmartConversion() {
-            const cantidadInput = $('#cantidad');
-            const unidadSelect = $('#unidadmedidaid');
-            const cantidad = parseFloat(cantidadInput.val()) || 0;
-            const unidadOption = unidadSelect.find('option:selected');
-            const unidadNombre = unidadOption.text().toLowerCase();
-            const unidadAbrev = unidadOption.data('abrev') ? unidadOption.data('abrev').toLowerCase() : '';
-
-            // 1. Normalize to KG
-            let cantidadKg = 0;
-            // Detectar unidad actual
-            if (unidadAbrev === 'kg' || unidadNombre.includes('kilo') || unidadNombre.includes('kg')) {
-                cantidadKg = cantidad;
-            } else if (unidadAbrev === 'g' || unidadNombre.includes('gramo') || unidadNombre.includes('gr')) {
-                cantidadKg = cantidad / 1000;
-            } else if (unidadAbrev === 't' || unidadNombre.includes('ton') || unidadNombre.includes('tonelada')) {
-                cantidadKg = cantidad * 1000;
-            } else if (unidadAbrev === 'lb' || unidadNombre.includes('libra')) {
-                cantidadKg = cantidad * 0.453592;
-            } else {
-                return; // Unidad no soportada para conversión inteligente
-            }
-
-            $('#smartConversionAlert').remove();
-
-            // 2. Determine Best Unit
-            let target = null;
-
-            // Priority: TON > KG
-            if (cantidadKg >= 1000) {
-                 // Suggest TON if current is NOT TON
-                 if (!unidadNombre.includes('ton') && !unidadAbrev.includes('t')) {
-                     target = { text: 'Ton', value: cantidadKg / 1000, keyword: 'ton', abrev: 't' };
-                 }
-            } 
-            else if (cantidadKg >= 1) {
-                // Suggest KG if current is NOT KG
-                 if (!unidadNombre.includes('kilo') && !unidadNombre.includes('kg') && unidadAbrev !== 'kg') {
-                     target = { text: 'Kg', value: cantidadKg, keyword: 'kilo', abrev: 'kg' };
-                 }
-            }
-
-            if (target) {
-                 mostrarSugerenciaConversion(cantidadInput, target.text, target.value, target.keyword, target.abrev);
-            }
+        const presentacionSelect = document.getElementById('catalogotamanoconteoid');
+        const equivalencia = document.getElementById('cosechaEquivalencia');
+        const consultas = new Set();
+        let versionConfig = 0;
+        let versionPrevia = 0;
+        let esperaPrevia;
+        let enviando = false;
+        let envioAutorizado = false;
+        const seleccionInicial = @json(old('catalogotamanoconteoid', $loteActivo?->catalogotamanoconteoid));
+        function loteSeleccionado() {
+            return document.querySelector('input[name="loteid"]')?.value || '';
         }
-
-        function mostrarSugerenciaConversion(inputElement, nuevaUnidadTexto, nuevoValor, keywordNuevaUnidad, nuevaAbrev) {
-            // Formatear valor para mostrar (max 2 decimales si es entero, o los necesarios)
-            const valorMostrado = Number.isInteger(nuevoValor) ? nuevoValor : nuevoValor.toFixed(3).replace(/\.?0+$/, '');
-
-            const alertHtml = `
-                <div id="smartConversionAlert" class="alert alert-warning p-2 mt-2 shadow-sm d-flex justify-content-between align-items-center" style="border-radius: 8px; cursor: pointer;">
-                    <div>
-                        <i class="fas fa-lightbulb text-warning mr-2"></i>
-                        <strong>Sugerencia:</strong> ¿Convertir a <strong>${valorMostrado} ${nuevaUnidadTexto}</strong>?
-                    </div>
-                    <button type="button" class="btn btn-sm btn-light border font-weight-bold" id="btnAplicarConversion">
-                        Aplicar
-                    </button>
-                </div>
-            `;
-            
-            inputElement.closest('.form-group').append(alertHtml);
-
-            $('#btnAplicarConversion').on('click', function() {
-                // Aplicar valor
-                $('#cantidad').val(nuevoValor);
-                
-                // Buscar y seleccionar la nueva unidad en el select
-                let unitFound = false;
-                $('#unidadmedidaid option').each(function() {
-                    const abrev = $(this).data('abrev') ? $(this).data('abrev').toLowerCase() : '';
-                    const text = $(this).text().toLowerCase();
-                    
-                    // Match robusto
-                    if ( (nuevaAbrev && abrev === nuevaAbrev.toLowerCase()) || 
-                         (keywordNuevaUnidad && text.includes(keywordNuevaUnidad)) ) {
-                        
-                        $(this).prop('selected', true);
-                        unitFound = true;
-                        return false; 
-                    }
-                });
-
-                if (unitFound) {
-                    $('#smartConversionAlert').remove();
-                    // Importante: disparar change en AMBOS para actualizar UI dependiente
-                    $('#unidadmedidaid').trigger('change');
-                    $('#cantidad').trigger('change');
-                } else {
-                    alert('No se encontró la unidad de medida destino en el sistema.');
-                    $('#smartConversionAlert').remove();
-                }
+        function consultar(url) {
+            // Keep track until the response body is read; aborting fetch alone does not
+            // guarantee the server has finished saving its session.
+            const consulta = fetch(url, {headers: {Accept: 'application/json'}}).then(async respuesta => {
+                const datos = await respuesta.json();
+                if (!respuesta.ok) throw new Error(Object.values(datos.errors || {}).flat()[0] || datos.message || 'No se pudo consultar la equivalencia.');
+                return datos;
             });
+            consultas.add(consulta);
+            consulta.finally(() => consultas.delete(consulta)).catch(() => {});
+            return consulta;
         }
+        async function cargarPresentaciones() {
+            const version = ++versionConfig;
+            ++versionPrevia;
+            clearTimeout(esperaPrevia);
+            presentacionSelect.replaceChildren(new Option('Selecciona una presentación', ''));
+            equivalencia.textContent = 'Selecciona una presentación para calcular la equivalencia.';
+            const loteid = loteSeleccionado();
+            if (!loteid) return;
+            try {
+                const url = new URL(@json(route('producciones.configuracion')), location.origin);
+                url.searchParams.set('loteid', loteid);
+                const datos = await consultar(url);
+                if (version !== versionConfig || enviando) return;
+                for (const p of datos.presentaciones) presentacionSelect.add(new Option(p.nombre + ' · ' + p.empaque, p.catalogotamanoconteoid));
+                const preferida = seleccionInicial || datos.predeterminada_id;
+                if ([...presentacionSelect.options].some(o => o.value === String(preferida))) presentacionSelect.value = String(preferida);
+                if (!datos.presentaciones.length) equivalencia.textContent = 'Este lote no tiene presentaciones activas configuradas. Revisa el catálogo.';
+                programarPrevia();
+            } catch (error) {
+                if (version === versionConfig && !enviando) equivalencia.textContent = error.message;
+            }
+        }
+        function programarPrevia() {
+            if (enviando) return;
+            clearTimeout(esperaPrevia);
+            ++versionPrevia;
+            equivalencia.textContent = 'La equivalencia se calcula al indicar cantidad y presentación.';
+            esperaPrevia = setTimeout(calcularPrevia, 350);
+        }
+        async function calcularPrevia() {
+            if (enviando) return;
+            const cantidad = document.getElementById('cantidad').value;
+            if (!cantidad || !loteSeleccionado() || !presentacionSelect.value) return;
+            const version = versionPrevia;
+            equivalencia.textContent = 'Calculando equivalencia…';
+            const url = new URL(@json(route('producciones.vista-previa')), location.origin);
+            for (const [clave, valor] of Object.entries({loteid: loteSeleccionado(), cantidad, unidadmedidaid: document.getElementById('unidadmedidaid').value, catalogotamanoconteoid: presentacionSelect.value})) url.searchParams.set(clave, valor);
+            try {
+                const datos = await consultar(url);
+                if (version !== versionPrevia || enviando) return;
+                equivalencia.textContent = datos.kg + ' kg · ' + datos.unidades + ' unidades estimadas · ' + datos.empaques + ' ' + datos.empaque_label + '. Factor: ' + datos.peso_promedio_kg + ' kg/unidad; ' + datos.conteo_por_empaque + ' unidades/empaque.';
+            } catch (error) {
+                if (version === versionPrevia && !enviando) equivalencia.textContent = error.message;
+            }
+        }
+        document.querySelector('form[enctype="multipart/form-data"]').addEventListener('submit', async function (evento) {
+            if (envioAutorizado) return;
+            evento.preventDefault();
+            if (enviando) return;
+            enviando = true;
+            clearTimeout(esperaPrevia);
+            // Finish all read requests before POST/redirect so they cannot consume or
+            // overwrite the validation flash data and old input on the shared session.
+            await Promise.allSettled([...consultas]);
+            envioAutorizado = true;
+            this.requestSubmit(evento.submitter || undefined);
+        });
+        document.addEventListener('cosecha:lote-cambiado', cargarPresentaciones);
+        $('#cantidad, #unidadmedidaid, #catalogotamanoconteoid').on('input change', programarPrevia);
+        cargarPresentaciones();
     });
 </script>
 @endpush

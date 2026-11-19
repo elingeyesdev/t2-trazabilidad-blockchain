@@ -12,7 +12,7 @@ final class CertificacionCampoService
         $lote->loadMissing('certificaciones');
 
         return $lote->certificaciones
-            ->sortByDesc(fn (CertificacionLote $c) => $c->fecha_certificacion?->timestamp ?? 0)
+            ->sortBy([['fecha_certificacion', 'desc'], ['certificacionid', 'desc']])
             ->first();
     }
 

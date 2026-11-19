@@ -203,9 +203,7 @@ class ReporteCentroService
 
         $criticos = (int) Insumo::query()
             ->where('almacenid', $almacen->almacenid)
-            ->where('stock', '>', 0)
-            ->whereColumn('stock', '<=', DB::raw('COALESCE(stockminimo, '.InsumoCatalogo::UMBRAL_ALERTA_STOCK.')'))
-            ->count();
+            ->whereNotNull('stockminimo')->get()->filter(fn ($insumo) => $insumo->stockBajo())->count();
 
         return [
             'stock' => $stockKg,

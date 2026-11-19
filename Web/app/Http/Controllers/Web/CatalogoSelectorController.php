@@ -480,12 +480,11 @@ class CatalogoSelectorController extends Controller
         $this->aplicarBusqueda($query, (string) $request->q, ['nombre', 'codigo_trazabilidad', 'ubicacion']);
 
         if ($request->boolean('solo_cosecha')) {
-            $trazabilidad = app(\App\Support\LoteTrazabilidadService::class);
             $planificacion = app(\App\Services\PlanificacionCosechaService::class);
             $perPage = min(50, max(5, (int) $request->input('per_page', 20)));
             $page = max(1, (int) $request->input('page', 1));
             $filtrados = $query->orderBy('nombre')->get()
-                ->filter(fn (Lote $l) => $trazabilidad->puedeRegistrarCosecha($l))
+                ->filter(fn (Lote $l) => app(\App\Services\CosechaRegistroService::class)->puedeRegistrar($request->user(), $l))
                 ->values();
             $total = $filtrados->count();
             $items = $filtrados->slice(($page - 1) * $perPage, $perPage)->values();
@@ -513,7 +512,7 @@ class CatalogoSelectorController extends Controller
                             'usuarioid' => $l->usuarioid,
                             'cultivo' => $l->cultivo?->nombre ?? 'Sin cultivo',
                             'superficie' => $l->superficie,
-                            'estimacion_cosecha' => $planificacion->estimacionUiDesdeLote($l),
+                            'estimacion_cosecha' => $planificacion->estimacionUiDesdeLote($l, soloLectura: true),
                         ],
                     ];
                 })->values(),
@@ -647,13 +646,13 @@ class CatalogoSelectorController extends Controller
         return $this->respuestaPaginada($request, $query->orderBy('nombre'), function (Insumo $i) use ($request, $inventarioPresentacion) {
             $unidad = $i->unidadMedida?->abreviatura ?? $i->unidadMedida?->nombre ?? 'ud';
             $alm = $i->almacen?->nombre;
-            $stock = (float) ($i->stock ?? 0);
+            $existencia = app(\App\Services\InventarioExistenciaService::class)->resumen($i);
+            $stock = (float) $existencia['cantidad_disponible'];
             $esSemilla = InsumoCatalogo::slugFromNombreTipo($i->tipo?->nombre) === 'material_siembra';
             $esProductoTerminado = mb_strtolower(trim($i->tipo?->nombre ?? '')) === 'producto terminado';
             if ($request->boolean('ambito_planta') && $esProductoTerminado) {
                 $almacenId = $request->filled('almacenid') ? (int) $request->almacenid : (int) $i->almacenid;
                 if ($almacenId > 0) {
-                    $inventarioPresentacion->asegurarInventarioDesdeStock($almacenId, (int) $i->insumoid);
                     $presentaciones = InsumoPresentacion::query()
                         ->where('insumoid', $i->insumoid)
                         ->where('activo', true)
@@ -718,6 +717,7 @@ class CatalogoSelectorController extends Controller
                     'almacen' => $alm,
                     'precio' => $i->preciounitario ?? 0,
                     'sin_stock' => $stock <= 0,
+                    'existencia' => $existencia,
                     'dosis_por_ha' => $esSemilla ? (float) ($dosisPorHa ?? 0) : null,
                     'dosis_unidad' => $dosisUnidad,
                     'dosis_unidad_legible' => $esSemilla ? CultivoSiembraCatalogo::unidadLegible($dosisUnidad) : null,
@@ -799,7 +799,6 @@ class CatalogoSelectorController extends Controller
         }
 
         if ($almacenId > 0) {
-            $inventarioPresentacion->asegurarInventarioDesdeStock($almacenId, $insumoId);
         }
 
         $items = InsumoPresentacion::query()
@@ -922,7 +921,6 @@ class CatalogoSelectorController extends Controller
 
         $presentacion = InsumoPresentacion::query()->find($presentacionId);
         if ($presentacion !== null) {
-            $inventarioPresentacion->asegurarInventarioDesdeStock($almacenId, (int) $presentacion->insumoid);
         }
 
         $lotes = $inventarioPresentacion->lotesDisponibles($almacenId, $presentacionId);

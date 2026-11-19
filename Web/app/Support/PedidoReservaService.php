@@ -3,162 +3,115 @@
 namespace App\Support;
 
 use App\Models\AlmacenMovimiento;
-use App\Models\DetallePedido;
 use App\Models\Insumo;
 use App\Models\Pedido;
 use App\Models\ProduccionAlmacenamiento;
 use App\Models\TipoMovimientoAlmacen;
+use App\Services\InventarioExistenciaService;
+use App\Services\PedidoEntradaService;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 final class PedidoReservaService
 {
-    /**
-     * @return array<int, string>
-     */
     public function verificarDisponibilidad(Pedido $pedido): array
     {
-        $pedido->loadMissing('detalles.insumo');
-        $errores = [];
+        try {
+            $this->comprobar($pedido, false);
 
-        foreach ($pedido->detalles as $detalle) {
-            $error = $this->verificarDetalle($detalle);
-            if ($error !== null) {
-                $errores[] = $error;
+            return [];
+        } catch (InvalidArgumentException $e) {
+            return [$e->getMessage()];
+        }
+    }
+
+    private function comprobar(Pedido $pedido, bool $bloquear): array
+    {
+        $pedido->loadMissing('detalles');
+        $lineas = $pedido->detalles->sortBy(fn ($d) => $d->producto_ref ?: 'insumo:'.$d->insumoid);
+        $fuentes = [];
+        $totales = [];
+        foreach ($lineas as $d) {
+            $cosecha = $d->produccionalmacenamientoid || str_starts_with($d->producto_ref ?? '', 'cosecha:');
+            $id = $cosecha ? ($d->produccionalmacenamientoid ?: (int) substr($d->producto_ref, 8)) : ($d->insumoid ?: (int) substr($d->producto_ref ?? '', 7));
+            $parteId = $d->materiaprimaloteid ? (int) $d->materiaprimaloteid : null;
+            $clave = ($cosecha ? 'cosecha:' : 'insumo:').$id.':'.($parteId ?? 0);
+            if (! $id) {
+                throw new InvalidArgumentException('El pedido no identifica existencias reales para todas sus líneas.');
             }
+            if (! isset($fuentes[$clave])) {
+                $query = $cosecha ? ProduccionAlmacenamiento::with(['unidadMedida', 'produccion', 'almacen'])->whereKey($id) : Insumo::with(['unidadMedida', 'almacen'])->whereKey($id);
+                if ($bloquear && ! $cosecha) {
+                    app(InventarioExistenciaService::class)->bloquear([(int) $id]);
+                }
+                if ($bloquear) {
+                    $query->lockForUpdate();
+                }
+                $origen = $query->first();
+                if (! $origen) {
+                    throw new InvalidArgumentException('El origen del pedido ya no existe.');
+                }
+                if ($bloquear && (! $origen->almacen || ! CampoAccess::puedeGestionarAlmacen(auth()->user(), $origen->almacen))) {
+                    abort(403, 'No puede comprometer existencias de un almacén agrícola ajeno.');
+                }
+                $factor = $d->datos_solicitud['factor_origen_kg'] ?? ($cosecha ? ($origen->produccion?->presentacion_cosecha['unidad_factor_kg'] ?? null) : null) ?? app(PedidoEntradaService::class)->factor($origen->unidadMedida);
+                if ($factor === null) {
+                    throw new InvalidArgumentException('No hay equivalencia verificable en kg para el origen.');
+                }
+                $stock = $cosecha ? ($origen->fechasalida ? '0' : $origen->getRawOriginal('cantidad')) : app(InventarioExistenciaService::class)->resumen($origen)['cantidad_disponible'];
+                if (! $cosecha) {
+                    $partidas = app(InventarioExistenciaService::class)->partidas($origen, $bloquear);
+                    if ($partidas->isNotEmpty() && ! $parteId) {
+                        throw new InvalidArgumentException('El pedido debe identificar la partida de material que realmente se consume.');
+                    }
+                    if ($parteId) {
+                        $parte = $partidas->firstWhere('materiaprimaloteid', $parteId);
+                        if (! $parte || ! app(InventarioExistenciaService::class)->utilizable($parte)) {
+                            throw new InvalidArgumentException('La partida de material no pertenece al producto o ya no está habilitada.');
+                        }
+                        $stockParte = BigDecimal::of((string) $parte->getRawOriginal('cantidad_disponible'));
+                        $stock = (string) ($stockParte->isLessThan((string) $stock) ? $stockParte : BigDecimal::of((string) $stock));
+                    }
+                }
+                $fuentes[$clave] = compact('origen', 'factor', 'stock', 'cosecha', 'parteId');
+            }
+            $totales[$clave] = ($totales[$clave] ?? BigDecimal::zero())->plus((string) $d->getRawOriginal('cantidad'));
+        }
+        foreach ($totales as $clave => $cantidad) {
+            $f = $fuentes[$clave];
+            try {
+                $nativa = $cantidad->dividedBy($f['factor'], 6, RoundingMode::UNNECESSARY);
+            } catch (\Brick\Math\Exception\MathException $e) {
+                throw new InvalidArgumentException('La cantidad no es representable en la unidad de origen con seis decimales.');
+            }
+            if ($nativa->isGreaterThan((string) $f['stock'])) {
+                throw new InvalidArgumentException('La cantidad acumulada supera las existencias disponibles del origen '.$clave.'.');
+            }
+            $fuentes[$clave]['cantidad'] = (string) $nativa;
         }
 
-        return $errores;
+        return $fuentes;
     }
 
     public function reservar(Pedido $pedido): void
     {
-        $errores = $this->verificarDisponibilidad($pedido);
-        if ($errores !== []) {
-            throw new InvalidArgumentException(implode(' ', $errores));
-        }
-
         DB::transaction(function () use ($pedido) {
-            foreach ($pedido->detalles as $detalle) {
-                $this->reservarDetalle($detalle, $pedido->numero_solicitud);
+            foreach ($this->comprobar($pedido, true) as $f) {
+                $origen = $f['origen'];
+                $cantidad = $f['cantidad'];
+                if ($f['cosecha']) {
+                    $saldo = BigDecimal::of((string) $origen->getRawOriginal('cantidad'))->minus($cantidad);
+                    $origen->update(['cantidad' => (string) $saldo->toScale(6), 'fechasalida' => $saldo->isZero() ? now() : null,
+                        'observaciones' => trim(($origen->observaciones ?? '').' Reservado para pedido '.$pedido->numero_solicitud.'.')]);
+                } else {
+                    $origen->decrementarStock($cantidad, $f['parteId']);
+                    $tipo = TipoMovimientoAlmacen::activosPorNaturaleza('salida')->firstOrFail();
+                    AlmacenMovimiento::create(['almacenid' => $origen->almacenid, 'insumoid' => $origen->getKey(), 'tipo_movimiento_almacenid' => $tipo->getKey(),
+                        'fecha' => now(), 'cantidad' => $cantidad, 'materiaprimaloteid' => $f['parteId'], 'unidadmedidaid' => $origen->unidadmedidaid, 'referencia' => $pedido->numero_solicitud, 'destino_motivo' => 'Reserva pedido planta', 'usuarioid' => auth()->id()]);
+                }
             }
-        });
-    }
-
-    private function verificarDetalle(DetallePedido $detalle): ?string
-    {
-        $ref = $detalle->producto_ref ?? '';
-        $cantidad = (float) $detalle->cantidad;
-        $label = $detalle->cultivo_personalizado ?: 'Producto';
-
-        if (str_starts_with($ref, 'insumo:') || $detalle->insumoid) {
-            $insumo = $detalle->insumoid
-                ? Insumo::query()->find($detalle->insumoid)
-                : Insumo::query()->find((int) substr($ref, 7));
-
-            if (! $insumo) {
-                return "No se encontró el insumo solicitado para «{$label}».";
-            }
-            if (! $insumo->tieneStockSuficiente($cantidad)) {
-                $disp = number_format((float) $insumo->stock, 2);
-
-                return "Stock insuficiente de «{$insumo->nombre}» (disponible: {$disp}).";
-            }
-
-            return null;
-        }
-
-        if (str_starts_with($ref, 'cosecha:') || $detalle->produccionalmacenamientoid) {
-            $cosecha = $this->resolverCosecha($detalle);
-            if (! $cosecha) {
-                return "No se encontró la cosecha en almacén para «{$label}».";
-            }
-            if ($cosecha->fechasalida !== null) {
-                return "La cosecha «{$label}» ya fue retirada del almacén agrícola.";
-            }
-            if ((float) $cosecha->cantidad < $cantidad) {
-                $disp = number_format((float) $cosecha->cantidad, 2);
-
-                return "Cantidad insuficiente de cosecha «{$label}» (disponible: {$disp}).";
-            }
-
-            return null;
-        }
-
-        return null;
-    }
-
-    private function reservarDetalle(DetallePedido $detalle, string $numeroSolicitud): void
-    {
-        $ref = $detalle->producto_ref ?? '';
-        $cantidad = (float) $detalle->cantidad;
-
-        if (str_starts_with($ref, 'insumo:') || $detalle->insumoid) {
-            $insumo = $detalle->insumoid
-                ? Insumo::query()->lockForUpdate()->findOrFail($detalle->insumoid)
-                : Insumo::query()->lockForUpdate()->findOrFail((int) substr($ref, 7));
-
-            $this->registrarSalidaInsumo($insumo, $cantidad, $numeroSolicitud);
-
-            return;
-        }
-
-        if (str_starts_with($ref, 'cosecha:') || $detalle->produccionalmacenamientoid) {
-            $cosecha = $this->resolverCosecha($detalle);
-            if (! $cosecha) {
-                return;
-            }
-
-            $cosecha = ProduccionAlmacenamiento::query()->lockForUpdate()->findOrFail($cosecha->produccionalmacenamientoid);
-            $nuevaCantidad = (float) $cosecha->cantidad - $cantidad;
-
-            if ($nuevaCantidad <= 0.0001) {
-                $cosecha->update([
-                    'cantidad' => 0,
-                    'fechasalida' => now(),
-                    'observaciones' => trim(($cosecha->observaciones ?? '')." Reservado para pedido {$numeroSolicitud}."),
-                ]);
-            } else {
-                $cosecha->update([
-                    'cantidad' => $nuevaCantidad,
-                    'observaciones' => trim(($cosecha->observaciones ?? '')." Reserva parcial ({$cantidad}) pedido {$numeroSolicitud}."),
-                ]);
-            }
-        }
-    }
-
-    private function registrarSalidaInsumo(Insumo $insumo, float $cantidad, string $numeroSolicitud): void
-    {
-        $tipoSalida = TipoMovimientoAlmacen::activosPorNaturaleza('salida')->first();
-
-        if ($tipoSalida && $insumo->almacenid) {
-            AlmacenMovimiento::create([
-                'almacenid' => $insumo->almacenid,
-                'insumoid' => $insumo->insumoid,
-                'tipo_movimiento_almacenid' => $tipoSalida->tipo_movimiento_almacenid,
-                'fecha' => now(),
-                'cantidad' => $cantidad,
-                'referencia' => $numeroSolicitud,
-                'destino_motivo' => 'Reserva pedido planta',
-                'observaciones' => 'Salida automática al aceptar pedido de planta.',
-                'usuarioid' => auth()->id(),
-            ]);
-        }
-
-        $insumo->decrementarStock($cantidad);
-    }
-
-    private function resolverCosecha(DetallePedido $detalle): ?ProduccionAlmacenamiento
-    {
-        if ($detalle->produccionalmacenamientoid) {
-            return ProduccionAlmacenamiento::query()->find($detalle->produccionalmacenamientoid);
-        }
-
-        $ref = $detalle->producto_ref ?? '';
-        if (! str_starts_with($ref, 'cosecha:')) {
-            return null;
-        }
-
-        return ProduccionAlmacenamiento::query()->find((int) substr($ref, 8));
+        }, 5);
     }
 }

@@ -42,6 +42,14 @@ class PedidoDistribucionSalidaMayoristaService
                     ?? $pedido->puntoVenta?->nombre
                     ?? 'Punto de venta';
 
+                $pendientes = $pedido->detalles->filter(fn ($d) => $d->insumo_presentacionid && !$this->yaDescontado($pedido, $d));
+                if ($pendientes->isNotEmpty()) {
+                    app(PedidoEntradaService::class)->distribucion(request(), $pendientes->map(fn ($d) => [
+                        'insumoid' => $d->insumoid, 'insumo_presentacionid' => $d->insumo_presentacionid,
+                        'inventario_presentacion_loteid' => $d->inventario_presentacion_loteid,
+                        'cantidad' => (string) $d->getRawOriginal('cantidad'), 'datos_solicitud' => $d->datos_solicitud,
+                    ])->all(), (int) $pedido->getKey());
+                }
                 foreach ($pedido->detalles as $detalle) {
                     if ($this->yaDescontado($pedido, $detalle)) {
                         $this->descontarSoloInventarioSiPendiente($detalle, $pedido);
@@ -107,16 +115,16 @@ class PedidoDistribucionSalidaMayoristaService
         ?TipoMovimientoAlmacen $tipoSalida = null,
         ?string $destinoMotivo = null,
     ): void {
-        $cantidadUnidades = (float) $detalle->cantidad;
+        $cantidadUnidades = (string) $detalle->getRawOriginal('cantidad');
         if ($cantidadUnidades <= 0) {
             throw new InvalidArgumentException('Cantidad inválida en el detalle del pedido.');
         }
 
         $detalle->loadMissing('presentacion.tipoEmpaque', 'insumo.unidadMedida', 'inventarioPresentacionLote');
         $presentacion = $detalle->presentacion;
-        $kgMovimiento = $presentacion
+        $kgMovimiento = $detalle->datos_solicitud['cantidad_kg'] ?? ($presentacion
             ? round($cantidadUnidades * $presentacion->pesoNetoKg(), 4)
-            : $cantidadUnidades;
+            : $cantidadUnidades);
 
         $insumoOrigen = $detalle->insumo;
         if ($insumoOrigen === null) {
@@ -143,7 +151,8 @@ class PedidoDistribucionSalidaMayoristaService
             $this->inventarioPresentacion->descontar(
                 $detalle->inventarioPresentacionLote,
                 $cantidadUnidades,
-                $kgMovimiento
+                $kgMovimiento,
+                $pedido->pedidodistribucionid
             );
         } elseif ($presentacion !== null) {
             $this->inventarioPresentacion->descontarFifo(
@@ -158,7 +167,7 @@ class PedidoDistribucionSalidaMayoristaService
                     "Stock insuficiente en origen para «{$insumoOrigen->nombre}». Disponible: {$insumoOrigen->stock}."
                 );
             }
-            $insumoOrigen->decrementarStock($kgMovimiento);
+            $insumoOrigen->decrementarStock($kgMovimiento, null, false, $pedido->pedidodistribucionid);
         }
 
         $tipoSalida ??= TipoMovimientoAlmacen::activosPorNaturaleza('salida')->firstOrFail();
@@ -194,7 +203,7 @@ class PedidoDistribucionSalidaMayoristaService
             return;
         }
 
-        $cantidadUnidades = (float) $detalle->cantidad;
+        $cantidadUnidades = (string) $detalle->getRawOriginal('cantidad');
         if ($cantidadUnidades <= 0) {
             return;
         }

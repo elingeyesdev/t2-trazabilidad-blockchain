@@ -15,6 +15,8 @@ class PedidoDistribucion extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'solicitud_id', 'solicitud_huella',
+
         'numero_solicitud',
         'puntoventaid',
         'almacen_planta_origenid',
@@ -93,6 +95,16 @@ class PedidoDistribucion extends Model
     public function registradoManualPor(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'registrado_manual_por_usuarioid', 'usuarioid');
+    }
+
+    public function decisiones()
+    {
+        return $this->hasMany(PedidoDecision::class, 'pedidodistribucionid', 'pedidodistribucionid');
+    }
+
+    public function ultimaDecision()
+    {
+        return $this->hasOne(PedidoDecision::class, 'pedidodistribucionid', 'pedidodistribucionid')->ofMany('secuencia', 'max');
     }
 
     public function detalles(): HasMany

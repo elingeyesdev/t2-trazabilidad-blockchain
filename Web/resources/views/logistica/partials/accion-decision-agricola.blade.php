@@ -3,13 +3,13 @@
     $tieneChofer = (bool) $asignacion->transportista_usuarioid;
 @endphp
 
-@if($pedido && ($puedeAceptarAgricola ?? auth()->user()?->can('pedidos.update')))
+@if($pedido && in_array('aceptar', app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($pedido, auth()->user()), true))
 <div class="env-decision-agricola mb-3">
     <div class="env-decision-head">
         <span class="env-decision-icon"><i class="fas fa-seedling"></i></span>
         <div>
             <strong class="d-block">Aprobación agrícola pendiente</strong>
-            <span class="small text-muted">Reserva stock del almacén agrícola para habilitar la salida del camión.</span>
+            <span class="small text-muted">Descuenta las cantidades del origen agrícola para habilitar la salida del camión.</span>
         </div>
     </div>
 
@@ -26,7 +26,7 @@
 
     <div class="env-paso-mini mb-2">
         <span class="env-paso-num">1</span>
-        <span>Aceptar y reservar material del almacén agrícola.</span>
+        <span>Aceptar y descontar material del origen agrícola.</span>
     </div>
     @if($tieneChofer)
         <div class="env-paso-mini mb-3">
@@ -35,25 +35,26 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('logistica.asignaciones.aceptar-pedido', $asignacion) }}" class="mb-2">
+    <form data-pedido-decision method="POST" action="{{ route('logistica.asignaciones.aceptar-pedido', $asignacion) }}" class="mb-2">
         @csrf
         <button type="button" class="btn btn-success btn-block font-weight-bold"
                 @disabled(($erroresStock ?? []) !== [])
                 data-confirm-modal
                 data-confirm-tone="success"
                 data-confirm-title="Confirmar aceptación del envío"
-                data-confirm-message="¿Confirma que puede reservar el stock del almacén agrícola y habilitar este envío?">
-            <i class="fas fa-check-circle mr-1"></i> Aceptar y reservar
+                data-confirm-message="¿Aceptar este pedido? Se descontarán las cantidades del origen agrícola.">
+            <i class="fas fa-check-circle mr-1"></i> Aceptar pedido
         </button>
     </form>
 
-    <details class="env-rechazo-details">
+    <details class="env-rechazo-details" @if($errors->has('motivo_rechazo') || old('motivo_rechazo')) open @endif>
         <summary class="small text-muted" style="cursor:pointer;">Rechazar solicitud</summary>
-        <form method="POST" action="{{ route('logistica.asignaciones.rechazar-pedido', $asignacion) }}" class="mt-2">
+        <form data-pedido-decision method="POST" action="{{ route('logistica.asignaciones.rechazar-pedido', $asignacion) }}" class="mt-2">
             @csrf
             <div class="form-group mb-2">
-                <label class="small text-muted mb-1">Motivo (opcional)</label>
-                <textarea name="motivo_rechazo" class="form-control form-control-sm" rows="2" maxlength="500" placeholder="Indique por qué no puede atenderse"></textarea>
+                <label class="small text-muted mb-1">Motivo del rechazo (obligatorio)</label>
+                <textarea required aria-label="Motivo del rechazo" name="motivo_rechazo" class="form-control form-control-sm" rows="2" maxlength="500" placeholder="Indique por qué no puede atenderse">{{ old('motivo_rechazo') }}</textarea>
+                            @error('motivo_rechazo')<span class="text-danger small d-block">{{ $message }}</span>@enderror
             </div>
             <button type="button" class="btn btn-outline-danger btn-sm btn-block"
                     data-confirm-modal

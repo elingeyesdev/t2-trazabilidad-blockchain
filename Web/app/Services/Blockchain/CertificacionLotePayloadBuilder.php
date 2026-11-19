@@ -35,6 +35,12 @@ class CertificacionLotePayloadBuilder
      */
     public function payloadSinHash(CertificacionLote $certificacion): array
     {
+        if (is_array($certificacion->datos_emision['blockchain_base'] ?? null)) {
+            $base = $certificacion->datos_emision['blockchain_base'];
+            $base['certificacion']['certificacionId'] = (int) $certificacion->getKey();
+
+            return $this->canonicalizar($base);
+        }
         $certificacion->loadMissing([
             'lote.actividades.tipoActividad',
             'lote.cultivo',
@@ -86,10 +92,6 @@ class CertificacionLotePayloadBuilder
         return hash('sha256', $this->jsonCanonico($payload));
     }
 
-    /**
-     * @param  mixed  $valor
-     * @return mixed
-     */
     public function canonicalizar(mixed $valor): mixed
     {
         if (! is_array($valor)) {
@@ -124,6 +126,9 @@ class CertificacionLotePayloadBuilder
      */
     private function resumenCosecha(Collection $producciones): array
     {
+        $mismaUnidad = $producciones->isNotEmpty()
+            && $producciones->every(fn (Produccion $p) => $p->unidadmedidaid !== null && $p->unidadMedida !== null)
+            && $producciones->pluck('unidadmedidaid')->unique()->count() === 1;
         $unidades = $producciones
             ->map(fn (Produccion $produccion) => $produccion->unidadMedida?->abreviatura ?: $produccion->unidadMedida?->nombre)
             ->filter()
@@ -138,7 +143,7 @@ class CertificacionLotePayloadBuilder
 
         return [
             'produccionesRegistradas' => $producciones->count(),
-            'cantidadTotal' => $this->numero($producciones->sum(fn (Produccion $produccion) => (float) $produccion->cantidad)),
+            'cantidadTotal' => $mismaUnidad ? $this->numero($producciones->sum(fn (Produccion $produccion) => (float) $produccion->cantidad)) : null,
             'unidad' => $unidades->count() === 1 ? $unidades->first() : ($unidades->isEmpty() ? null : 'mixta'),
             'ultimaFechaCosecha' => $this->fecha($ultimaFecha),
         ];

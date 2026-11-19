@@ -1,3 +1,7 @@
+@if($eval->datos_emision)
+    @include('certificados.partials.instantanea', ['datos' => $eval->datos_emision])
+@else
+    <div class="alert alert-light border">Sin instantánea histórica. Los datos del lote y los nombres que se muestran a continuación son actuales.</div>
 @php
     $lote = $eval->loteProduccionPedido;
     $inspector = $eval->inspector
@@ -217,3 +221,5 @@
         </div>
     @endif
 </div>
+
+@endif

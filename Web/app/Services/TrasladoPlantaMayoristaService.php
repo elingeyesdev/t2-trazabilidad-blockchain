@@ -848,7 +848,7 @@ class TrasladoPlantaMayoristaService
 
                 'stock' => 0,
 
-                'stockminimo' => InsumoCatalogo::UMBRAL_ALERTA_STOCK,
+                'stockminimo' => null,
 
                 'descripcion' => 'Producto recibido desde planta — '.$ref,
 
@@ -950,10 +950,7 @@ class TrasladoPlantaMayoristaService
 
                     $detalle->inventarioLote->referencia_lote,
 
-                    $unidadesRecibidas,
-
-                    $kgRecibidos
-
+                    $unidadesRecibidas, $kgRecibidos, $detalle->inventarioLote->fecha_vencimiento?->toDateString()
                 );
 
             }

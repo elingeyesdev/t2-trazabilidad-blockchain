@@ -11,10 +11,18 @@ class EvidenciaFoto
         return $file->store($carpeta, 'public');
     }
 
-    public static function urlDesdePath(?string $path): ?string
+    public static function urlDesdePath(?string $path, ?int $actividadid = null): ?string
     {
         if ($path === null || trim($path) === '') {
             return null;
+        }
+
+        if (preg_match('#^actividades_privadas/([0-9]+)/#', $path, $matches)) {
+            return route('actividades.evidencia', ['actividad' => $matches[1]]);
+        }
+
+        if (str_starts_with($path, 'actividades_evidencia/')) {
+            return $actividadid ? route('actividades.evidencia', ['actividad' => $actividadid]) : null;
         }
 
         return asset('storage/'.ltrim($path, '/'));

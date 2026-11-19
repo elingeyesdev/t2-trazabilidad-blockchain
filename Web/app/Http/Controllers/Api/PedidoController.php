@@ -2,124 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\Pedido;
+use App\Services\PedidoAgricolaCreacionService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 
-class PedidoController extends Controller
+/** Adaptador del contrato agrícola legado: objetos y listas planos con las claves originales. */
+class PedidoController extends PedidoMovilController
 {
-    public function index()
+    private function fila(Pedido $pedido): array
     {
-        return response()->json(
-            Pedido::with('detalles')->get()
-        );
+        return $pedido->only(['pedidoid', 'numero_solicitud', 'nombre_planta', 'origen_latitud', 'origen_longitud', 'origen_direccion', 'latitud', 'longitud', 'direccion_texto', 'estado', 'fechapedido', 'fechaEntregaDeseada', 'observaciones', 'fecha_aceptacion_agricola', 'aceptado_por_usuarioid']) + [
+            'decision' => $pedido->ultimaDecision?->only(['accion', 'estado_resultante', 'motivo', 'usuarioid', 'fecha']),
+            'motivo_rechazo' => $pedido->estado === 'rechazado' ? $pedido->ultimaDecision?->motivo : null,
+            'acciones_disponibles' => app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($pedido, request()->user()),
+            'detalles' => $pedido->detalles->map(fn ($d) => $d->only(['detallepedidoid', 'pedidoid', 'insumoid', 'producto_ref', 'produccionalmacenamientoid', 'nombre_planta', 'cultivo_personalizado', 'cantidad', 'observaciones']))->all()];
     }
 
-    public function show($id)
+    public function index(Request $request)
     {
-        return response()->json(
-            Pedido::with('detalles')->findOrFail($id)
-        );
+        $data = $request->validate(['per_page' => ['sometimes', 'integer', 'between:1,50'], 'page' => ['sometimes', 'integer', 'min:1']]);
+        $pagina = $this->consulta($request)->with('detalles')->orderByDesc('pedidoid')->paginate($data['per_page'] ?? 15);
+
+        return response()->json($pagina->getCollection()->map(fn ($p) => $this->fila($p)))->header('X-Total-Count', (string) $pagina->total())->header('X-Current-Page', (string) $pagina->currentPage());
+    }
+
+    public function show(Request $request, string $pedido)
+    {
+        return response()->json($this->fila($this->consulta($request)->with('detalles')->findOrFail($pedido)));
     }
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'numero_solicitud' => 'required|string|max:50|unique:pedido,numero_solicitud',
-            'nombre_planta'    => 'required|string|max:150',
-
-            'latitud'          => 'required|numeric|between:-90,90',
-            'longitud'         => 'required|numeric|between:-180,180',
-            'direccion_texto'  => 'nullable|string|max:255',
-
-            'estado'           => 'required|in:pendiente,confirmado,en produccion,rechazado',
-
-            'fechapedido'          => 'nullable|date',
-            'fechaEntregaDeseada'  => 'nullable|date',
-
-            'observaciones'    => 'nullable|string',
-
-            // Detalles (mínimo 1)
-            'detalles' => 'required|array|min:1',
-            'detalles.*.cultivo_personalizado' => 'required|string|max:150',
-            'detalles.*.cantidad' => 'required|numeric|min:0.01',
-            'detalles.*.observaciones' => 'nullable|string',
-        ]);
-
-        $pedido = DB::transaction(function () use ($data) {
-            $detalles = $data['detalles'];
-            unset($data['detalles']);
-
-            $pedido = Pedido::create($data);
-            $pedido->detalles()->createMany($detalles);
-
-            return $pedido;
-        });
-
-        return response()->json(
-            Pedido::with('detalles')->findOrFail($pedido->pedidoid),
-            201
-        );
-    }
-
-    public function update(Request $request, $id)
-    {
-        $pedido = Pedido::with('detalles')->findOrFail($id);
-
-        $data = $request->validate([
-            'numero_solicitud' => [
-                'sometimes',
-                'string',
-                'max:50',
-                Rule::unique('pedido', 'numero_solicitud')->ignore($pedido->pedidoid, 'pedidoid')
-            ],
-            'nombre_planta'    => 'sometimes|string|max:150',
-
-            'latitud'          => 'sometimes|numeric|between:-90,90',
-            'longitud'         => 'sometimes|numeric|between:-180,180',
-            'direccion_texto'  => 'nullable|string|max:255',
-
-            'estado'           => 'sometimes|in:pendiente,confirmado,en produccion,rechazado',
-
-            'fechapedido'          => 'nullable|date',
-            'fechaEntregaDeseada'  => 'nullable|date',
-
-            'observaciones'    => 'nullable|string',
-
-            // Si envías detalles, se reemplazan todos (simplifica el control)
-            'detalles' => 'sometimes|array|min:1',
-            'detalles.*.cultivo_personalizado' => 'required_with:detalles|string|max:150',
-            'detalles.*.cantidad' => 'required_with:detalles|numeric|min:0.01',
-            'detalles.*.observaciones' => 'nullable|string',
-        ]);
-
-        DB::transaction(function () use ($pedido, $data) {
-            if (array_key_exists('detalles', $data)) {
-                $detalles = $data['detalles'];
-                unset($data['detalles']);
-
-                // Reemplazo total
-                $pedido->detalles()->delete();
-                $pedido->detalles()->createMany($detalles);
-            }
-
-            $pedido->update($data);
-        });
-
-        return response()->json(
-            Pedido::with('detalles')->findOrFail($pedido->pedidoid)
-        );
-    }
-
-    public function destroy($id)
-    {
-        $pedido = Pedido::findOrFail($id);
-        $pedido->delete(); // cascade borra detalles si FK está con cascadeOnDelete
-
-        return response()->json([
-            'message' => 'Pedido eliminado correctamente'
-        ]);
+        return response()->json($this->fila(app(PedidoAgricolaCreacionService::class)->crear($request)->load('detalles')), 201);
     }
 }

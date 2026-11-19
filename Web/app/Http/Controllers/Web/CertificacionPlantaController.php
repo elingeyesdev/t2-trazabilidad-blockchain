@@ -37,13 +37,6 @@ class CertificacionPlantaController extends Controller
     public function show(EvaluacionFinalLoteProduccion $evaluacionFinalLoteProduccion): View
     {
         abort_if(UsuarioRol::esOperarioPlanta(auth()->user()), 403, 'Solo el jefe de planta o administración pueden certificar lotes.');
-        $evaluacionFinalLoteProduccion->load([
-            'loteProduccionPedido.pedido',
-            'loteProduccionPedido.plantillaTransformacion',
-            'loteProduccionPedido.unidadMedida',
-            'inspector',
-        ]);
-
-        return view('certificaciones-planta.show', ['eval' => $evaluacionFinalLoteProduccion]);
+        return app(\App\Http\Controllers\CertificadoHistorialController::class)->planta(request(), $evaluacionFinalLoteProduccion);
     }
 }

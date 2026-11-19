@@ -1,11 +1,12 @@
 @php
     $rutaPrefijo = $rutaPrefijo ?? 'almacen-mayorista';
     $tituloModulo = $tituloModulo ?? 'Almacén mayorista';
-    $unidad = $producto->unidadMedida?->abreviatura ?? $producto->unidadMedida?->nombre ?? 'u.';
-    $stockMinimo = old('stockminimo', $producto->stockminimo ?? \App\Support\InsumoCatalogo::UMBRAL_ALERTA_STOCK);
+    $unidad = $producto->unidadMedida?->abreviatura ?? $producto->unidadMedida?->nombre ?? 'Unidad sin registrar';
+    $stockMinimo = old('stockminimo', $producto->stockminimo);
 @endphp
 
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Editar '.$producto->nombre.' | Inventario')
 @section('page_title', 'Editar producto del almacén')
@@ -150,7 +151,7 @@
                             <div class="preview-stock">
                                 <div class="text-muted small mb-1">Stock en depósito</div>
                                 <div class="valor">
-                                    <span id="previewStock">{{ number_format($producto->stock, 2) }}</span>
+                                    <span id="previewStock">{{ \App\Support\CosechaDecimal::mostrar($producto->stock) }}</span>
                                     <span class="text-muted" style="font-size:1rem;">{{ $unidad }}</span>
                                 </div>
                                 <div class="text-muted small mt-1" id="previewNombre">{{ $producto->nombre }}</div>
@@ -158,6 +159,8 @@
                         </div>
 
                         <div class="col-lg-8 form-panel">
+                    <div class="form-group"><label for="inventario-motivo">Motivo si cambia el saldo</label><input id="inventario-motivo" name="motivo_ajuste" maxlength="150" class="form-control" value="{{ old('motivo_ajuste') }}"><small class="text-muted">Para ajustar una partida concreta, utiliza Existencias del almacén.</small></div>
+
                             @if($errors->any())
                                 <div class="alert alert-danger">
                                     <ul class="mb-0 pl-3">
@@ -177,8 +180,8 @@
 
                             <div class="form-row">
                                 <div class="form-group col-md-4">
-                                    <label for="stock">Cantidad disponible <span class="text-danger">*</span></label>
-                                    <input type="number" step="0.01" min="0" name="stock" id="stock"
+                                    <label for="stock">Existencia física <span class="text-danger">*</span></label>
+                                    <input type="number" step="0.000001" min="0" name="stock" id="stock"
                                            class="form-control" required
                                            value="{{ old('stock', $producto->stock) }}">
                                     <div class="field-hint">Unidades actuales en este almacén.</div>
@@ -194,8 +197,8 @@
                                     </select>
                                 </div>
                                 <div class="form-group col-md-4">
-                                    <label for="stockminimo">Stock mínimo</label>
-                                    <input type="number" step="0.01" min="0" name="stockminimo" id="stockminimo"
+                                    <label for="stockminimo">Mínimo ({{ $unidad }})</label>
+                                    <input type="number" step="0.000001" min="0" name="stockminimo" id="stockminimo"
                                            class="form-control"
                                            value="{{ $stockMinimo }}">
                                     <div class="field-hint">Aviso cuando baje de este valor.</div>
@@ -259,13 +262,12 @@
 
     if (nombre && previewNombre) {
         nombre.addEventListener('input', function () {
-            previewNombre.textContent = this.value || '{{ $producto->nombre }}';
+            previewNombre.textContent = this.value || @json($producto->nombre);
         });
     }
     if (stock && previewStock) {
         stock.addEventListener('input', function () {
-            var v = parseFloat(this.value);
-            previewStock.textContent = isNaN(v) ? '0.00' : v.toFixed(2);
+            previewStock.textContent = this.value.trim() || '0';
         });
     }
 })();

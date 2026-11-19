@@ -17,7 +17,7 @@
             </label>
             <div class="d-flex align-items-center flex-wrap" style="gap:.5rem">
                 <input type="number"
-                       step="0.01"
+                       step="any"
                        class="form-control form-control-sm"
                        style="max-width:140px"
                        id="{{ $inputIdPrefix }}-{{ $p['variableestandarid'] }}"

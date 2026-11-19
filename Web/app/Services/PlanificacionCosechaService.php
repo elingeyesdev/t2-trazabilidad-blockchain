@@ -11,6 +11,7 @@ use App\Support\PedidoCatalogo;
  */
 class PlanificacionCosechaService
 {
+    private bool $soloLectura = false;
     public const MODO_HECTAREAS = 'hectareas';
     public const MODO_UNIDADES = 'unidades';
     public const MODO_EMPAQUES = 'empaques';
@@ -168,7 +169,7 @@ class PlanificacionCosechaService
                     CosechaPresentacionService::tipoEmpaqueParaCosechaEnCampo($c['tipo_empaque'] ?? null)
                 ),
             ],
-            PedidoCatalogo::listarCalibresParaProducto('insumo:'.$insumoId)
+            PedidoCatalogo::listarCalibresParaProducto('insumo:'.$insumoId, sincronizar: ! $this->soloLectura)
         );
     }
 
@@ -269,9 +270,15 @@ class PlanificacionCosechaService
     }
 
     /** Resumen compacto para formularios (registrar cosecha, selector de lotes). */
-    public function estimacionUiDesdeLote(\App\Models\Lote $lote): ?array
+    public function estimacionUiDesdeLote(\App\Models\Lote $lote, bool $soloLectura = false): ?array
     {
-        $est = $this->estimacionDesdeLote($lote);
+        $anterior = $this->soloLectura;
+        $this->soloLectura = $soloLectura;
+        try {
+            $est = $this->estimacionDesdeLote($lote);
+        } finally {
+            $this->soloLectura = $anterior;
+        }
         if (! $est || ! ($est['ok'] ?? false)) {
             return null;
         }

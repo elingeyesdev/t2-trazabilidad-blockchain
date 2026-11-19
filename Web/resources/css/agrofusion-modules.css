@@ -1,0 +1,249 @@
+/* Module components share the same surfaces as dashboard notifications.
+   Explicit selectors keep maps, photos, workflow states and action icons intact. */
+body.ag-ui :is(
+    .usu-index-card, .usu-edit-card, .usu-show-card, .usu-show-panel,
+    .catalog-hub-card, .log-hub-card, .x-card, .form-card, .panel-card,
+    .lote-card, .lote-section-card, .lote-datos-panel, .lote-op-panel, .lote-tabs-wrap,
+    .lote-section, .lote-op-stat, .lote-datos-panel__item, .lote-datos-panel__metric,
+    .lot-info-panel, .siembra-card, .siembra-aside, .siembra-lote-panel, .siembra-resumen-card,
+    .actividad-modal-resumen, .act-det-resumen, .act-det-resumen__card, .act-det-calc,
+    .almacen-card, .contenido-card, .almacen-section, .alm-ubicacion-panel,
+    .aplicacion-card, .ins-form-card, .ins-flow-panel, .ins-tipo-card,
+    .hero-card, .inv-hero, .inv-stock-card, .edit-shell, .preview-panel,
+    .mov-det-item, .rep-card, .cv-card, .cosecha-pres-card, .cosecha-lote-preview,
+    .cos-det__panel, .cos-det__lote-card, .cos-det__photo-wrap,
+    .maq-form-panel, .maq-vars-panel, .maq-etapa-card, .var-edit-panel, .var-det-item,
+    .cert-info-strip, .cert-det-v2__section, .pt-linea-wrap,
+    .af-ruta-editor, .af-ruta-paso-card, .paso-card, .paso-det-card,
+    .lp-fase-card, .lp-form-etapa, .lp-resumen-card, .lp-timeline-shell,
+    .tl-transformacion__item, .tp-card, .tp-kv-item, .tp-time-box,
+    .pedidos-filtros-card, .pedidos-table-card, .ped-show-card, .pedido-edit-section,
+    .item-card-ven, .item-card-prod, .total-estimado-box,
+    .sol-card, .pdv-card, .pdv-inv-card, .pdv-info-tile, .pdv-tile,
+    .pdv-ctx-ubicacion-card, .pdv-paso-card, .pdv-flota-panel,
+    .pdv-capacidad-preview, .pdv-capacidad-vehiculo,
+    .ruta-dist-card, .ruta-flota-panel, .ruta-plan-card, .ruta-plan-table-wrap,
+    .envio-card, .env-det-card, .env-wizard-panel, .env-recurso-card, .env-particion-card,
+    .env-paso, .env-destino-opcion, .envios-filtros-card, .env-seccion-nav,
+    .env-decision-agricola, .env-carga-ayuda--empaque, .env-accion-tiempo-real,
+    .env-accion-cierre, .env-ingreso-transportista, .env-panel-recorrido-fila,
+    .veh-form-section, .veh-transporte-card, .veh-capacity-box, .veh-det-panel,
+    .cat-log-side, .cat-log-header, .log-doc-card, .log-doc-det-card,
+    .log-doc-filtros, .log-doc-det-actions, .log-doc-preview__empty,
+    .cierre-ag-card, .cierre-ag-toolbar, .log-mas-card, .incidente-det-card,
+    .rt-filtros-card, .rt-live-card, .rt-mapa-panel,
+    .inicio-pendientes-card, .inicio-op-tareas, .iop-card, .iop-acceso, .iop-lote, .iop-al-dia,
+    .min-panel-inv-card, .may-rec-card, .admin-chart-card, .admin-weather,
+    .rpt-card, .rpt-filtros, .rpt-panel, .rpt-table-wrap,
+    .mapa-panel-inferior__card, .mapa-tool-tile, .trz-cat-card, .trz-dash .chart-box,
+    .trz-dash .filtros-trz, .trz-mapa-panel, .trz-evidencia-card
+) {
+    background: #fff !important;
+    background-image: none !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    color: var(--txt-1);
+    transform: none !important;
+}
+
+/* Compact metrics: neutral value and label, without oversized illustrations. */
+body.ag-ui :is(
+    .usu-index-stat, .usu-show-stat, .stat-card, .lote-kpi, .mapa-kpi-card,
+    .metric-card, .cert-kpi, .cos-det__metric, .flota-kpi, .ingresos-metric,
+    .may-rec-stat, .ruta-plan-metric, .log-doc-metric, .tp-stat, .pl-stat,
+    .admin-metric, .trz-dash .kpi-card, .veh-carga-preview-stat
+) {
+    position: relative;
+    background: #fff !important;
+    background-image: none !important;
+    color: var(--txt-1) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    padding: 20px 22px !important;
+    transform: none !important;
+}
+body.ag-ui :is(.usu-index-stat, .usu-show-stat, .stat-card, .lote-kpi, .cert-kpi, .flota-kpi, .ingresos-metric, .may-rec-stat, .ruta-plan-metric, .log-doc-metric, .tp-stat, .pl-stat, .admin-metric) :is(h3, .text-white) { color: var(--txt-1) !important; }
+body.ag-ui :is(.usu-index-stat, .usu-show-stat, .stat-card, .lote-kpi, .cert-kpi, .flota-kpi, .ingresos-metric, .may-rec-stat, .ruta-plan-metric, .log-doc-metric, .tp-stat, .pl-stat, .admin-metric) :is(p, small) { color: #7b8a9c !important; opacity: 1 !important; font-size: 12px; font-weight: 400; }
+body.ag-ui :is(.usu-index-stat, .usu-show-stat, .stat-card, .lote-kpi, .cert-kpi, .flota-kpi, .ingresos-metric, .may-rec-stat, .ruta-plan-metric, .log-doc-metric, .tp-stat, .pl-stat, .admin-metric) > i { display: none; }
+body.ag-ui :is(.lote-kpi__val, .lote-kpi__value, .mapa-kpi-card__val, .flota-kpi-value, .cert-kpi__val, .log-doc-metric__value, .ruta-plan-metric__value, .tp-stat__value, .pl-stat__value) { color: var(--txt-1) !important; font-size: 28px !important; font-weight: 600 !important; line-height: 1.2; }
+body.ag-ui :is(.lote-kpi__lbl, .lote-kpi__label, .mapa-kpi-card__label, .flota-kpi-label, .cert-kpi__lbl, .log-doc-metric__label, .ruta-plan-metric__label, .tp-stat__label) { color: #7b8a9c !important; font-size: 11px !important; font-weight: 500 !important; opacity: 1 !important; }
+body.ag-ui :is(.lote-kpi__icon, .flota-kpi-icon, .mapa-kpi-card__icon, .cert-kpi__icon, .ruta-plan-metric__icon, .log-doc-metric__icon, .tp-stat__icon) { display: none; }
+body.ag-ui .small-box .inner :is(h3, p), body.ag-ui .small-box .icon > i { color: inherit !important; }
+body.ag-ui .small-box .inner p { color: #7b8a9c !important; }
+body.ag-ui :is(.small-box.active-filter, .mov-kpi.active, .pdv-paso-card.activo, .env-destino-opcion.active, .veh-transporte-card.is-selected, .almacen-section.active) { border-color: #75a687 !important; background: #f6faf7 !important; }
+
+/* Page headers are text on the page. Headers inside panels remain white. */
+body.ag-ui :is(
+    .usu-edit-hero, .usu-show-hero, .lote-hero, .siembra-hero, .ins-form-hero,
+    .hero-header, .inv-hero-head, .edit-head, .mov-det-hero, .rep-hero,
+    .cv-hero, .detalle-hero, .cos-det__hero, .maq-form-hero, .var-det-hero, .var-edit-hero,
+    .cert-page-hero, .cert-det-v2__hero, .pt-form-hero, .lp-header,
+    .tp-hero, .tp-detail-hero, .ven-page-header, .pedido-edit-hero, .sol-top,
+    .pdv-ctx-ubicacion-header, .ruta-hero, .env-hero, .veh-form-hero, .veh-det-hero,
+    .veh-det-hero__body, .log-doc-hero, .may-rec-hero
+) {
+    background: #fff !important;
+    background-image: none !important;
+    color: var(--txt-1) !important;
+    border-radius: 4px 4px 0 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--border) !important;
+    box-shadow: none !important;
+    padding: 22px !important;
+}
+body.ag-ui :is(.usu-edit-hero, .usu-show-hero, .lote-hero, .siembra-hero, .ins-form-hero, .hero-header, .inv-hero-head, .edit-head, .mov-det-hero, .rep-hero, .cv-hero, .detalle-hero, .cos-det__hero, .maq-form-hero, .var-det-hero, .var-edit-hero, .cert-page-hero, .cert-det-v2__hero, .pt-form-hero, .lp-header, .tp-hero, .tp-detail-hero, .ven-page-header, .pedido-edit-hero, .sol-top, .pdv-ctx-ubicacion-header, .ruta-hero, .env-hero, .veh-form-hero, .veh-det-hero, .log-doc-hero, .may-rec-hero) :is(h2, h3, h4, .text-white) { color: var(--txt-1) !important; font-weight: 600; }
+body.ag-ui :is(.usu-edit-hero, .usu-show-hero, .lote-hero, .siembra-hero, .ins-form-hero, .hero-header, .inv-hero-head, .edit-head, .mov-det-hero, .rep-hero, .cv-hero, .detalle-hero, .cos-det__hero, .maq-form-hero, .var-det-hero, .var-edit-hero, .cert-page-hero, .cert-det-v2__hero, .pt-form-hero, .lp-header, .tp-hero, .tp-detail-hero, .ven-page-header, .pedido-edit-hero, .sol-top, .pdv-ctx-ubicacion-header, .ruta-hero, .env-hero, .veh-form-hero, .veh-det-hero, .log-doc-hero, .may-rec-hero) p { color: #7b8a9c !important; opacity: 1 !important; font-size: 13px; }
+body.ag-ui :is(.lote-hero, .ins-form-hero, .cert-page-hero, .ven-page-header, .log-doc-hero, .tp-hero, .siembra-hero)::after { display: none !important; }
+body.ag-ui :is(.ven-page-header-icon, .log-doc-hero__icon, .siembra-hero__icon, .veh-det-hero__icon, .pdv-ctx-ubicacion-icon, .tp-task-icon) { display: none !important; }
+
+body.ag-ui :is(
+    .usu-index-card-head, .iop-card__head, .inicio-op-tareas__head,
+    .lote-datos-panel__header, .lote-op-panel__head, .siembra-resumen-card__head,
+    .alm-ubicacion-panel__head, .af-ruta-editor__head, .paso-card__head, .paso-det-card__head,
+    .lp-resumen-head, .cat-log-header, .cat-log-side__head,
+    .log-doc-card__head, .log-doc-det-card__head, .cierre-ag-card__head,
+    .mapa-panel-inferior__head, .tp-action-hd, .form-header,
+    .card-top
+) {
+    background: #fff !important;
+    background-image: none !important;
+    color: var(--txt-1) !important;
+    border-bottom: 1px solid var(--border) !important;
+    border-radius: 4px 4px 0 0 !important;
+    padding: 18px 22px;
+    box-shadow: none !important;
+}
+body.ag-ui :is(.card-header, .usu-index-card-head, .iop-card__head, .lote-op-panel__head, .lote-datos-panel__header, .log-doc-card__head, .log-doc-det-card__head, .cierre-ag-card__head, .paso-card__head, .paso-det-card__head) :is(h2, h3, h4, h5, .text-white) { color: var(--txt-1) !important; font-size: 15px; font-weight: 500 !important; }
+body.ag-ui :is(.card-title, .modal-title, .usu-index-card-head h2, .usu-edit-section-title, .usu-show-panel-title, .iop-card__head h2, .log-doc-card__head h3, .log-doc-det-card__head h3, .cierre-ag-card__head h3) > i { display: none !important; }
+
+/* Functional icons stay in buttons; decorative tiles become small, muted accents. */
+body.ag-ui :is(.catalog-hub-icon, .log-hub-icon, .rpt-card__icon, .lote-datos-panel__header-icon, .lote-op-panel__head-icon, .inicio-pendientes-card__icon, .inicio-op-tareas__icon, .iop-tarea__icon, .pdv-tile__icon, .tipo-icon, .cat-log-header__icon) {
+    background: #edf5f0 !important;
+    background-image: none !important;
+    color: #23754b !important;
+    width: 36px !important;
+    height: 36px !important;
+    border: 0 !important;
+    border-radius: 4px !important;
+    font-size: 16px !important;
+    box-shadow: none !important;
+}
+body.ag-ui :is(.usu-edit-avatar, .usu-show-avatar, .avatar-preview, .avatar-circle, .iop-hero-avatar, .cert-det-v2__avatar, .cos-det__avatar) { background: #edf5f0 !important; color: #23754b !important; border: 1px solid #dce9e0 !important; box-shadow: none !important; }
+body.ag-ui :is(.usu-edit-hero-badge, .usu-show-hero-badge, .usu-index-count, .iop-hero-chip, .lote-hero-chip, .ven-total-badge, .id-chip, .lote-chip) { background: #f5f7fa !important; color: #526071 !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-shadow: none !important; font-weight: 500; }
+body.ag-ui :is(.pdv-tile, .catalog-hub-card, .log-hub-card, .rpt-card)::before { display: none !important; }
+body.ag-ui :is(.rpt-card__title, .catalog-hub-card h3, .log-hub-card h3, .pdv-tile__title) { color: var(--txt-1); font-size: 15px; font-weight: 500; }
+
+/* Filter panels, forms and lists use the same spacing as notifications. */
+body.ag-ui :is(.usu-index-filtros, .filtros-panel, .map-filters, .rpt-filtros, .ruta-plan-search, .sel-modal-search-panel) { background: #f8fafc !important; background-image: none !important; border-color: var(--border) !important; border-radius: 4px; box-shadow: none !important; }
+body.ag-ui :is(.usu-index-filtros, .usu-edit-field) label { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; }
+body.ag-ui :is(.inicio-pendiente-item, .iop-tarea, .log-doc-table tbody tr) { background: #fff; border-color: var(--border); transform: none !important; box-shadow: none !important; }
+body.ag-ui :is(.inicio-pendiente-item, .iop-tarea):hover { background: #f8fafc; }
+body.ag-ui .table-responsive { max-width: 100%; }
+body.ag-ui .log-doc-table thead th { background: #f8fafc !important; color: #7b8a9c !important; border-color: var(--border); }
+body.ag-ui :is(.btn-nuevo, .btn-guardar, .btn-actualizar, .usu-index-btn-new, .usu-edit-btn-save, .usu-show-btn-edit, .btn-siembra, .btn-siembra-enviar, .cos-det__btn-primary, .lote-op-panel__cta, .lote-datos-panel__map-btn, .log-doc-btn-filter, .log-doc-btn--primary, .log-doc-btn-icon--view, .ruta-plan-btn-nueva, .cierre-ag-btn-finalizar, .tp-btn-complete, .tp-btn-go, .pdv-tile__btn-primary, .pdv-btn-ubicacion, .log-ops-file-btn, .btn-evidencia-upload, .upload-foto__btn) {
+    background: #23754b !important;
+    background-image: none !important;
+    color: #fff !important;
+    border: 1px solid #23754b !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    font-weight: 500 !important;
+    transform: none !important;
+}
+body.ag-ui :is(.nav-pills .nav-link.active, .lote-tabs .nav-link.active, .env-seccion-nav__link.active) { background: #edf5f0 !important; color: #195c39 !important; border-radius: 4px; box-shadow: none !important; }
+body.ag-ui :is(.ruta-plan-footer, .veh-form-footer, .pdv-tile__footer, .env-confirm-panel__body) { background: #f8fafc !important; background-image: none !important; box-shadow: none !important; }
+
+/* Headings do not need a second illustration beside their text. */
+body.ag-ui .ag-content :is(h1, h2, h3, h4, h5) > i { display: none !important; }
+body.ag-ui :is(.log-doc-card__title, .lote-hero__glow)::before,
+body.ag-ui .lote-hero__glow { display: none !important; }
+body.ag-ui .text-success { color: #23754b !important; }
+body.ag-ui :is(.consulta-banner, .guia-campo, .guia-venta, .insumo-stock-alert, .siembra-resumen-hint, .recomendacion-mp-pure, .tp-alert-block) {
+    background: #f8fafc !important; background-image: none !important;
+    color: #526071 !important; border: 1px solid var(--border) !important;
+    border-radius: 4px !important; box-shadow: none !important;
+}
+body.ag-ui :is(.ins-imagen-preview, .lote-hero__thumb, .upload-foto__panel, .upload-foto__img, .zona-preview-foto--form, .sel-modal-table-wrap) { border-radius: 4px !important; box-shadow: none !important; }
+body.ag-ui :is(.ins-tipo-card.is-active, .flota-kpi.is-active) { border-color: #75a687 !important; background: #f6faf7 !important; outline: none; }
+body.ag-ui .ins-tipo-card__icon { width: 28px; height: 28px; border-radius: 4px; background: #edf5f0 !important; color: #23754b !important; font-size: 14px; }
+body.ag-ui .cert-kpi { padding: 0 !important; }
+body.ag-ui .cert-kpi .card-body { padding: 20px 22px; }
+body.ag-ui .cert-kpi .kpi-value { color: var(--txt-1); font-size: 28px; font-weight: 600; }
+body.ag-ui .cert-kpi .kpi-label { color: #7b8a9c; font-size: 10px; font-weight: 500; opacity: 1; }
+body.ag-ui .cert-kpi i { display: none; }
+body.ag-ui :is(.rpt-kpi, .weather-widget, .sun-card) { background: #fff !important; color: var(--txt-1) !important; border: 1px solid var(--border) !important; border-radius: 4px !important; box-shadow: none !important; }
+body.ag-ui .rpt-kpi__val { color: var(--txt-1); font-weight: 600; }
+body.ag-ui .rpt-panel__head { background: #fff; border-left: 0; border-bottom: 1px solid var(--border); padding: 16px 22px; color: var(--txt-1); font-weight: 500; }
+body.ag-ui .rpt-card__preview { color: #526071; font-weight: 500; }
+body.ag-ui .rpt-hub__intro { margin-bottom: 24px; }
+body.ag-ui .rpt-hub__intro p { margin-top: 0; }
+body.ag-ui :is(.log-doc-card__count, .log-doc-det-card__count) { background: #f5f7fa; color: #526071; border: 1px solid var(--border); border-radius: 4px; font-weight: 500; }
+body.ag-ui .ocupacion-bar .fill { background: #23754b !important; }
+body.ag-ui .inicio-dash-link-panel { border: 1px solid #d8dee6; border-radius: 4px; color: #526071; font-weight: 500; }
+body.ag-ui .inicio-dash-link-panel:hover { background: #edf5f0; color: #195c39; border-color: #b8d2c1; }
+body.ag-ui .ag-flash { border-radius: 4px; box-shadow: none; border-width: 1px; font-size: 13px; }
+body.ag-ui .ag-flash__icon { display: none; }
+body.ag-ui :is(.trz-public-meta, .trz-timeline-content, .rcp-card, .rcp-modal) { background: #fff; border: 1px solid var(--border); border-radius: 4px; box-shadow: none; }
+body.ag-ui .rcp-btn--primary { background: #23754b; border-radius: 4px; box-shadow: none; }
+body.ag-ui .pdv-tile__stock { background: transparent; border: 0; border-radius: 0; padding: 0; }
+body.ag-ui .pdv-tile__stock-val { color: var(--txt-1); font-size: 24px; font-weight: 600; }
+body.ag-ui .pdv-tile__stock-val--vacio { color: #7b8a9c; }
+body.ag-ui .pdv-tile__stock-bar__fill { background: #23754b; border-radius: 3px; }
+body.ag-ui .pdv-tile__stock-bar__fill--alto { background: #b78122; }
+body.ag-ui .pdv-tile__stock-bar__fill--lleno { background: #b13e42; }
+body.ag-ui .pdv-tile__location { border: 0; border-radius: 0; padding: 0; box-shadow: none; }
+body.ag-ui .pdv-tile__name { font-size: 15px; font-weight: 500; }
+body.ag-ui :is(.env-recurso-card.is-selected, .maq-etapa-card.is-selected, .pdv-paso-card.vista-activa, .pdv-paso-card.hecho) { background: #f6faf7 !important; border-color: #75a687 !important; }
+body.ag-ui .pdv-paso-card.activo :is(.paso-label, .paso-icon, .paso-num) { color: #195c39 !important; }
+body.ag-ui .pdv-paso-card.activo .paso-num { background: #dce9e0; }
+
+/* Every role gets the same floating notification, including operational logins. */
+body.ag-ui.login-notif-modal-open .ag-layout { filter: none !important; }
+body.ag-ui .login-notif-scrim { background: rgba(24, 36, 51, .38); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+body.ag-ui .login-notif-modal-root .modal-dialog { max-width: 560px; transform: none; transition: none; }
+body.ag-ui .login-notif-modal { border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 16px 48px rgba(24,36,51,.16); }
+body.ag-ui .login-notif-modal__accent, body.ag-ui .login-notif-modal__head::after { display: none; }
+body.ag-ui .login-notif-modal__head { background: #fff; color: var(--txt-1); border-bottom: 1px solid var(--border); padding: 22px 24px 20px; }
+body.ag-ui .login-notif-modal__head .modal-title { color: var(--txt-1); font-size: 18px; font-weight: 600; }
+body.ag-ui .login-notif-modal__head .close { color: #7b8a9c; text-shadow: none; }
+body.ag-ui .login-notif-modal__badge { padding: 0; background: transparent; color: #7b8a9c; font-size: 10px; font-weight: 500; border-radius: 0; box-shadow: none; }
+body.ag-ui .login-notif-modal__badge > i, body.ag-ui .login-notif-modal__highlight-icon { display: none; }
+body.ag-ui .login-notif-modal__body { background: #fff; padding: 20px 24px 6px; }
+body.ag-ui .login-notif-modal__highlight { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; margin-bottom: 12px; }
+body.ag-ui .login-notif-modal__highlight-title { font-size: 14px; font-weight: 500; }
+body.ag-ui .login-notif-modal__highlight-sub { color: #7b8a9c; font-size: 13px; line-height: 1.6; }
+body.ag-ui .login-notif-modal__lista { gap: 0; }
+body.ag-ui .login-notif-modal__item { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 18px 0; background: #fff; box-shadow: none; transform: none; }
+body.ag-ui .login-notif-modal__item:last-child { border-bottom: 0; }
+body.ag-ui .login-notif-modal__codigo { color: var(--txt-1); font: 500 14px/1.45 Inter, sans-serif; letter-spacing: 0; }
+body.ag-ui .login-notif-modal__meta { color: #7b8a9c; font-size: 12px; line-height: 1.55; }
+body.ag-ui .login-notif-modal__qty { background: #f5f7fa; color: #526071; border: 0; border-radius: 4px; font-weight: 400; }
+body.ag-ui .login-notif-modal .login-notif-modal__cta { background: #fff !important; color: #23754b !important; border: 1px solid #d5e4da !important; border-radius: 4px; font-size: 12px; font-weight: 500; box-shadow: none; transform: none; }
+body.ag-ui .login-notif-modal .login-notif-modal__cta:hover { background: #edf5f0 !important; }
+body.ag-ui .login-notif-modal__foot { background: #f8fafc; border-top: 1px solid var(--border); padding: 14px 24px; }
+body.ag-ui :is(.login-notif-modal__btn-secondary, .login-notif-modal__btn-cerrar) { background: #fff !important; color: #526071 !important; border: 1px solid #d8dee6; border-radius: 4px; font-size: 12px; font-weight: 500; box-shadow: none !important; transform: none !important; }
+
+/* Dialog titles stay readable with legacy inline colors and dynamic alerts. */
+body.ag-ui .modal-header { background: #fff !important; color: var(--txt-1) !important; border-bottom: 1px solid var(--border) !important; }
+body.ag-ui .modal-header :is(.modal-title, .close, .text-white) { color: var(--txt-1) !important; }
+body.ag-ui .modal-footer { background: #f8fafc; border-top: 1px solid var(--border) !important; }
+body.ag-ui .swal2-popup { border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 16px 48px rgba(24,36,51,.16); font-family: inherit; }
+body.ag-ui .swal2-title { font-size: 20px; font-weight: 600; }
+body.ag-ui .swal2-styled { border-radius: 4px; box-shadow: none; font-size: 13px; font-weight: 500; }
+
+@media (max-width: 767px) {
+    body.ag-ui :is(.usu-index-card-head, .iop-card__head, .log-doc-card__head, .log-doc-det-card__head, .cierre-ag-card__head, .lote-op-panel__head, .lote-datos-panel__header) { padding: 16px; }
+    body.ag-ui :is(.usu-edit-hero, .usu-show-hero, .ven-page-header, .log-doc-hero, .tp-hero, .env-hero, .ruta-hero, .lote-hero, .siembra-hero) { padding: 16px !important; }
+    body.ag-ui .rpt-grid { grid-template-columns: minmax(0, 1fr); }
+    body.ag-ui .login-notif-modal-root .modal-dialog { margin: 16px; max-width: calc(100% - 32px); }
+    body.ag-ui .login-notif-modal { max-height: calc(100dvh - 32px); }
+    body.ag-ui .login-notif-modal__body { overflow-y: auto; min-height: 0; }
+    body.ag-ui .login-notif-modal__item { flex-wrap: wrap; gap: 10px; }
+    body.ag-ui .login-notif-modal__item-body { flex-basis: 100%; }
+    body.ag-ui .login-notif-modal__cta { margin-left: auto; }
+}
+@media print {
+    body.ag-ui .ag-main { width: 100% !important; margin: 0 !important; }
+}

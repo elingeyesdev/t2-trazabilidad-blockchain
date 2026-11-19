@@ -3,6 +3,7 @@
 @endphp
 
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', $nombre.' | Cosecha en almacén')
 @section('page_title', 'Detalle de cosecha')

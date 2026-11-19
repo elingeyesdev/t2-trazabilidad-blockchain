@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Gestión de Insumos | AgroFusion')
 @section('page_title', 'Inventario de Insumos')
@@ -49,50 +50,11 @@
     Al usarlos en un lote, registre una <strong>Actividad</strong>.
 </div>
 
-<div class="row mb-2">
-        <div class="col-lg-3 col-6">
-            <div class="small-box small-box-green">
-                <div class="inner">
-                    <h3>{{ $stats['total'] }}</h3>
-                    <p>Total de insumos</p>
-                </div>
-                <div class="icon"><i class="fas fa-boxes"></i></div>
-                <span class="small-box-footer">En tu catálogo</span>
-            </div>
-        </div>
-        <div class="col-lg-3 col-6">
-            <div class="small-box small-box-red">
-                <div class="inner">
-                    <h3>{{ $stats['stock_bajo'] }}</h3>
-                    <p>Stock bajo</p>
-                </div>
-                <div class="icon"><i class="fas fa-exclamation-triangle"></i></div>
-                <a href="#" class="small-box-footer" id="linkStockBajo">
-                    Filtrar críticos <i class="fas fa-arrow-circle-right"></i>
-                </a>
-            </div>
-        </div>
-        <div class="col-lg-3 col-6">
-            <div class="small-box small-box-blue">
-                <div class="inner">
-                    <h3>{{ $stats['categorias'] }}</h3>
-                    <p>Categorías (tipos)</p>
-                </div>
-                <div class="icon"><i class="fas fa-tags"></i></div>
-                <span class="small-box-footer">Tipos distintos</span>
-            </div>
-        </div>
-        <div class="col-lg-3 col-6">
-            <div class="small-box small-box-yellow">
-                <div class="inner">
-                    <h3>≤ {{ $umbral ?? 5 }}</h3>
-                    <p>Umbral de alerta</p>
-                </div>
-                <div class="icon"><i class="fas fa-bell"></i></div>
-                <span class="small-box-footer">Aviso cuando el stock llega a {{ $umbral ?? 5 }} o menos</span>
-            </div>
-        </div>
-    </div>
+<div class="op-metricas op-metricas--tres">
+    <x-operacion.metrica :valor="$stats['total']" etiqueta="Insumos registrados" />
+    <a href="#tableView" id="linkStockBajo" aria-label="Filtrar insumos con existencias bajas"><x-operacion.metrica :valor="$stats['stock_bajo']" etiqueta="Existencias bajas" detalle="Ver productos que requieren atención" /></a>
+    <x-operacion.metrica :valor="$stats['categorias']" etiqueta="Tipos de insumo" />
+</div>
 
     <div class="card card-outline card-success card-modulo-main elevation-1">
         <x-modulo-index-header
@@ -164,7 +126,7 @@
                 <tbody>
                     @forelse($insumos as $i)
                         @php
-                            $rowStockClass = \App\Support\InsumoCatalogo::claseStock((float) $i->stock);
+                            $rowStockClass = \App\Support\InsumoCatalogo::claseStockInsumo($i);
                         @endphp
                         <tr class="search-item-row"
                             data-nombre="{{ strtolower($i->nombre) }}"
@@ -181,16 +143,16 @@
                             <td>{{ $i->unidadMedida->nombre ?? '—' }}</td>
                             <td>
                                 <span class="badge stock-badge-{{ $rowStockClass }}">
-                                    {{ number_format($i->stock, 2) }}
+                                    <x-operacion.cantidad :valor="$i->stock" :unidad="$i->unidadMedida?->abreviatura ?? $i->unidadMedida?->nombre" />
                                 </span>
                             </td>
                             <td>
                                 @if($rowStockClass === 'low')
-                                    <span class="text-danger small font-weight-bold"><i class="fas fa-exclamation-triangle mr-1"></i>Alerta</span>
+                                    <span class="text-danger small font-weight-bold"><i class="fas fa-exclamation-triangle mr-1"></i>Existencias bajas</span>
                                 @elseif($rowStockClass === 'medium')
-                                    <span class="text-warning small">Atención</span>
+                                    <span class="text-warning small">Revisar existencias</span>
                                 @else
-                                    <span class="text-success small">Normal</span>
+                                    <span class="text-success small">Sin alerta por mínimo</span>
                                 @endif
                             </td>
                             <td class="text-center btn-actions-cell">
@@ -226,7 +188,7 @@
         <div id="cardView" style="display: none;">
             @forelse($insumos as $i)
                 @php
-                    $stockClass = \App\Support\InsumoCatalogo::claseStock((float) $i->stock);
+                    $stockClass = \App\Support\InsumoCatalogo::claseStockInsumo($i);
                     $imagenSrc = $i->imagenSrc(128);
                     $outline = $stockClass === 'low' ? 'danger' : ($stockClass === 'medium' ? 'warning' : 'success');
                 @endphp
@@ -244,7 +206,7 @@
                                 <a href="{{ route('insumos.show', $i) }}" class="product-title">
                                     {{ $i->nombre }}
                                     <span class="badge stock-badge-{{ $stockClass }} float-right">
-                                        Stock: {{ number_format($i->stock, 2) }}
+                                        Stock: <x-operacion.cantidad :valor="$i->stock" :unidad="$i->unidadMedida?->abreviatura ?? $i->unidadMedida?->nombre" />
                                     </span>
                                 </a>
                                 <span class="product-description">
@@ -253,7 +215,7 @@
                                     <i class="fas fa-balance-scale text-muted mr-1"></i>{{ $i->unidadMedida->nombre ?? '—' }}
                                     <span class="mx-2 text-muted">|</span>
                                     @if($stockClass === 'low')
-                                    <span class="mx-2 text-danger font-weight-bold">| Alerta (≤ {{ $umbral ?? 5 }})</span>
+                                    <span class="mx-2 text-danger font-weight-bold">| Existencias bajas</span>
                                     @endif
                                 </span>
                             </div>

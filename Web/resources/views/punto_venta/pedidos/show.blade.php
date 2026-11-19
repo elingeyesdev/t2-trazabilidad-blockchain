@@ -382,12 +382,14 @@
 @endpush
 
 @section('content')
+@include('pedidos.partials.decision-registrada', ['pedidoDecision' => $pedido])
+@include('recepcion.enlace-pedido', ['pedido' => $pedido])
     @php
         $det = $pedido->detalles->first();
         $badge = \App\Support\PedidoDistribucionCatalogo::badgeEstado($pedido);
         $pendienteMayorista = \App\Support\PedidoDistribucionCatalogo::pendienteAprobacionMayorista($pedido);
-        $unidad = $det?->presentacion?->etiquetaUnidad() ?? $det?->insumo?->unidadMedida?->abreviatura ?? 'unidades';
-        $stockOk = $pendienteMayorista || $erroresStock === [] || ($det?->es_solicitud_custom ?? false);
+        $unidad = $det?->datos_solicitud['unidad'] ?? $det?->presentacion?->etiquetaUnidad() ?? $det?->insumo?->unidadMedida?->abreviatura ?? 'unidades';
+        $stockOk = $erroresStock === [] || ($det?->es_solicitud_custom ?? false);
         $transportistaEfectivo = $pedido->transportista ?? $pedido->rutaDistribucion?->transportista;
         $vehiculoEfectivo = $pedido->vehiculo ?? $pedido->rutaDistribucion?->vehiculo;
         $puedeDesignarTransportista = $puedeDesignarTransportista ?? false;
@@ -470,6 +472,7 @@
                     </span>
                 </div>
                 <div class="card-body">
+                    @include('punto_venta.pedidos.partials.lineas-registradas')
                     @if(! in_array($pedido->estado, ['rechazado', 'cancelado'], true))
                     <div class="pdv-pedido-flujo" id="pdvPedidoFlujo" data-paso-inicial="{{ $pasoInicial }}" data-paso-flujo="{{ $pasoActualFlujo }}">
                         @foreach($pasos as $paso)
@@ -512,7 +515,7 @@
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--prod"><i class="fas fa-box"></i></span>
                                 <span class="pdv-info-tile__label">Producto solicitado</span>
                                 <div class="pdv-info-tile__value">{{ $det?->producto_nombre ?? '—' }}</div>
-                                <div class="pdv-info-tile__sub">{{ $det ? number_format($det->cantidad, 2).' '.$unidad : '—' }}</div>
+                                <div class="pdv-info-tile__sub">{{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '—' }}</div>
                             </div>
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--alm"><i class="fas fa-warehouse"></i></span>
@@ -529,7 +532,7 @@
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--stock"><i class="fas fa-cubes"></i></span>
                                 <span class="pdv-info-tile__label">Stock en mayorista</span>
-                                <div class="pdv-info-tile__value">{{ number_format((float) $det->insumo->stock, 2) }} {{ $unidad }}</div>
+                                <div class="pdv-info-tile__value"><x-operacion.cantidad :valor="$det->insumo->getRawOriginal('stock')" :unidad="$det->insumo->unidadMedida?->abreviatura ?? $det->insumo->unidadMedida?->nombre" /></div>
                                 <span class="pdv-info-tile__badge {{ $stockOk ? 'pdv-info-tile__badge--ok' : 'pdv-info-tile__badge--bad' }}">
                                     <i class="fas {{ $stockOk ? 'fa-check-circle' : 'fa-exclamation-circle' }}"></i>
                                     {{ $stockOk ? 'Disponible para despacho' : 'Stock insuficiente' }}
@@ -553,7 +556,7 @@
                                     <div class="form-group col-md-4">
                                         <label class="small font-weight-bold">Cantidad ({{ $unidad }})</label>
                                         <input type="number" name="cantidad" class="form-control" step="0.01" min="0.01"
-                                               max="{{ $det?->insumo?->stock ?? 999999 }}" value="{{ old('cantidad', $det?->cantidad) }}" required>
+                                               value="{{ old('cantidad', $det?->cantidad) }}" required>
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="small font-weight-bold">Entrega deseada</label>
@@ -600,7 +603,7 @@
                                     </div>
                                 @elseif($pendienteMayorista && $pedido->espera_stock)
                                     <div class="pdv-revision-banner__sub">
-                                        Cantidad solicitada: {{ $det ? number_format($det->cantidad, 0).' '.$unidad : '—' }}.
+                                        Cantidad solicitada: {{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '—' }}.
                                         El mayorista aceptará o rechazará según disponibilidad para la fecha indicada.
                                     </div>
                                 @endif
@@ -609,8 +612,8 @@
                         @if($det?->insumo)
                         <div class="pdv-stock-row">
                             <div>
-                                <div class="pdv-stock-row__label">Stock verificado en mayorista</div>
-                                <div class="pdv-stock-row__value">{{ number_format((float) $det->insumo->stock, 2) }} {{ $unidad }}</div>
+                                <div class="pdv-stock-row__label">Existencia física en mayorista (primer producto)</div>
+                                <div class="pdv-stock-row__value"><x-operacion.cantidad :valor="$det->insumo->getRawOriginal('stock')" :unidad="$det->insumo->unidadMedida?->abreviatura ?? $det->insumo->unidadMedida?->nombre" /></div>
                             </div>
                             <span class="pdv-info-tile__badge {{ $stockOk ? 'pdv-info-tile__badge--ok' : 'pdv-info-tile__badge--bad' }}">
                                 <i class="fas {{ $stockOk ? 'fa-check' : 'fa-exclamation-triangle' }} mr-1"></i>
@@ -635,7 +638,7 @@
                                 @if(! empty($resumenCargaPedido['volumen_m3']))
                                     · <strong>{{ number_format((float) $resumenCargaPedido['volumen_m3'], 3) }} m³</strong>
                                 @endif
-                                ({{ $det ? number_format($det->cantidad, 0).' '.$unidad : '—' }})
+                                ({{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '—' }})
                             </div>
                             <p class="pdv-capacidad-vehiculo__hint mb-0" id="txtCapacidadVehiculoPdv">
                                 Seleccione chofer y vehículo a la derecha para ver si la carga cabe (peso y volumen).
@@ -658,7 +661,7 @@
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--prod"><i class="fas fa-box"></i></span>
                                 <span class="pdv-info-tile__label">Producto a despachar</span>
                                 <div class="pdv-info-tile__value">{{ $det?->producto_nombre ?? '—' }}</div>
-                                <div class="pdv-info-tile__sub">{{ $det ? number_format($det->cantidad, 2).' '.$unidad : '' }}</div>
+                                <div class="pdv-info-tile__sub">{{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '' }}</div>
                             </div>
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--pdv"><i class="fas fa-store"></i></span>
@@ -686,7 +689,7 @@
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--prod"><i class="fas fa-box"></i></span>
                                 <span class="pdv-info-tile__label">Producto</span>
                                 <div class="pdv-info-tile__value">{{ $det?->producto_nombre ?? '—' }}</div>
-                                <div class="pdv-info-tile__sub">{{ $det ? number_format($det->cantidad, 2).' '.$unidad : '' }}</div>
+                                <div class="pdv-info-tile__sub">{{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '' }}</div>
                             </div>
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--alm"><i class="fas fa-warehouse"></i></span>
@@ -755,7 +758,7 @@
             </div>
 
             <div class="pdv-sidebar-paso" data-sidebar-paso="2">
-            @if(($puedeGestionarMayorista ?? false) && $pendienteMayorista)
+            @if(in_array('aceptar', app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($pedido, auth()->user()), true))
             <div class="card pdv-card card-outline card-success mb-3">
                 <div class="card-header bg-white py-2">
                     <h3 class="card-title mb-0 font-weight-bold"><i class="fas fa-warehouse text-success mr-1"></i> Decisión mayorista</h3>
@@ -769,18 +772,19 @@
                             Al aceptar se confirmará el almacén mayorista de origen y podrá asignar transporte.
                         @endif
                     </p>
-                    <form method="POST" action="{{ route('punto-venta.pedidos.aceptar', $pedido) }}" class="mb-3">
+                    <form data-pedido-decision method="POST" action="{{ route('punto-venta.pedidos.aceptar', $pedido) }}" class="mb-3">
                         @csrf
-                        <button type="submit" class="btn btn-success btn-block btn-lg">
+                        <button type="button" class="btn btn-success btn-block btn-lg" data-confirm-modal data-confirm-tone="success" data-confirm-title="Aceptar pedido" data-confirm-message="Se reservarán las existencias disponibles para este pedido. ¿Desea continuar?">
                             <i class="fas fa-check mr-1"></i> Aceptar y preparar envío
                         </button>
                     </form>
                     <hr>
-                    <form method="POST" action="{{ route('punto-venta.pedidos.rechazar', $pedido) }}">
+                    <form data-pedido-decision method="POST" action="{{ route('punto-venta.pedidos.rechazar', $pedido) }}">
                         @csrf
                         <div class="form-group mb-2">
-                            <label class="small text-muted">Motivo (opcional)</label>
-                            <textarea name="motivo_rechazo" class="form-control form-control-sm" rows="2" maxlength="500" placeholder="Ej: stock insuficiente"></textarea>
+                            <label class="small text-muted">Motivo del rechazo (obligatorio)</label>
+                            <textarea required aria-label="Motivo del rechazo" name="motivo_rechazo" class="form-control form-control-sm" rows="2" maxlength="500" placeholder="Ej: stock insuficiente">{{ old('motivo_rechazo') }}</textarea>
+                            @error('motivo_rechazo')<span class="text-danger small d-block">{{ $message }}</span>@enderror
                         </div>
                         <button type="button" class="btn btn-outline-danger btn-block"
                                 data-confirm-modal

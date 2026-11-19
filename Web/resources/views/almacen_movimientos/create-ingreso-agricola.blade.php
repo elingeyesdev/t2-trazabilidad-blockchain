@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Ingreso manual de inventario | AgroFusion')
 @section('page_title', 'Ingreso de almacén agrícola')

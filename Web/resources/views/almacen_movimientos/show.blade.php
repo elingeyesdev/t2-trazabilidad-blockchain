@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Detalle de movimiento')
 @section('page_title', 'Detalle de movimiento de almacén')

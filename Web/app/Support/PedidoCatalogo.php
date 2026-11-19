@@ -532,7 +532,7 @@ final class PedidoCatalogo
      *
      * @return list<array<string, mixed>>
      */
-    public static function listarCalibresParaProducto(string $productoRef, ?int $tipoEmpaqueId = null): array
+    public static function listarCalibresParaProducto(string $productoRef, ?int $tipoEmpaqueId = null, bool $sincronizar = true): array
     {
         if (! \Illuminate\Support\Facades\Schema::hasTable('catalogo_tamano_conteo')) {
             return [];
@@ -543,7 +543,9 @@ final class PedidoCatalogo
             return [];
         }
 
-        CalibresVerdurasCatalogo::sincronizarParaInsumo($insumoId);
+        if ($sincronizar) {
+            CalibresVerdurasCatalogo::sincronizarParaInsumo($insumoId);
+        }
 
         $insumoIds = self::insumoIdsRelacionadosParaCalibres($insumoId);
 
@@ -1006,6 +1008,15 @@ final class PedidoCatalogo
      */
     public static function presentacionDetalle(DetallePedido $detalle): array
     {
+        if ($detalle->datos_solicitud !== null) {
+            $kg = CosechaDecimal::mostrar((string)$detalle->getRawOriginal('cantidad'));
+            $etiqueta = $detalle->datos_solicitud['presentacion'] ?? null;
+            $linea = ($etiqueta ? $etiqueta.' · ' : '').$kg.' kg';
+            return ['kg' => (float)$detalle->getRawOriginal('cantidad'), 'kg_fmt' => $kg,
+                'empaque' => $etiqueta, 'empaques' => null, 'unidades' => null, 'unidades_fmt' => null,
+                'linea' => $linea, 'linea_corta' => $linea];
+        }
+
         $detalle->loadMissing([
             'cosechaAlmacen.catalogoTamanoConteo.tipoEmpaque',
             'insumo',

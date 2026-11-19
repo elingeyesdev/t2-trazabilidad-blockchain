@@ -437,6 +437,7 @@
 
 
 @section('content')
+@include('pedidos.partials.decision-registrada', ['pedidoDecision' => $asignacion->pedido])
 
 @php
 

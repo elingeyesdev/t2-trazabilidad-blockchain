@@ -57,6 +57,7 @@ class AsignacionMultipleController extends Controller
 
         $paradasMapa = EnvioPedidoService::paradasMapaEnvio($asignacion);
         $pedido = $asignacion->pedido;
+        if ($pedido) { abort_unless(\App\Support\PedidoMovilAcceso::agricola($pedido->newQuery()->whereKey($pedido->getKey()), $user)->exists(), 403); }
         $logistica = EnvioPedidoService::datosLogistica($asignacion);
         $pendienteAgricola = $pedido !== null && PedidoCatalogo::pendienteAprobacionAgricola($pedido);
         $estadoVisual = $pedido !== null
@@ -80,7 +81,7 @@ class AsignacionMultipleController extends Controller
             'erroresStock' => $pendienteAgricola && $pedido
                 ? app(PedidoReservaService::class)->verificarDisponibilidad($pedido)
                 : [],
-            'puedeAceptarAgricola' => $pendienteAgricola && auth()->user()?->can('pedidos.update'),
+            'puedeAceptarAgricola' => $asignacion->pedido && in_array('aceptar', app(\App\Services\PedidoTransicionService::class)->accionesDisponibles($asignacion->pedido, auth()->user()), true),
         ]);
     }
 
@@ -652,94 +653,31 @@ class AsignacionMultipleController extends Controller
         EnvioAsignacionMultiple $asignacion,
         NotificacionUsuarioService $notificaciones
     ): RedirectResponse {
-        abort_unless($request->user()?->can('pedidos.update'), 403);
-
-        $asignacion->loadMissing('pedido');
-        $pedido = $asignacion->pedido;
-        if (! $pedido) {
-            return back()->with('error', 'Este envío no tiene pedido agrícola asociado.');
-        }
-
-        if (! PedidoCatalogo::pendienteAprobacionAgricola($pedido)) {
-            return back()->with('warning', 'Este envío ya fue procesado por producción agrícola.');
-        }
-
-        $reserva = app(PedidoReservaService::class);
-        $envioActivado = null;
-
+        $data = $request->validate(['motivo_rechazo' => ['nullable', 'string', 'max:500']]);
+        abort_unless($asignacion->pedido, 404);
         try {
-            DB::transaction(function () use ($pedido, $reserva, $asignacion, &$envioActivado) {
-                $reserva->reservar($pedido);
-
-                $pedido->update([
-                    'estado' => PedidoCatalogo::ESTADO_CONFIRMADO,
-                    'fecha_aceptacion_agricola' => now(),
-                    'aceptado_por_usuarioid' => auth()->id(),
-                ]);
-
-                EnvioPedidoService::activarTransportistaProgramado($pedido->fresh());
-
-                if (! $asignacion->transportista_usuarioid) {
-                    $asignacion->update(EnvioAsignacionEstadoCatalogo::applyToAttributes([
-                        'estado' => 'pendiente',
-                    ]));
-                }
-
-                if ($asignacion->transportista_usuarioid) {
-                    $envioActivado = $asignacion->fresh(['pedido.detalles']);
-                }
-            });
-        } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage());
+            app(\App\Services\PedidoTransicionService::class)->ejecutar($asignacion->pedido, $request->user(), 'aceptar');
+        } catch (\InvalidArgumentException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            if ($e->getStatusCode() !== 409) { throw $e; }
+            return back()->withInput()->with('error', $e->getMessage());
         }
-
-        if ($envioActivado) {
-            $notificaciones->envioListoParaRecoger($envioActivado);
-        }
-
-        $mensaje = $asignacion->fresh()->transportista_usuarioid
-            ? 'Envío aceptado. Se reservó material del almacén agrícola y el transportista programado quedó asignado.'
-            : 'Envío aceptado. Se reservó material del almacén agrícola. Ya se puede asignar un transportista.';
-
-        return redirect()
-            ->route('logistica.asignaciones.show', $asignacion)
-            ->with('success', $mensaje);
+        return back()->with('success', 'Pedido aceptado correctamente.');
     }
 
     public function rechazarPedidoAgricola(Request $request, EnvioAsignacionMultiple $asignacion): RedirectResponse
     {
-        abort_unless($request->user()?->can('pedidos.update'), 403);
-
-        $asignacion->loadMissing('pedido');
-        $pedido = $asignacion->pedido;
-        if (! $pedido) {
-            return back()->with('error', 'Este envío no tiene pedido agrícola asociado.');
+        $data = $request->validate(['motivo_rechazo' => ['nullable', 'string', 'max:500']]);
+        abort_unless($asignacion->pedido, 404);
+        try {
+            app(\App\Services\PedidoTransicionService::class)->ejecutar($asignacion->pedido, $request->user(), 'rechazar', $data['motivo_rechazo'] ?? null);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            if ($e->getStatusCode() !== 409) { throw $e; }
+            return back()->withInput()->with('error', $e->getMessage());
         }
-
-        if (! PedidoCatalogo::pendienteAprobacionAgricola($pedido)) {
-            return back()->with('warning', 'Este envío ya fue procesado.');
-        }
-
-        $data = $request->validate([
-            'motivo_rechazo' => 'nullable|string|max:500',
-        ]);
-
-        DB::transaction(function () use ($pedido, $asignacion, $data) {
-            $obs = trim(($pedido->observaciones ?? '')."\n[Rechazado agrícola] ".($data['motivo_rechazo'] ?? 'Sin motivo.'));
-
-            $pedido->update([
-                'estado' => PedidoCatalogo::ESTADO_RECHAZADO,
-                'observaciones' => $obs,
-            ]);
-
-            $asignacion->update(EnvioAsignacionEstadoCatalogo::applyToAttributes([
-                'estado' => 'cancelado',
-            ]));
-        });
-
-        return redirect()
-            ->route('logistica.asignaciones.show', $asignacion)
-            ->with('success', 'Envío rechazado. Logística no podrá despachar esta solicitud.');
+        return back()->with('success', 'Pedido rechazado correctamente.');
     }
+
 }
 

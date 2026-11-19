@@ -469,7 +469,7 @@ class DashboardController extends Controller
             'lotes_activos' => (clone $lotesQuery)->count(),
             'total_lotes' => Lote::count(),
             'produccion_mes_kg' => (clone $produccionQuery)->sum('cantidad'),
-            'insumos_stock_bajo' => Insumo::where('stock', '<=', InsumoCatalogo::UMBRAL_ALERTA_STOCK)->count(),
+            'insumos_stock_bajo' => Insumo::whereNotNull('almacenid')->get()->filter(fn ($insumo) => $insumo->stockBajo())->count(),
             'transporte_costo_mes' => round(
                 (float) (clone $enviosTransporteQuery)->sum('costo_bs')
                 + (float) (clone $rutasTransporteQuery)->sum('costo_bs'),
@@ -505,9 +505,9 @@ class DashboardController extends Controller
             'insumosStockBajo' => InsumoCatalogo::aplicarFiltroOperativo(
                 Insumo::with(['tipo', 'unidadMedida'])
             )
-                ->where('stock', '<=', InsumoCatalogo::UMBRAL_ALERTA_STOCK)
+                ->whereNotNull('stockminimo')
                 ->orderBy('stock')->limit(12)->get()
-                ->filter(fn (Insumo $insumo) => ! EtiquetaDemo::esDemo($insumo->nombre))
+                ->filter(fn (Insumo $insumo) => $insumo->stockBajo() && ! EtiquetaDemo::esDemo($insumo->nombre))
                 ->take(5)->values(),
             'lotesPorEstado' => Lote::select('estadolote_tipo.nombre', DB::raw('COUNT(*) as total'))
                 ->join('estadolote_tipo', 'lote.estadolotetipoid', '=', 'estadolote_tipo.estadolotetipoid')
@@ -719,7 +719,7 @@ class DashboardController extends Controller
                     ->count(),
                 'productos_stock' => (clone $inventarioQuery)->count(),
                 'stock_bajo' => (clone $inventarioQuery)
-                    ->where('stockminimo', '>', 0)
+                    ->whereNotNull('stockminimo')
                     ->whereColumn('stock', '<=', 'stockminimo')
                     ->count(),
                 'recepciones_en_camino' => $recepcionesPlanta['en_camino'] ?? 0,

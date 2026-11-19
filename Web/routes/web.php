@@ -103,6 +103,8 @@ Route::get('/recepcion/{token}', [RecepcionQrPublicaController::class, 'show'])-
 
 Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
 
+    Route::get('/recepciones-envio/{recepcion}/comprobante', [\App\Http\Controllers\Api\EnvioMovilController::class, 'comprobante'])->whereNumber('recepcion')->name('recepcion.comprobante');
+
     Route::get('/api/cierre/firmas-estado', [CierreFirmasEstadoController::class, 'show'])->name('cierre.firmas-estado');
     Route::post('/recepcion/{token}', [RecepcionQrPublicaController::class, 'firmar'])->name('recepcion.publica.firmar');
 
@@ -163,6 +165,8 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
     Route::delete('actividades/{actividad}', [ActividadController::class, 'destroy'])->name('actividades.destroy')->middleware('action.permission:lotes,update');
     Route::get('actividades/{actividad}/resumen-completar', [ActividadController::class, 'resumenCompletar'])->name('actividades.resumen-completar');
     Route::post('actividades/{actividad}/marcar-realizada', [ActividadController::class, 'marcarRealizada'])->name('actividades.marcar-realizada');
+    Route::get('actividades/{actividad}/evidencia', [\App\Http\Controllers\Api\ActividadCierreController::class, 'evidencia'])
+        ->name('actividades.evidencia')->middleware('action.permission:lotes,read');
     Route::get('climas/datos-tiempo', [ClimaController::class, 'datosTiempo'])->name('climas.datos-tiempo');
     Route::get('climas', [ClimaController::class, 'index'])->name('climas.index');
     Route::get('clima', [ClimaController::class, 'index'])->name('clima.index');
@@ -212,8 +216,10 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
     Route::delete('lote-insumos/{lote_insumo}', fn () => redirect()->route('actividades.index'))->name('lote-insumos.destroy')->middleware('action.permission:inventario,delete');
     Route::resource('prioridades', PrioridadController::class)
         ->parameters(['prioridades' => 'prioridad']);
+    Route::get('producciones/configuracion', [ProduccionController::class, 'configuracion'])->name('producciones.configuracion')->middleware('action.permission:lotes,read');
+    Route::get('producciones/vista-previa', [ProduccionController::class, 'vistaPrevia'])->name('producciones.vista-previa')->middleware('action.permission:lotes,read');
     Route::resource('producciones', ProduccionController::class)
-        ->parameters(['producciones' => 'produccion']);
+        ->parameters(['producciones' => 'produccion'])->middleware('action.permission:lotes,read');
     Route::resource('procesos-planta', ProcesoPlantaController::class)->only(['index', 'show', 'create', 'store', 'edit', 'update', 'destroy']);
     Route::get('plantillas-transformacion/{plantillas_transformacion}/parametros', [PlantillaTransformacionController::class, 'parametrosJson'])
         ->name('plantillas-transformacion.parametros');
@@ -356,6 +362,9 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
                     ->name('movimientos.store')
                     ->middleware('action.permission:almacen_movimientos,read');
 
+                Route::get('/{almacen}/existencias', [\App\Http\Controllers\InventarioExistenciasController::class, 'index'])->name('existencias.index')->middleware('action.permission:inventario,read');
+                Route::patch('/{almacen}/existencias/{insumo}/minimo', [\App\Http\Controllers\InventarioExistenciasController::class, 'minimo'])->name('existencias.minimo')->middleware('action.permission:inventario,update');
+                Route::get('/{almacen}/movimientos', [\App\Http\Controllers\InventarioExistenciasController::class, 'movimientos'])->name('existencias.movimientos')->middleware('action.permission:almacen_movimientos,read');
                 Route::get('/{almacen}/inventario/{insumo}', [AlmacenInventarioController::class, 'show'])
                     ->whereNumber(['almacen', 'insumo'])
                     ->name('inventario.show')
@@ -445,6 +454,11 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
             ->name('cierre.finalizar')
             ->whereNumber('ruta');
     });
+
+    Route::get('lotes/{lote}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialCampo'])->name('lotes.certificados.index')->middleware('action.permission:certificaciones,read');
+    Route::get('procesamiento/{loteProduccion}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialPlanta'])->name('procesamiento.certificados.index')->middleware('action.permission:lote_produccion,read');
+    Route::get('certificaciones/{certificacion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoCampo'])->name('certificaciones.archivo')->middleware('action.permission:certificaciones,read');
+    Route::get('certificaciones-planta/{evaluacionFinalLoteProduccion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoPlanta'])->name('certificaciones-planta.archivo')->middleware('action.permission:lote_produccion,read');
 
     Route::get('/certificaciones', [CertificacionController::class, 'index'])->name('certificaciones.index')->middleware('action.permission:certificaciones,read');
     Route::post('/certificaciones/masivo', [CertificacionController::class, 'storeBatch'])->name('certificaciones.store-bulk')->middleware('action.permission:certificaciones,create');

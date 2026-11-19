@@ -187,6 +187,7 @@
         const form = btn.closest('form');
         if (!form) return;
         if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
+        if (form.hasAttribute('data-pedido-decision') && (form.dataset.submitting === '1' || !form.reportValidity())) return;
         const attrs = form.dataset;
         guardarScrollLpProcesamiento(form);
         window.ModalConfirmar.abrir(
@@ -274,6 +275,12 @@
         }
 
         document.addEventListener('submit', function (e) {
+            const decision = e.target.closest('form[data-pedido-decision]');
+            if (decision) {
+                if (decision.dataset.submitting === '1') { e.preventDefault(); return; }
+                decision.dataset.submitting = '1';
+                decision.querySelectorAll('button').forEach(button => { button.disabled = true; });
+            }
             const form = e.target.closest('#form-finalizar-cierre-traslado, #form-finalizar-cierre-agricola');
             if (!form) return;
             const btn = form.querySelector('[data-confirm-submit]');

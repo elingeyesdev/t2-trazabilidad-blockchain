@@ -132,7 +132,10 @@ class SeguridadBaseRbacTest extends TestCase
 
     private function uriConParametros(RouteDefinition $ruta): string
     {
-        return '/'.ltrim((string) preg_replace('/\{[^}]+\}/', '1', $ruta->uri()), '/');
+        // El tipo de envío es un segmento enumerado, no un identificador numérico.
+        $uri = str_starts_with($ruta->uri(), 'api/envios/') ? str_replace('{tipo}', 'agricola', $ruta->uri()) : $ruta->uri();
+
+        return '/'.ltrim((string) preg_replace('/\{[^}]+\}/', '1', $uri), '/');
     }
 
     // ------------------------------------------------------------------ SEC-01

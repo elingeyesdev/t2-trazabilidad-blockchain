@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', $solicitud->numero_solicitud)
 @section('page_title', 'Solicitud '.$solicitud->numero_solicitud)
