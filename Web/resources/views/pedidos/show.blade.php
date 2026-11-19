@@ -27,7 +27,9 @@
 @section('content')
 @php
     $itemsCount = $pedido->detalles?->count() ?? 0;
-    $totalKg = $pedido->detalles?->sum('cantidad') ?? 0;
+    $totalKg = \Brick\Math\BigDecimal::zero();
+    foreach ($pedido->detalles as $lineaTotal) { $totalKg = $totalKg->plus((string)$lineaTotal->getRawOriginal('cantidad')); }
+    $totalKg = (string)$totalKg;
     $envio = $pedido->envioAsignacion;
     $logisticaEnvio = \App\Support\EnvioPedidoService::datosLogistica($envio);
     $faseLogistica = $envio?->fecha_recepcion_planta ? 'recibido_planta' : \App\Support\PedidoCatalogo::faseLogistica($logisticaEnvio);
@@ -105,7 +107,7 @@
                                     <tr>
                                         <td>{{ $i + 1 }}</td>
                                         <td><strong>{{ $det->cultivo_personalizado }}</strong></td>
-                                        <td>{{ number_format($det->cantidad, 2) }} kg</td>
+                                        <td>{{ \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')) }} kg</td>
                                         <td class="text-muted">{{ $det->observaciones ?? '—' }}</td>
                                     </tr>
                                     @empty
@@ -116,7 +118,7 @@
                                 <tfoot>
                                     <tr class="bg-light">
                                         <th colspan="2" class="text-right">Total</th>
-                                        <th colspan="2">{{ number_format($totalKg, 2) }} kg</th>
+                                        <th colspan="2">{{ \App\Support\CosechaDecimal::mostrar($totalKg) }} kg</th>
                                     </tr>
                                 </tfoot>
                                 @endif
@@ -175,7 +177,7 @@
                                         @foreach($pedido->detalles as $det)
                                         <tr>
                                             <td>{{ $det->cultivo_personalizado ?? $det->insumo?->nombre ?? '—' }}</td>
-                                            <td>{{ number_format((float) $det->cantidad, 2) }}</td>
+                                            <td>{{ \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')) }}</td>
                                             <td style="max-width:9rem">
                                                 <input type="number" step="0.000001" min="0.000001" max="{{ $det->cantidad }}" required
                                                        class="form-control form-control-sm"

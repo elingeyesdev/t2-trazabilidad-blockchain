@@ -42,6 +42,12 @@ class PedidoDistribucionReservaService
         }
 
         $pedido->loadMissing(['detalles.presentacion', 'detalles.insumo']);
+        app(PedidoEntradaService::class)->distribucion(request(), $pedido->detalles->filter(fn ($d) => !$d->es_solicitud_custom && $d->insumo_presentacionid)->map(fn ($d) => [
+            'insumoid' => $d->insumoid, 'insumo_presentacionid' => $d->insumo_presentacionid,
+            'inventario_presentacion_loteid' => $d->inventario_presentacion_loteid,
+            'cantidad' => (string) $d->getRawOriginal('cantidad'), 'datos_solicitud' => $d->datos_solicitud,
+        ])->all(), (int) $pedido->getKey());
+
 
         $almacenIds = $pedido->detalles
             ->map(fn (DetallePedidoDistribucion $d) => $this->almacenDeLinea($d, $pedido))

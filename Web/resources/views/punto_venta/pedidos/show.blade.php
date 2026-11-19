@@ -386,8 +386,8 @@
         $det = $pedido->detalles->first();
         $badge = \App\Support\PedidoDistribucionCatalogo::badgeEstado($pedido);
         $pendienteMayorista = \App\Support\PedidoDistribucionCatalogo::pendienteAprobacionMayorista($pedido);
-        $unidad = $det?->presentacion?->etiquetaUnidad() ?? $det?->insumo?->unidadMedida?->abreviatura ?? 'unidades';
-        $stockOk = $pendienteMayorista || $erroresStock === [] || ($det?->es_solicitud_custom ?? false);
+        $unidad = $det?->datos_solicitud['unidad'] ?? $det?->presentacion?->etiquetaUnidad() ?? $det?->insumo?->unidadMedida?->abreviatura ?? 'unidades';
+        $stockOk = $erroresStock === [] || ($det?->es_solicitud_custom ?? false);
         $transportistaEfectivo = $pedido->transportista ?? $pedido->rutaDistribucion?->transportista;
         $vehiculoEfectivo = $pedido->vehiculo ?? $pedido->rutaDistribucion?->vehiculo;
         $puedeDesignarTransportista = $puedeDesignarTransportista ?? false;
@@ -470,6 +470,7 @@
                     </span>
                 </div>
                 <div class="card-body">
+                    @include('punto_venta.pedidos.partials.lineas-registradas')
                     @if(! in_array($pedido->estado, ['rechazado', 'cancelado'], true))
                     <div class="pdv-pedido-flujo" id="pdvPedidoFlujo" data-paso-inicial="{{ $pasoInicial }}" data-paso-flujo="{{ $pasoActualFlujo }}">
                         @foreach($pasos as $paso)
@@ -512,7 +513,7 @@
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--prod"><i class="fas fa-box"></i></span>
                                 <span class="pdv-info-tile__label">Producto solicitado</span>
                                 <div class="pdv-info-tile__value">{{ $det?->producto_nombre ?? '—' }}</div>
-                                <div class="pdv-info-tile__sub">{{ $det ? number_format($det->cantidad, 2).' '.$unidad : '—' }}</div>
+                                <div class="pdv-info-tile__sub">{{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '—' }}</div>
                             </div>
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--alm"><i class="fas fa-warehouse"></i></span>
@@ -529,7 +530,7 @@
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--stock"><i class="fas fa-cubes"></i></span>
                                 <span class="pdv-info-tile__label">Stock en mayorista</span>
-                                <div class="pdv-info-tile__value">{{ number_format((float) $det->insumo->stock, 2) }} {{ $unidad }}</div>
+                                <div class="pdv-info-tile__value"><x-operacion.cantidad :valor="$det->insumo->getRawOriginal('stock')" :unidad="$det->insumo->unidadMedida?->abreviatura ?? $det->insumo->unidadMedida?->nombre" /></div>
                                 <span class="pdv-info-tile__badge {{ $stockOk ? 'pdv-info-tile__badge--ok' : 'pdv-info-tile__badge--bad' }}">
                                     <i class="fas {{ $stockOk ? 'fa-check-circle' : 'fa-exclamation-circle' }}"></i>
                                     {{ $stockOk ? 'Disponible para despacho' : 'Stock insuficiente' }}
@@ -553,7 +554,7 @@
                                     <div class="form-group col-md-4">
                                         <label class="small font-weight-bold">Cantidad ({{ $unidad }})</label>
                                         <input type="number" name="cantidad" class="form-control" step="0.01" min="0.01"
-                                               max="{{ $det?->insumo?->stock ?? 999999 }}" value="{{ old('cantidad', $det?->cantidad) }}" required>
+                                               value="{{ old('cantidad', $det?->cantidad) }}" required>
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="small font-weight-bold">Entrega deseada</label>
@@ -600,7 +601,7 @@
                                     </div>
                                 @elseif($pendienteMayorista && $pedido->espera_stock)
                                     <div class="pdv-revision-banner__sub">
-                                        Cantidad solicitada: {{ $det ? number_format($det->cantidad, 0).' '.$unidad : '—' }}.
+                                        Cantidad solicitada: {{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '—' }}.
                                         El mayorista aceptará o rechazará según disponibilidad para la fecha indicada.
                                     </div>
                                 @endif
@@ -609,8 +610,8 @@
                         @if($det?->insumo)
                         <div class="pdv-stock-row">
                             <div>
-                                <div class="pdv-stock-row__label">Stock verificado en mayorista</div>
-                                <div class="pdv-stock-row__value">{{ number_format((float) $det->insumo->stock, 2) }} {{ $unidad }}</div>
+                                <div class="pdv-stock-row__label">Existencia física en mayorista (primer producto)</div>
+                                <div class="pdv-stock-row__value"><x-operacion.cantidad :valor="$det->insumo->getRawOriginal('stock')" :unidad="$det->insumo->unidadMedida?->abreviatura ?? $det->insumo->unidadMedida?->nombre" /></div>
                             </div>
                             <span class="pdv-info-tile__badge {{ $stockOk ? 'pdv-info-tile__badge--ok' : 'pdv-info-tile__badge--bad' }}">
                                 <i class="fas {{ $stockOk ? 'fa-check' : 'fa-exclamation-triangle' }} mr-1"></i>
@@ -635,7 +636,7 @@
                                 @if(! empty($resumenCargaPedido['volumen_m3']))
                                     · <strong>{{ number_format((float) $resumenCargaPedido['volumen_m3'], 3) }} m³</strong>
                                 @endif
-                                ({{ $det ? number_format($det->cantidad, 0).' '.$unidad : '—' }})
+                                ({{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '—' }})
                             </div>
                             <p class="pdv-capacidad-vehiculo__hint mb-0" id="txtCapacidadVehiculoPdv">
                                 Seleccione chofer y vehículo a la derecha para ver si la carga cabe (peso y volumen).
@@ -658,7 +659,7 @@
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--prod"><i class="fas fa-box"></i></span>
                                 <span class="pdv-info-tile__label">Producto a despachar</span>
                                 <div class="pdv-info-tile__value">{{ $det?->producto_nombre ?? '—' }}</div>
-                                <div class="pdv-info-tile__sub">{{ $det ? number_format($det->cantidad, 2).' '.$unidad : '' }}</div>
+                                <div class="pdv-info-tile__sub">{{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '' }}</div>
                             </div>
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--pdv"><i class="fas fa-store"></i></span>
@@ -686,7 +687,7 @@
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--prod"><i class="fas fa-box"></i></span>
                                 <span class="pdv-info-tile__label">Producto</span>
                                 <div class="pdv-info-tile__value">{{ $det?->producto_nombre ?? '—' }}</div>
-                                <div class="pdv-info-tile__sub">{{ $det ? number_format($det->cantidad, 2).' '.$unidad : '' }}</div>
+                                <div class="pdv-info-tile__sub">{{ $det ? \App\Support\CosechaDecimal::mostrar($det->getRawOriginal('cantidad')).' '.$unidad : '' }}</div>
                             </div>
                             <div class="pdv-info-tile">
                                 <span class="pdv-info-tile__icon pdv-info-tile__icon--alm"><i class="fas fa-warehouse"></i></span>

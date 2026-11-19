@@ -81,7 +81,16 @@ class PedidoController extends Controller
             'label' => $a->nombre,
         ])->values()->all();
 
+        $partidasAgricolas = [];
+        if (UsuarioRol::esJefeAgricultor($user)) {
+            $partidasAgricolas = \App\Models\MateriaPrimaLote::whereIn('almacenid', array_column($filtroAlmacenesAgricola, 'value'))
+                ->orderBy('materiaprimaloteid')->get()->groupBy('insumoid')->map(function ($filas) {
+                    return $filas->filter(fn ($p) => app(\App\Services\InventarioExistenciaService::class)->utilizable($p))
+                        ->map(fn ($p) => ['id' => (int)$p->getKey(), 'label' => $p->lote_proveedor ?: 'Partida #'.$p->getKey()])->values()->all();
+                })->all();
+        }
         return view('pedidos.create', array_merge([
+            'partidasAgricolas' => $partidasAgricolas,
             'numeroSolicitud' => $numeroSolicitud,
             'codigoTrasladoPreview' => RutaDistribucionCatalogo::generarCodigoTraslado(),
             'hubLat' => RutaPorCallesService::HUB_LAT,
@@ -302,137 +311,13 @@ class PedidoController extends Controller
 
     public function store(Request $request)
     {
-        EnvioTrayectoCatalogo::autorizarTrayecto($request->user(), EnvioTrayectoCatalogo::TRAYECTO_PLANTA);
-
-        $data = $request->validate([
-            'origen_latitud' => 'required|numeric|between:-90,90',
-            'origen_longitud' => 'required|numeric|between:-180,180',
-            'origen_direccion' => 'nullable|string|max:255',
-            'origen_almacenid' => 'nullable|integer|exists:almacen,almacenid',
-            'latitud' => 'required|numeric|between:-90,90',
-            'longitud' => 'required|numeric|between:-180,180',
-            'direccion_texto' => 'nullable|string|max:255',
-            'fechaEntregaDeseada' => 'required|date',
-            'hora_recogida' => 'nullable|date_format:H:i',
-            'hora_entrega_estimada' => 'nullable|date_format:H:i',
-            'instrucciones_recogida' => 'nullable|string|max:2000',
-            'instrucciones_entrega' => 'nullable|string|max:2000',
-            'observaciones' => 'nullable|string',
-            'transportista_usuarioid' => 'required|integer|exists:usuario,usuarioid',
-            'vehiculoid' => 'required|integer|exists:vehiculo,vehiculoid',
-            'costo_bs' => 'required|integer|min:1|max:99999999',
-            'recogidas' => 'nullable|array|max:5',
-            'recogidas.*.latitud' => 'required|numeric|between:-90,90',
-            'recogidas.*.longitud' => 'required|numeric|between:-180,180',
-            'recogidas.*.direccion' => 'nullable|string|max:255',
-            'recogidas.*.almacenid' => 'nullable|integer|exists:almacen,almacenid',
-            'detalles' => 'required|array|min:1',
-            'detalles.*.producto_ref' => ['required', 'string', 'regex:/^(insumo|cosecha|cultivo):\d+$/'],
-            'detalles.*.cantidad' => 'required|numeric|min:0.01',
-            'detalles.*.observaciones' => 'nullable|string',
-        ], [
-            'detalles.*.producto_ref.regex' => 'Seleccione un producto válido de producción agrícola.',
-            'fechaEntregaDeseada.required' => 'Indique la fecha de entrega deseada.',
-        ]);
-
-        // AGR-07: origen / recogidas solo desde almacén agrícola del propio jefe.
-        $this->assertAlmacenesAgricolasPropios($request->user(), $data);
-
-        $erroresStock = PedidoCatalogo::validarStockDetallesPedido(
-            $data['detalles'],
-            isset($data['origen_almacenid']) ? (int) $data['origen_almacenid'] : null,
-            array_values($data['recogidas'] ?? [])
-        );
-        if ($erroresStock !== null) {
-            throw \Illuminate\Validation\ValidationException::withMessages($erroresStock);
-        }
-
-        $erroresPresentacion = PedidoCatalogo::validarPresentacionDetallesPedido($data['detalles']);
-        if ($erroresPresentacion !== null) {
-            throw \Illuminate\Validation\ValidationException::withMessages($erroresPresentacion);
-        }
-
-        $pesoTotalKg = (float) array_sum(array_map(
-            fn (array $d) => (float) ($d['cantidad'] ?? 0),
-            $data['detalles']
-        ));
-        $vehiculo = Vehiculo::query()->findOrFail((int) $data['vehiculoid']);
-        app(TransporteCapacidadService::class)->validarCarga($vehiculo, $pesoTotalKg);
-
-        $transportistaId = (int) $data['transportista_usuarioid'];
-        $vehiculoId = (int) $data['vehiculoid'];
-        $costoBs = (float) $data['costo_bs'];
-        $recogidasExtra = array_values($data['recogidas'] ?? []);
-
-        $pedido = null;
-
-        try {
-            DB::transaction(function () use ($data, $transportistaId, $vehiculoId, $costoBs, $recogidasExtra, &$pedido) {
-            $detallesInput = $data['detalles'];
-            unset($data['detalles'], $data['transportista_usuarioid'], $data['vehiculoid'], $data['recogidas'], $data['costo_bs']);
-
-            $pedido = Pedido::create([
-                ...$data,
-                'numero_solicitud' => PedidoCatalogo::generarNumeroSolicitud(),
-                'nombre_planta' => null,
-                'estado' => PedidoCatalogo::ESTADO_INICIAL,
-                'fechapedido' => now(),
-            ]);
-
-            foreach ($detallesInput as $detalle) {
-                $producto = PedidoCatalogo::resolverProductoPedido($detalle['producto_ref']);
-
-                $pedido->detalles()->create([
-                    'insumoid' => $producto['insumoid'],
-                    'producto_ref' => $detalle['producto_ref'],
-                    'produccionalmacenamientoid' => str_starts_with($detalle['producto_ref'], 'cosecha:')
-                        ? (int) substr($detalle['producto_ref'], 8)
-                        : null,
-                    'cultivo_personalizado' => $producto['cultivo'],
-                    'cantidad' => $detalle['cantidad'],
-                    'observaciones' => $detalle['observaciones'] ?? null,
-                ]);
-            }
-
-            $envio = EnvioPedidoService::programarTransportista(
-                $pedido,
-                $transportistaId,
-                $vehiculoId,
-                (int) auth()->id(),
-                $costoBs
-            );
-
-            if ($recogidasExtra !== []) {
-                EnvioPedidoService::crearRutaRecogidasMultiples(
-                    $pedido,
-                    $envio,
-                    $recogidasExtra,
-                    $transportistaId,
-                    (int) auth()->id()
-                );
-            }
-            });
-        } catch (\InvalidArgumentException $e) {
-            return back()->withInput()->withErrors([
-                'vehiculoid' => $e->getMessage(),
-            ]);
-        }
-
-        app(NotificacionUsuarioService::class)->pedidoPendienteAgricola($pedido->fresh(['detalles']));
-
-        $mensaje = 'Envío registrado con transportista asignado.';
-        if ($recogidasExtra !== []) {
-            $totalRecogidas = count($recogidasExtra) + 1;
-            $mensaje .= " Ruta con {$totalRecogidas} punto(s) de recogida hacia planta.";
-        } else {
-            $mensaje .= ' Producción agrícola debe aceptarlo para activar la salida.';
-        }
-
-        return redirect()->route('logistica.asignaciones.listado')->with('success', $mensaje);
+        $pedido = app(\App\Services\PedidoAgricolaCreacionService::class)->crear($request);
+        return redirect()->route('logistica.asignaciones.listado')->with('success', 'Envío registrado con transportista asignado. Producción agrícola debe aceptarlo para activar la salida.');
     }
 
     public function show($id)
     {
+        \App\Support\PedidoMovilAcceso::asegurar(auth()->user(), Pedido::findOrFail($id));
         $pedido = Pedido::with([
             'detalles',
             'envioAsignacion.transportista.perfilTransportista.vehiculo.tipoVehiculo',
@@ -482,6 +367,7 @@ class PedidoController extends Controller
 
     public function edit(Pedido $pedido)
     {
+        \App\Support\PedidoMovilAcceso::asegurar(auth()->user(), $pedido);
         $pedido->load([
             'detalles',
             'envioAsignacion.transportista.perfilTransportista.vehiculo.tipoVehiculo',
@@ -496,6 +382,10 @@ class PedidoController extends Controller
 
     public function update(Request $request, Pedido $pedido)
     {
+        \App\Support\PedidoMovilAcceso::asegurar($request->user(), $pedido);
+        if ($request->has('estado') && $request->input('estado') !== $pedido->estado) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['estado' => 'Use las acciones de aceptación o rechazo autorizadas para cambiar el estado.']);
+        }
         if ($request->has('estado') && ! $request->has('fechaEntregaDeseada') && ! $request->has('observaciones')) {
             $data = $request->validate([
                 'estado' => 'required|in:sin asignacion,pendiente,confirmado,en produccion,rechazado',
@@ -506,7 +396,8 @@ class PedidoController extends Controller
                 return back()->with('error', 'Solo producción agrícola puede aceptar el pedido y reservar stock del almacén.');
             }
 
-            $pedido->update($data);
+            // El estado se modifica únicamente mediante las acciones autorizadas.
+
 
             return back()->with('success', 'Estado actualizado.');
         }
@@ -553,7 +444,10 @@ class PedidoController extends Controller
 
     public function destroy($id)
     {
-        Pedido::findOrFail($id)->delete();
+        $pedido = Pedido::findOrFail($id);
+        \App\Support\PedidoMovilAcceso::asegurar(auth()->user(), $pedido);
+        abort_unless(PedidoCatalogo::pendienteAprobacionAgricola($pedido), 409, 'No se puede eliminar un pedido agrícola ya procesado.');
+        $pedido->delete();
 
         return redirect()->route('logistica.asignaciones.listado');
     }

@@ -15,6 +15,8 @@ class PedidoDistribucion extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'solicitud_id', 'solicitud_huella',
+
         'numero_solicitud',
         'puntoventaid',
         'almacen_planta_origenid',

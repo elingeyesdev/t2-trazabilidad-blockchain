@@ -14,6 +14,9 @@ class Pedido extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'solicitud_id', 'solicitud_huella',
+        'creado_por_usuarioid',
+
         'numero_solicitud',
         'nombre_planta',
         'origen_latitud',
