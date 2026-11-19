@@ -477,7 +477,13 @@ class PedidoDistribucionController extends Controller
     {
         MayoristaAccess::asegurarPuedeVerPedido(auth()->user(), $pedido);
         $data = request()->validate(['motivo_rechazo' => ['nullable', 'string', 'max:500']]);
-        app(\App\Services\PedidoTransicionService::class)->ejecutar($pedido, auth()->user(), 'aceptar', $data['motivo_rechazo'] ?? null);
+        try {
+            app(\App\Services\PedidoTransicionService::class)->ejecutar($pedido, auth()->user(), 'aceptar', $data['motivo_rechazo'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (ValidationException $e) {
+            return back()->withErrors($e->errors())->with('error', implode(' ', \Illuminate\Support\Arr::flatten($e->errors())));
+        }
         return back()->with('success', 'Pedido actualizado correctamente.');
     }
 

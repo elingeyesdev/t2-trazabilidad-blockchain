@@ -306,6 +306,8 @@ class ApiPedidosMovilTest extends TestCase
         $id = $this->crear('distribucion')->assertCreated()->json('data.id');
         $this->partida->update(['fecha_vencimiento' => now()->subDay()->toDateString()]);
         $this->actingAs($this->mayorista)->postJson('/api/pedidos-distribucion/'.$id.'/transiciones', ['accion' => 'aceptar'])->assertUnprocessable();
+        $this->actingAs($this->mayorista)->post(route('punto-venta.pedidos.aceptar', $id))
+            ->assertRedirect()->assertSessionHas('error')->assertSessionHasErrors();
         $this->assertSame('pendiente', PedidoDistribucion::findOrFail($id)->estado);
         $this->assertSame('100.000000', $this->partida->fresh()->cantidad_unidades);
     }

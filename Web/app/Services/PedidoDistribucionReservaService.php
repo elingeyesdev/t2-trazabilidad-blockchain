@@ -42,13 +42,6 @@ class PedidoDistribucionReservaService
         }
 
         $pedido->loadMissing(['detalles.presentacion', 'detalles.insumo']);
-        app(PedidoEntradaService::class)->distribucion(request(), $pedido->detalles->filter(fn ($d) => !$d->es_solicitud_custom && $d->insumo_presentacionid)->map(fn ($d) => [
-            'insumoid' => $d->insumoid, 'insumo_presentacionid' => $d->insumo_presentacionid,
-            'inventario_presentacion_loteid' => $d->inventario_presentacion_loteid,
-            'cantidad' => (string) $d->getRawOriginal('cantidad'), 'datos_solicitud' => $d->datos_solicitud,
-        ])->all(), (int) $pedido->getKey());
-
-
         $almacenIds = $pedido->detalles
             ->map(fn (DetallePedidoDistribucion $d) => $this->almacenDeLinea($d, $pedido))
             ->filter()
@@ -59,6 +52,9 @@ class PedidoDistribucionReservaService
         if ($almacenIds === []) {
             return;
         }
+
+        // Adquirir los locks compartidos de existencias antes de consultar disponibilidad.
+        app(InventarioExistenciaService::class)->bloquear($pedido->detalles->pluck('insumoid')->filter()->unique()->values()->all());
 
         // Mutex por almacén: serializa reservas que compiten por el mismo stock.
         Almacen::query()->whereIn('almacenid', $almacenIds)->orderBy('almacenid')->lockForUpdate()->get();
@@ -80,6 +76,13 @@ class PedidoDistribucionReservaService
                 );
             }
         }
+
+        // Mantener el error de dominio histórico antes de validar acumulados y vencimientos.
+        app(PedidoEntradaService::class)->distribucion(request(), $pedido->detalles->filter(fn ($d) => !$d->es_solicitud_custom && $d->insumo_presentacionid)->map(fn ($d) => [
+            'insumoid' => $d->insumoid, 'insumo_presentacionid' => $d->insumo_presentacionid,
+            'inventario_presentacion_loteid' => $d->inventario_presentacion_loteid,
+            'cantidad' => (string) $d->getRawOriginal('cantidad'), 'datos_solicitud' => $d->datos_solicitud,
+        ])->all(), (int) $pedido->getKey(), false);
     }
 
     /** Stock de la línea menos lo ya reservado por OTROS pedidos confirmados del mismo almacén. */
