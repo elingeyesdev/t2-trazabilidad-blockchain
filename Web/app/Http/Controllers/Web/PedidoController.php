@@ -638,7 +638,7 @@ class PedidoController extends Controller
 
         $cantidades = [];
         foreach ($data['cantidades'] as $detalleId => $kg) {
-            $cantidades[(int) $detalleId] = (float) $kg;
+            $cantidades[(int) $detalleId] = $kg;
         }
 
         try {

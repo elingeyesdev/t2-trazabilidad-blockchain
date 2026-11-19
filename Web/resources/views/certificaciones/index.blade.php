@@ -198,6 +198,7 @@
                         @if($lotesPendientes->isNotEmpty())
                             <form action="{{ route('certificaciones.store-bulk') }}" method="POST" id="formCertMasivo" class="mb-3 p-3 bg-light rounded">
                                 @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                                 <input type="hidden" name="modo" value="todos">
                                 <div class="d-flex flex-wrap align-items-end">
                                     <div class="flex-grow-1 mr-2 mb-2" style="min-width:200px;">
@@ -212,6 +213,7 @@
 
                             <form action="{{ route('certificaciones.store-bulk') }}" method="POST" id="formCertSeleccion">
                                 @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                                 <input type="hidden" name="modo" value="seleccion">
                                 <input type="hidden" name="observaciones" id="obsSeleccionHidden" value="">
                             </form>
@@ -242,6 +244,7 @@
                                     @can('certificaciones.create')
                                         <form action="{{ route('certificaciones.store') }}" method="POST" class="mb-2">
                                             @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                                             <input type="hidden" name="loteid" value="{{ $lote->loteid }}">
                                             <input type="hidden" name="resultado" value="Certificado">
                                             <div class="form-row align-items-center">
@@ -257,6 +260,7 @@
                                         </form>
                                         <form action="{{ route('certificaciones.store') }}" method="POST" class="mb-0" onsubmit="return confirm('¿Marcar este lote como No conforme? No podrá enviarse al almacén.');">
                                             @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                                             <input type="hidden" name="loteid" value="{{ $lote->loteid }}">
                                             <input type="hidden" name="resultado" value="No conforme">
                                             <div class="form-row">
@@ -323,7 +327,7 @@
                              title="Ver detalle de la evaluación"
                              data-cert-id="{{ $cert->certificacionid }}"
                              data-cert-url="{{ route('certificaciones.show', $cert) }}"
-                             data-search="{{ strtolower(trim(($cert->codigo_certificado ?? '').' '.$cert->loteid.' '.($cert->lote->nombre ?? '').' '.($cert->lote->cultivo->nombre ?? '').' '.($cert->observaciones ?? '').' '.($cert->esNoConforme() ? 'no conforme' : 'certificado'))) }}">
+                             data-search="{{ strtolower(trim(($cert->codigo_certificado ?? '').' '.$cert->loteid.' '.($cert->datos_emision['recorrido']['producto']['nombre'] ?? $cert->lote->nombre ?? '').' '.($cert->datos_emision['recorrido']['producto']['cultivo'] ?? $cert->lote->cultivo->nombre ?? '').' '.($cert->observaciones ?? '').' '.($cert->esNoConforme() ? 'no conforme' : 'certificado'))) }}">
                             <div class="d-flex justify-content-between align-items-start mb-1">
                                 @if($cert->esNoConforme())
                                     <span class="badge badge-warning">No conforme</span>
@@ -332,8 +336,8 @@
                                 @endif
                                 <small class="text-muted">{{ $cert->fecha_certificacion?->format('d/m/Y H:i') }}</small>
                             </div>
-                            <div class="font-weight-bold">{{ $cert->lote->nombre ?? 'Lote #'.$cert->loteid }}</div>
-                            <div class="small text-muted">Lote #{{ $cert->loteid }} · {{ $cert->lote->cultivo->nombre ?? '—' }}</div>
+                            <div class="font-weight-bold">{{ $cert->datos_emision['recorrido']['producto']['nombre'] ?? $cert->lote->nombre ?? 'Lote #'.$cert->loteid }}</div>
+                            <div class="small text-muted">Lote #{{ $cert->loteid }} · {{ $cert->datos_emision['recorrido']['producto']['cultivo'] ?? $cert->lote->cultivo->nombre ?? '—' }}</div>
                             @if($cert->observaciones)
                                 <p class="small mb-1 mt-2 text-secondary text-truncate">{{ Str::limit($cert->observaciones, 80) }}</p>
                             @endif

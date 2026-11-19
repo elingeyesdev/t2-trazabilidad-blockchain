@@ -10,7 +10,6 @@ use App\Models\ProcesoPlanta;
 use App\Models\RegistroProcesoMaquinaPlanta;
 use App\Models\Usuario;
 use App\Services\NotificacionUsuarioService;
-use App\Support\UsuarioRol;
 use Illuminate\Support\Facades\DB;
 
 class AsignacionEtapaPlantaService
@@ -77,16 +76,42 @@ class AsignacionEtapaPlantaService
 
     public function puedeCompletar(AsignacionEtapaPlanta $asignacion): bool
     {
-        if (! $asignacion->estaPendiente()) {
-            return false;
-        }
+        return $this->motivoBloqueo($asignacion) === null;
+    }
 
+    public function motivoBloqueo(AsignacionEtapaPlanta $asignacion): ?string
+    {
+        if (! $asignacion->estaPendiente() && ! $asignacion->estaProgramada()) {
+            return 'Esta tarea ya fue completada o cancelada.';
+        }
         $lote = $asignacion->loteProduccion;
-        if (! $lote) {
-            return false;
+        if (! $lote || $this->trazabilidad->transformacionCompleta($lote)) {
+            return 'La transformación del lote ya finalizó o no está disponible.';
+        }
+        if ((int) $asignacion->orden !== $this->transformacion->ordenPasoActual($lote)) {
+            return 'Complete primero las etapas anteriores de la ruta.';
+        }
+        if (! $asignacion->proceso?->activo || ! $asignacion->maquina?->activo) {
+            return 'El proceso o la maquinaria no está disponible.';
+        }
+        if (! MaquinaProcesoCompatibilidad::compatible((int) $asignacion->procesoplantaid, (int) $asignacion->maquinaplantaid)) {
+            return 'La maquinaria no es compatible con esta etapa.';
+        }
+        if ($asignacion->loteproduccionrutapasoid) {
+            $paso = $asignacion->rutaPaso;
+            if (! $paso || (int) $paso->loteproduccionpedidoid !== (int) $lote->getKey()
+                || (int) $paso->orden !== (int) $asignacion->orden
+                || (int) $paso->procesoplantaid !== (int) $asignacion->procesoplantaid
+                || (int) $paso->maquinaplantaid !== (int) $asignacion->maquinaplantaid) {
+                return 'La asignación no corresponde a la ruta del lote.';
+            }
+        }
+        $envio = $lote->pedido?->envioAsignacion;
+        if ($envio && ! $envio->fecha_recepcion_planta) {
+            return 'Debe confirmar la recepción de materia prima en planta.';
         }
 
-        return ! $this->trazabilidad->transformacionCompleta($lote);
+        return null;
     }
 
     /**
@@ -340,16 +365,41 @@ class AsignacionEtapaPlantaService
      */
     public function completar(AsignacionEtapaPlanta $asignacion, array $data, Usuario $usuario): RegistroProcesoMaquinaPlanta
     {
+        if (! UsuarioRol::esOperarioPlanta($usuario) || (int) $asignacion->operador_usuarioid !== (int) $usuario->usuarioid) {
+            throw new \InvalidArgumentException('No tiene permiso para completar esta tarea.');
+        }
+        $huella = $this->huellaParametros($data['parametros'] ?? []);
         $paramService = app(LoteProduccionParametrosService::class);
         $parametrosIngresados = $data['parametros'] ?? [];
 
-        $registro = DB::transaction(function () use ($asignacion, $data, $usuario, $paramService, $parametrosIngresados) {
+        $registro = DB::transaction(function () use ($asignacion, $usuario, $paramService, $parametrosIngresados, $huella) {
+            // Proteger el agregado antes de leer o bloquear una asignación.
+            if (DB::getDriverName() === 'sqlite') {
+                DB::table('lote_produccion_pedido')->where('loteproduccionpedidoid', $asignacion->loteproduccionpedidoid)
+                    ->update(['codigo_lote' => DB::raw('codigo_lote')]);
+            }
+            $lote = LoteProduccionPedido::whereKey($asignacion->loteproduccionpedidoid)->lockForUpdate()->firstOrFail();
             /** @var AsignacionEtapaPlanta $locked */
             $locked = AsignacionEtapaPlanta::query()
                 ->whereKey($asignacion->asignacionetapaplantaid)
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ((int) $locked->operador_usuarioid !== (int) $usuario->usuarioid) {
+                throw new \InvalidArgumentException('No tiene permiso para completar esta tarea.');
+            }
+            if ($locked->estado === AsignacionEtapaPlanta::ESTADO_COMPLETADA && $locked->registro) {
+                $anterior = json_decode($locked->registro->variables_ingresadas, true);
+                if (($anterior['solicitud_huella'] ?? null) === $huella) {
+                    return $locked->registro;
+                }
+                throw new \App\Exceptions\PlantaConflictoException('La etapa ya fue confirmada con otros resultados.');
+            }
+            $locked->setRelation('loteProduccion', $lote);
+            $locked->setRelation('maquina', MaquinaPlanta::whereKey($locked->maquinaplantaid)->lockForUpdate()->first());
+            if ($error = $this->motivoBloqueo($locked)) {
+                throw new \InvalidArgumentException($error);
+            }
             $this->activarAsignacionProgramadaSiCorresponde($locked);
             $locked->refresh();
 
@@ -364,7 +414,7 @@ class AsignacionEtapaPlantaService
                 throw new \InvalidArgumentException('No tiene permiso para completar esta tarea.');
             }
 
-            $lote = $locked->loteProduccion()->lockForUpdate()->firstOrFail();
+            $lote = $locked->loteProduccion;
             if ($this->trazabilidad->transformacionCompleta($lote)) {
                 throw new \InvalidArgumentException('La transformación del lote ya finalizó.');
             }
@@ -407,13 +457,14 @@ class AsignacionEtapaPlantaService
                     'proceso' => $proceso?->nombre,
                     'maquina' => $maquina?->nombre,
                     'asignacion_id' => $locked->asignacionetapaplantaid,
+                    'solicitud_huella' => $huella,
                     'parametros' => $parametrosRegistrados,
                 ], JSON_UNESCAPED_UNICODE),
                 'cumple_estandar' => true,
                 'observaciones' => $locked->observaciones,
-                'hora_inicio' => $data['hora_inicio'],
-                'hora_fin' => $data['hora_fin'],
-                'fecha_registro' => $data['hora_fin'],
+                'hora_inicio' => $locked->creado_en ?? now(),
+                'hora_fin' => now(),
+                'fecha_registro' => now(),
             ]);
 
             $locked->update([
@@ -423,20 +474,38 @@ class AsignacionEtapaPlantaService
             ]);
 
             if (! $lote->hora_inicio) {
-                $lote->update(['hora_inicio' => $data['hora_inicio']]);
+                $lote->update(['hora_inicio' => $locked->creado_en ?? now()]);
             }
             $lote->update(['procesoplantaid' => $locked->procesoplantaid]);
 
+            $this->promoverSiguienteProgramada($lote->fresh());
+            $this->transformacion->limpiarAsignacionesObsoletas($lote->fresh());
+
             return $registro;
-        });
+        }, 5);
 
         $this->notificaciones->descartarEtapaPlantaAsignada((int) $asignacion->asignacionetapaplantaid);
 
-        $lote = $asignacion->loteProduccion()->firstOrFail()->fresh();
-        $this->promoverSiguienteProgramada($lote);
-        $this->transformacion->limpiarAsignacionesObsoletas($lote);
-
         return $registro;
+    }
+
+    private function huellaParametros(array $parametros): string
+    {
+        $normalizados = [];
+        foreach ($parametros as $indice => $fila) {
+            $id = (int) ($fila['variableestandarid'] ?? 0);
+            if ($id <= 0 || isset($normalizados[$id]) || ! is_numeric($fila['valor'] ?? null) || ! is_finite((float) $fila['valor'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parametros.'.$indice.'.valor' => 'Indique un parámetro único con un valor numérico finito.']);
+            }
+            $texto = (string) $fila['valor'];
+            if (strlen($texto) > 64 || (preg_match('/[eE]([+-]?[0-9]+)$/', $texto, $exponente) && abs((int) $exponente[1]) > 24)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parametros.'.$indice.'.valor' => 'El valor excede la precisión admitida.']);
+            }
+            $normalizados[$id] = (string) \Brick\Math\BigDecimal::of($texto)->stripTrailingZeros();
+        }
+        ksort($normalizados);
+
+        return hash('sha256', json_encode($normalizados, JSON_THROW_ON_ERROR));
     }
 
     public function sincronizarPromocionCola(LoteProduccionPedido $lote): void

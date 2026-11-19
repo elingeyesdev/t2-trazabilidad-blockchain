@@ -26,6 +26,11 @@ class LoteProduccionMateriaPrima extends Model
         'cantidad_unidades_consumidas' => 'decimal:6',
     ];
 
+    public function presentacionLote(): BelongsTo
+    {
+        return $this->belongsTo(InventarioPresentacionLote::class, 'inventario_presentacion_loteid', 'inventario_presentacion_loteid');
+    }
+
     public function loteProduccionPedido(): BelongsTo
     {
         return $this->belongsTo(LoteProduccionPedido::class, 'loteproduccionpedidoid', 'loteproduccionpedidoid');

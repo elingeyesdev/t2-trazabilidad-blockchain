@@ -87,6 +87,7 @@ class TareaPlantaController extends Controller
         return view('tareas_planta.show', [
             'tarea' => $asignacion,
             'puedeCompletar' => $this->asignaciones->puedeCompletar($asignacion),
+            'motivoBloqueo' => $this->asignaciones->motivoBloqueo($asignacion),
             'empaquePlan' => $empaquePlan,
             'vistaEmpaquetado' => $vistaEmpaquetado,
             'parametrosRequeridos' => $this->parametros->parametrosRequeridosParaAsignacion($asignacion),

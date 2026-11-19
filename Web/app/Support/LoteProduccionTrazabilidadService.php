@@ -30,7 +30,7 @@ class LoteProduccionTrazabilidadService
     {
         $lote->loadMissing('evaluacionesFinales');
 
-        return $lote->evaluacionesFinales->sortByDesc('fecha_evaluacion')->first();
+        return $lote->evaluacionesFinales->sortBy([['fecha_evaluacion', 'desc'], ['evaluacionfinalloteid', 'desc']])->first();
     }
 
     public function evaluacionAprobada(LoteProduccionPedido $lote): bool
@@ -43,18 +43,10 @@ class LoteProduccionTrazabilidadService
         return $this->evaluacionActual($lote)?->esNoConforme() ?? false;
     }
 
-    /** Elimina ingresos a almacén inválidos en lotes marcados como no conforme. */
+    /** Compatibilidad con llamadas existentes: consultar nunca elimina almacenajes. */
     public function limpiarAlmacenajeSiRechazado(LoteProduccionPedido $lote): void
     {
-        if (! $this->loteRechazado($lote)) {
-            return;
-        }
-
-        if ($lote->almacenajes()->exists()) {
-            $lote->almacenajes()->delete();
-        }
-
-        $lote->unsetRelation('almacenajes');
+        // La consulta no elimina antecedentes de almacenaje de evaluaciones anteriores.
     }
 
     public function almacenajeVigente(LoteProduccionPedido $lote): ?AlmacenajeLoteProduccion

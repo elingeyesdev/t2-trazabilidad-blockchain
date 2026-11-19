@@ -15,7 +15,7 @@ class MateriaPrimaLote extends Model
         'materiaprimabaseid', 'proveedor_actorid', 'lote_proveedor', 'numero_factura',
         'fecha_recepcion', 'fecha_vencimiento', 'cantidad', 'cantidad_disponible',
         'conformidad_recepcion', 'observaciones',
-        'insumoid', 'almacenid',
+        'insumoid', 'almacenid', 'detallepedidoid',
     ];
 
     protected $casts = [
@@ -25,6 +25,11 @@ class MateriaPrimaLote extends Model
         'cantidad_disponible'   => 'decimal:6',
         'conformidad_recepcion' => 'boolean',
     ];
+
+    public function detallePedido(): BelongsTo
+    {
+        return $this->belongsTo(DetallePedido::class, 'detallepedidoid', 'detallepedidoid');
+    }
 
     public function materiaBase(): BelongsTo
     {

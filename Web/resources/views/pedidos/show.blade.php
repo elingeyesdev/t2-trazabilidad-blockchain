@@ -30,7 +30,7 @@
     $totalKg = $pedido->detalles?->sum('cantidad') ?? 0;
     $envio = $pedido->envioAsignacion;
     $logisticaEnvio = \App\Support\EnvioPedidoService::datosLogistica($envio);
-    $faseLogistica = \App\Support\PedidoCatalogo::faseLogistica($logisticaEnvio);
+    $faseLogistica = $envio?->fecha_recepcion_planta ? 'recibido_planta' : \App\Support\PedidoCatalogo::faseLogistica($logisticaEnvio);
     $etiquetaEstadoVisible = $faseLogistica
         ? \App\Support\PedidoCatalogo::etiquetaFaseLogistica($faseLogistica)
         : \App\Support\PedidoCatalogo::etiquetaEstado($pedido->estado);
@@ -42,7 +42,7 @@
     };
     $pasoAsignado = $envio !== null;
     $pasoEnCamino = (bool) ($logisticaEnvio['cargado_en_ruta'] ?? false);
-    $pasoRecibido = (bool) ($logisticaEnvio['recibido_planta'] ?? false);
+    $pasoRecibido = $envio?->fecha_recepcion_planta !== null || (bool) ($logisticaEnvio['recibido_planta'] ?? false);
     $plantaNombre = $trayectoPartes['destino'] ?? ($pedido->nombre_planta ?: null);
 @endphp
 
@@ -132,6 +132,23 @@
                         && empty($envioAsig->fecha_recepcion_planta)
                         && in_array($envioAsig->estado, ['en_transporte_planta', 'en_ruta', 'en_transito'], true);
                 @endphp
+                @if(!empty($envioAsig?->recepcion_planta_datos['lineas']))
+                <div class="card ped-show-card" id="comprobante-recepcion">
+                    <div class="card-header"><h3 class="card-title font-weight-bold mb-0">Recepción registrada en planta</h3></div>
+                    <div class="card-body">
+                        <p class="small text-muted">{{ $envioAsig->fecha_recepcion_planta?->format('d/m/Y H:i') }} · {{ $envioAsig->recepcionConfirmadaPor?->nombre }} {{ $envioAsig->recepcionConfirmadaPor?->apellido }}</p>
+                        <div class="table-responsive"><table class="table table-sm mb-0">
+                            <thead><tr><th>Producto / línea</th><th>Enviado (kg)</th><th>Recibido (kg)</th><th>Partida destino</th></tr></thead>
+                            <tbody>@foreach($envioAsig->recepcion_planta_datos['lineas'] as $linea)
+                                <tr><td>{{ $linea['producto'] }} <span class="text-muted">#{{ $linea['detallepedidoid'] }}</span></td>
+                                <td>{{ \App\Support\CosechaDecimal::mostrar($linea['cantidad_enviada']) }}</td>
+                                <td>{{ \App\Support\CosechaDecimal::mostrar($linea['cantidad_recibida']) }}</td>
+                                <td>#{{ $linea['materiaprimaloteid'] }}@if($linea['origen']['loteid'] ?? null) · Lote agrícola #{{ $linea['origen']['loteid'] }}@endif</td></tr>
+                            @endforeach</tbody>
+                        </table></div>
+                    </div>
+                </div>
+                @endif
                 @if($puedePesaje)
                 <div class="card ped-show-card" id="pesaje-recepcion">
                     <div class="card-header">
@@ -160,7 +177,7 @@
                                             <td>{{ $det->cultivo_personalizado ?? $det->insumo?->nombre ?? '—' }}</td>
                                             <td>{{ number_format((float) $det->cantidad, 2) }}</td>
                                             <td style="max-width:9rem">
-                                                <input type="number" step="0.01" min="0.01" required
+                                                <input type="number" step="0.000001" min="0.000001" max="{{ $det->cantidad }}" required
                                                        class="form-control form-control-sm"
                                                        name="cantidades[{{ $det->detallepedidoid }}]"
                                                        value="{{ old('cantidades.'.$det->detallepedidoid, $det->cantidad) }}">

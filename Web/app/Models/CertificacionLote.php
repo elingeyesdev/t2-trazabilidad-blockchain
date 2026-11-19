@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CertificacionLote extends Model
 {
+    use \App\Models\Concerns\ConservaEmisionCertificado;
+
+    protected $hidden = ['archivo_path', 'solicitud_id', 'solicitud_huella'];
+
     public const RAZON_CERTIFICADO = 'Certificado';
 
     public const RAZON_NO_CONFORME = 'No conforme';
@@ -53,6 +57,8 @@ class CertificacionLote extends Model
     ];
 
     protected $casts = [
+        'datos_emision' => 'array',
+        'formato_version' => 'integer',
         'certificacionid' => 'integer',
         'loteid' => 'integer',
         'usuarioid' => 'integer',

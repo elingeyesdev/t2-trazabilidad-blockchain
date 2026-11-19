@@ -63,6 +63,17 @@ $recursoProtegido = function (string $uri, string $controller, string $modulo, ?
 
 Route::name('api.')->group(function () use ($recursoProtegido) {
 
+    Route::prefix('planta')->middleware('auth:sanctum')->group(function () {
+        $controller = \App\Http\Controllers\Api\PlantaTrabajoController::class;
+        Route::get('tareas', [$controller, 'tareas'])->middleware('action.permission:lote_produccion,read');
+        Route::get('tareas/{asignacion}', [$controller, 'tarea'])->whereNumber('asignacion')->middleware('action.permission:lote_produccion,read');
+        Route::post('lotes-produccion/{loteProduccion}/tareas/{asignacion}/completar', [$controller, 'completar'])
+            ->whereNumber(['loteProduccion', 'asignacion'])->middleware('action.permission:lote_produccion,read');
+        Route::get('recepciones', [$controller, 'recepciones'])->middleware('action.permission:recepcion_planta,read');
+        Route::get('recepciones/{pedido}', [$controller, 'recepcion'])->whereNumber('pedido')->middleware('action.permission:recepcion_planta,read');
+        Route::post('recepciones/{pedido}/confirmar', [$controller, 'confirmar'])->whereNumber('pedido')->middleware('action.permission:recepcion_planta,confirm');
+    });
+
     // ENDPOINT DE PRUEBA
     Route::get('/test-api', function () {
         return response()->json(['ok' => true]);
@@ -191,6 +202,16 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
         ->middleware(['auth:sanctum', 'action.permission:pedidos,delete']);
 
     // CERTIFICACIONES - control granular API
+    Route::get('certificaciones/{certificacion}', [\App\Http\Controllers\CertificadoHistorialController::class, 'campo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('certificaciones/{certificacion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoCampo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('lotes/{lote}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialCampo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('lotes/{lote}/certificados/{certificacion}', [\App\Http\Controllers\CertificadoHistorialController::class, 'campoAnidado'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('lotes/{lote}/antecedentes', [\App\Http\Controllers\CertificadoHistorialController::class, 'recorridoCampo'])->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
+    Route::get('planta/lotes-produccion/{loteProduccion}/certificados', [\App\Http\Controllers\CertificadoHistorialController::class, 'historialPlanta'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+    Route::get('planta/lotes-produccion/{loteProduccion}/certificados/{evaluacionFinalLoteProduccion}', [\App\Http\Controllers\CertificadoHistorialController::class, 'plantaAnidado'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+    Route::get('planta/lotes-produccion/{loteProduccion}/antecedentes', [\App\Http\Controllers\CertificadoHistorialController::class, 'recorridoPlanta'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+    Route::get('planta/certificados/{evaluacionFinalLoteProduccion}/archivo', [\App\Http\Controllers\CertificadoHistorialController::class, 'archivoPlanta'])->middleware(['auth:sanctum', 'action.permission:lote_produccion,read']);
+
     Route::get('certificaciones', [CertificacionController::class, 'index'])
         ->middleware(['auth:sanctum', 'action.permission:certificaciones,read']);
     Route::post('certificaciones', [CertificacionController::class, 'store'])
