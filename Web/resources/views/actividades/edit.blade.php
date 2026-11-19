@@ -203,7 +203,7 @@
                     <div class="col-md-4">
                         <div class="form-group">
                             <label><i class="fas fa-calendar-check mr-1"></i> Fecha Fin (real)</label>
-                            <input type="datetime-local" name="fechafin" class="form-control" value="{{ $actividad->fechafin ? \Carbon\Carbon::parse($actividad->fechafin)->format('Y-m-d\TH:i') : '' }}">
+                            <input type="datetime-local" readonly class="form-control" value="{{ $actividad->fechafin ? \Carbon\Carbon::parse($actividad->fechafin)->format('Y-m-d\TH:i') : '' }}">
                             <small class="text-muted">Dejar vacío si aún no ha finalizado</small>
                         </div>
                     </div>

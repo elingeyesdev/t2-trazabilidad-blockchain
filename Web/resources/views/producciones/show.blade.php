@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 
 
@@ -38,14 +39,16 @@
 
         : null;
 
-    $umAbbr = $produccion->unidadMedida->abreviatura ?? 'kg';
+    $umAbbr = $produccion->unidadMedida->abreviatura ?? 'Unidad sin registrar';
 
-    $umNombre = $produccion->unidadMedida->nombre ?? 'Kilogramo';
+    $umNombre = $produccion->unidadMedida->nombre ?? 'Unidad sin registrar';
 
     $fotoUrl = \App\Support\EvidenciaFoto::urlDesdeImagenUrl($produccion->imagenurl);
 
     $presentacion = $presentacion ?? ['ok' => false];
-    $kgPresentacion = (float) ($presentacion['kg'] ?? $produccion->cantidad_base ?? $produccion->cantidad ?? 0);
+    $kgPresentacion = $presentacion['kg'] ?? $produccion->cantidad_base;
+    $umAbbr = $presentacion['unidad_abreviatura'] ?? $umAbbr;
+    $umNombre = $presentacion['unidad_nombre'] ?? $umNombre;
 @endphp
 
 
@@ -53,6 +56,7 @@
 @push('styles')
 
 <style>
+    body.ag-ui .cos-det .cos-chip--glass { background: #f8fafc; color: #526071; border-color: #e6e8eb; }
 
     .cos-det { --cos-green: #14532d; --cos-mint: #22c55e; }
 
@@ -798,9 +802,9 @@
 
                 @if($presentacion['ok'] ?? false)
                 <div class="cos-det__metric-val">{{ number_format($presentacion['unidades'] ?? 0, 0) }} <span style="font-size:1rem;font-weight:600;">ud</span></div>
-                <div class="cos-det__metric-lbl">{{ number_format($kgPresentacion, 2) }} kg · {{ number_format($presentacion['empaques'] ?? 0, 0) }} {{ $presentacion['empaque_label'] ?? 'Cajas' }}</div>
+                <div class="cos-det__metric-lbl">{{ \App\Support\CosechaDecimal::mostrar($kgPresentacion) }} kg · {{ number_format($presentacion['empaques'] ?? 0, 0) }} {{ $presentacion['empaque_label'] ?? 'Empaques' }}</div>
                 @else
-                <div class="cos-det__metric-val">{{ number_format($produccion->cantidad ?? 0, 2) }} <span style="font-size:1rem;font-weight:600;">{{ $umAbbr }}</span></div>
+                <div class="cos-det__metric-val">{{ \App\Support\CosechaDecimal::mostrar($produccion->cantidad) }} <span style="font-size:1rem;font-weight:600;">{{ $umAbbr }}</span></div>
                 <div class="cos-det__metric-lbl">Cantidad cosechada</div>
                 @endif
 
@@ -824,21 +828,31 @@
 
                     <div class="cos-det__grid-cell">
 
-                        <span class="cos-det__field-label"><i class="fas fa-weight-hanging mr-1"></i> Volumen</span>
+                        <span class="cos-det__field-label">Cantidad registrada y equivalencia</span>
 
                         <span class="cos-det__field-value cos-det__field-value--accent">
 
+                            {{ \App\Support\CosechaDecimal::mostrar($produccion->cantidad) }} {{ $umAbbr }}<br>
                             @if($presentacion['ok'] ?? false)
-                                {{ number_format($presentacion['unidades'] ?? 0, 0) }} unidades<br>
-                                <span class="text-muted font-weight-normal">{{ number_format($kgPresentacion, 2) }} kg · {{ number_format($presentacion['empaques'] ?? 0, 0) }} {{ $presentacion['empaque_label'] ?? 'cajas' }}</span>
+                                {{ number_format($presentacion['unidades'] ?? 0, 0) }} unidades estimadas<br>
+                                <span class="text-muted font-weight-normal">{{ \App\Support\CosechaDecimal::mostrar($kgPresentacion) }} kg · {{ number_format($presentacion['empaques'] ?? 0, 0) }} {{ $presentacion['empaque_label'] ?? 'Empaques' }}</span>
                             @else
-                                {{ number_format($produccion->cantidad ?? 0, 2) }} {{ $umNombre }}
+                                <span class="text-muted">Equivalencia registrada: {{ \App\Support\CosechaDecimal::mostrar($kgPresentacion) }}{{ $kgPresentacion !== null ? ' kg' : '' }}</span>
                             @endif
 
                         </span>
 
                     </div>
 
+                    <div class="cos-det__grid-cell">
+                        <span class="cos-det__field-label">Presentación registrada</span>
+                        <span class="cos-det__field-value">{{ $presentacion['calibre_nombre'] ?? 'Sin instantánea histórica' }}</span>
+                        @if(!empty($presentacion['peso_promedio_kg']))
+                            <small class="text-muted d-block">{{ $presentacion['peso_promedio_kg'] }} kg/unidad · {{ $presentacion['conteo_por_empaque'] }} unidades/empaque</small>
+                        @else
+                            <small class="text-muted d-block">El factor original no está disponible. Se conservan las cantidades guardadas sin recalcularlas.</small>
+                        @endif
+                    </div>
                     <div class="cos-det__grid-cell">
 
                         <span class="cos-det__field-label"><i class="fas fa-calendar-check mr-1"></i> Fecha</span>

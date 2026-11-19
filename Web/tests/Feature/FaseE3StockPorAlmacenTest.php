@@ -405,6 +405,7 @@ class FaseE3StockPorAlmacenTest extends TestCase
                 'tipoinsumoid' => $tipoId,
                 'unidadmedidaid' => $umId,
                 'stock' => 8,
+                'motivo_ajuste' => 'Conteo físico del almacén propio',
                 'almacenid' => $almB->almacenid,
             ])
             ->assertRedirect(route('insumos.index'));

@@ -12,6 +12,7 @@
                 <div class="col-lg-6 mb-3">
                     <form action="{{ route('certificaciones.store') }}" method="POST" class="border rounded p-3 h-100" >
                         @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                         <input type="hidden" name="loteid" value="{{ $lote->loteid }}">
                         <input type="hidden" name="resultado" value="{{ \App\Models\CertificacionLote::RAZON_CERTIFICADO }}">
                         <input type="hidden" name="return" value="{{ route('lotes.trazabilidad', $lote, absolute: false) }}">
@@ -28,6 +29,7 @@
                     <form action="{{ route('certificaciones.store') }}" method="POST" class="border rounded p-3 h-100"
                           onsubmit="return confirm('¿Marcar este lote como no conforme? No podrá enviarse al almacén.');">
                         @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                         <input type="hidden" name="loteid" value="{{ $lote->loteid }}">
                         <input type="hidden" name="resultado" value="{{ \App\Models\CertificacionLote::RAZON_NO_CONFORME }}">
                         <input type="hidden" name="return" value="{{ route('lotes.trazabilidad', $lote, absolute: false) }}">

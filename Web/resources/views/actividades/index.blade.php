@@ -20,7 +20,7 @@
         ? round(($stats['completadas'] / $stats['total']) * 100)
         : 0;
     $urlTrazabilidadActividad = fn ($act) => $act->lote
-        ? route('lotes.trazabilidad', $act->lote).'#historial-eventos'
+        ? route('actividades.show', $act)
         : null;
     $loteFiltroId = $filtros['loteid'] ?? '';
     $loteFiltroNombre = $loteFiltroNombre ?? '';

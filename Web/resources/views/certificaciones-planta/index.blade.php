@@ -197,6 +197,7 @@
                                     @can('lote_produccion.create')
                                         <form action="{{ route('procesamiento.certificar', $lote) }}" method="POST" class="mb-2">
                                             @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                                             <input type="hidden" name="redirect_to" value="certificaciones-planta">
                                             <input type="hidden" name="razon" value="Certificado">
                                             <div class="form-row align-items-center">
@@ -212,6 +213,7 @@
                                         </form>
                                         <form action="{{ route('procesamiento.certificar', $lote) }}" method="POST" class="mb-0" onsubmit="return confirm('¿Marcar este lote como No conforme? No podrá ingresar al almacén.');">
                                             @csrf
+                        <input type="hidden" name="solicitud_id" value="{{ old('solicitud_id', (string) \Illuminate\Support\Str::uuid()) }}">
                                             <input type="hidden" name="redirect_to" value="certificaciones-planta">
                                             <input type="hidden" name="razon" value="No conforme">
                                             <div class="form-row">
@@ -258,7 +260,7 @@
                     @forelse($certificados as $eval)
                         @php
                             $loteEval = $eval->loteProduccionPedido;
-                            $codigoEval = $loteEval?->codigo_lote ?? ('LP-'.$eval->loteproduccionpedidoid);
+                            $codigoEval = $eval->codigo_certificado ?? $loteEval?->codigo_lote ?? ('LP-'.$eval->loteproduccionpedidoid);
                         @endphp
                         <div class="border-bottom px-3 py-3 cert-item"
                              role="button"
@@ -274,10 +276,10 @@
                                 @endif
                                 <small class="text-muted">{{ $eval->fecha_evaluacion?->format('d/m/Y H:i') }}</small>
                             </div>
-                            <div class="font-weight-bold">{{ $loteEval->nombre ?? 'Lote #'.$eval->loteproduccionpedidoid }}</div>
+                            <div class="font-weight-bold">{{ $eval->datos_emision['recorrido']['producto']['nombre'] ?? $loteEval->nombre ?? 'Lote #'.$eval->loteproduccionpedidoid }}</div>
                             <div class="small text-muted">
-                                {{ $loteEval->producto ?? '—' }}
-                                · {{ $loteEval->plantillaTransformacion->nombre ?? '—' }}
+                                {{ $eval->datos_emision['recorrido']['producto']['producto'] ?? $loteEval->producto ?? '—' }}
+                                · {{ $eval->datos_emision['recorrido']['producto']['plantilla'] ?? $loteEval->plantillaTransformacion->nombre ?? '—' }}
                             </div>
                             @if($eval->observaciones)
                                 <p class="small mb-1 mt-2 text-secondary text-truncate">{{ Str::limit($eval->observaciones, 80) }}</p>

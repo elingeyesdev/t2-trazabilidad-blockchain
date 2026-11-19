@@ -209,7 +209,7 @@
                     </div>
                     <form method="POST" action="{{ route('tareas-planta.completar', $tarea) }}" class="mb-0">
                         @csrf
-                        @include('planta.partials.parametros-etapa-lectura', [
+                        @include('planta.partials.form-parametros-etapa', [
                             'parametrosRequeridos' => $parametrosRequeridos ?? [],
                         ])
                         <button type="submit" class="btn btn-success btn-block tp-btn-complete">
@@ -221,7 +221,7 @@
             @elseif($tarea->estaPendiente())
             <div class="tp-alert-block">
                 <strong><i class="fas fa-exclamation-triangle mr-1"></i>No se puede completar</strong>
-                <p class="mb-0 mt-1 small">La transformación de este lote ya finalizó. Si cree que es un error, contacte al jefe de planta.</p>
+                <p class="mb-0 mt-1 small">{{ $motivoBloqueo ?? 'Revise el orden de las etapas, la recepción y la disponibilidad de la máquina.' }}</p>
             </div>
             @else
             <div class="tp-card tp-done-card">

@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', 'Movimiento por cosecha | AgroFusion')
 @section('page_title', 'Ingreso por cosecha')

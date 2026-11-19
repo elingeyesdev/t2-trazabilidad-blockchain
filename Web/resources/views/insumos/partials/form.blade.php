@@ -443,6 +443,8 @@
                                     value="{{ old('stock', isset($insumo) ? $insumo->stock : 0) }}"
                                     placeholder="0">
                                 <div class="ins-field-hint">Cantidad disponible hoy (puede ser <strong>0</strong> si aún no hay existencias).</div>
+                            <div class="col-md-6 mt-3"><label class="ins-field-label" for="stockminimo">Mínimo de esta existencia</label><input name="stockminimo" id="stockminimo" inputmode="decimal" class="form-control" value="{{ old('stockminimo', $insumo->stockminimo ?? '') }}"><div class="ins-field-hint">Vacío: sin configurar. Cero es válido.</div></div>
+                            @if(isset($insumo))<div class="col-md-6 mt-3"><label class="ins-field-label" for="motivo-ajuste">Motivo si cambia el saldo</label><input name="motivo_ajuste" id="motivo-ajuste" maxlength="150" class="form-control @error('motivo_ajuste') is-invalid @enderror" value="{{ old('motivo_ajuste') }}">@error('motivo_ajuste')<div class="invalid-feedback">{{ $message }}</div>@enderror<div class="ins-field-hint">Si hay partidas, registra el ajuste desde Existencias del almacén.</div></div>@endif
                             </div>
                         </div>
                     </div>

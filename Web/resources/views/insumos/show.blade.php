@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 @section('title', $insumo->nombre . ' | Insumo')
 @section('page_title', 'Detalle del insumo')
@@ -11,8 +12,8 @@
 
 @php
     use App\Support\InsumoCatalogo;
-    $claseStock = InsumoCatalogo::claseStock((float) $insumo->stock);
-    $umbral = $umbral ?? InsumoCatalogo::UMBRAL_ALERTA_STOCK;
+    $claseStock = InsumoCatalogo::claseStockInsumo($insumo);
+    $umbral = $insumo->stockminimo;
     $slugTipo = InsumoCatalogo::slugFromNombreTipo($insumo->tipo->nombre ?? '');
     $iconoTipo = match ($slugTipo) {
         'material_siembra' => 'seedling',
@@ -76,6 +77,7 @@
 @endpush
 
 @section('content')
+@if($insumo->almacenid)<div class="mb-3"><a class="btn btn-outline-success" href="{{ route('almacen-agricola.existencias.index', $insumo->almacenid) }}">Existencias, alertas y vencimientos del almacén</a></div>@endif
 <div class="modulo-inv page-insumo-show">
     <div class="row justify-content-center">
         <div class="col-lg-8">
@@ -99,9 +101,11 @@
                     </div>
 
                     <div class="alerta-banner mb-4 {{ $claseStock === 'low' ? 'critico' : ($claseStock === 'medium' ? 'atencion' : 'ok') }}">
-                        @if($claseStock === 'low')
+                        @if($umbral === null)
+                            <strong>Mínimo sin configurar.</strong> Configúrelo en las existencias del almacén para activar el aviso.
+                        @elseif($claseStock === 'low')
                             <i class="fas fa-exclamation-triangle mr-1"></i>
-                            <strong>Alerta de stock:</strong> quedan {{ number_format($insumo->stock, 2) }}
+                            <strong>Alerta de stock:</strong> quedan {{ \App\Support\CosechaDecimal::mostrar($insumo->stock) }}
                             {{ $insumo->unidadMedida->abreviatura ?? 'u.' }} (umbral ≤ {{ $umbral }}).
                         @elseif($claseStock === 'medium')
                             <i class="fas fa-info-circle mr-1"></i>
@@ -129,7 +133,7 @@
                         <div class="col-md-6 mb-3">
                             <div class="dato-label">Stock actual</div>
                             <div class="dato-valor {{ $claseStock === 'low' ? 'text-danger' : '' }}">
-                                {{ number_format($insumo->stock, 2) }}
+                                {{ \App\Support\CosechaDecimal::mostrar($insumo->stock) }}
                                 {{ $insumo->unidadMedida->abreviatura ?? '' }}
                             </div>
                         </div>

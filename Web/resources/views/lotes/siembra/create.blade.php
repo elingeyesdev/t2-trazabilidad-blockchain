@@ -287,6 +287,9 @@
                             </small>
 
                             <div id="siembraEvidenciaWrap" class="mt-3" style="{{ old('completar', request()->boolean('completar')) ? '' : 'display:none;' }}">
+                                <label for="resultadoSiembra">Resultado de la siembra *</label>
+                                <textarea id="resultadoSiembra" name="resultado" maxlength="250" rows="2" class="form-control">{{ old('resultado') }}</textarea>
+ @include('lotes.partials.consumo-cierre-siembra')
                                 <label class="font-weight-bold d-block">
                                     <i class="fas fa-camera mr-1 text-teal"></i> Foto de evidencia <span class="text-danger">*</span>
                                 </label>

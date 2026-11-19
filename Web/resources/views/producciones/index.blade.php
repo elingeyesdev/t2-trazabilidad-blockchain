@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion')
 
 
 
@@ -18,181 +19,7 @@
 
 
 
-@push('styles')
 
-@include('partials.modulo-produccion-styles')
-
-<style>
-
-.modulo-prod .cosecha-hero {
-
-    background: linear-gradient(135deg, #14532d 0%, #166534 50%, #22c55e 100%);
-
-    border-radius: 14px;
-
-    color: #fff;
-
-    padding: 1.35rem 1.5rem;
-
-    margin-bottom: 1.25rem;
-
-    box-shadow: 0 6px 24px rgba(20, 83, 45, .2);
-
-}
-
-.modulo-prod .cosecha-hero h2 {
-
-    font-size: 1.35rem;
-
-    font-weight: 800;
-
-    margin: 0 0 .35rem;
-
-}
-
-.modulo-prod .cosecha-hero p {
-
-    margin: 0;
-
-    opacity: .92;
-
-    font-size: .9rem;
-
-    max-width: 42rem;
-
-}
-
-.modulo-prod .cosecha-kpi {
-
-    border: none;
-
-    border-radius: 12px;
-
-    padding: 1rem 1.1rem;
-
-    color: #fff;
-
-    height: 100%;
-
-    box-shadow: 0 2px 12px rgba(15, 23, 42, .08);
-
-}
-
-.modulo-prod .cosecha-kpi__val { font-size: 1.65rem; font-weight: 800; line-height: 1.1; }
-
-.modulo-prod .cosecha-kpi__lbl { font-size: .78rem; opacity: .9; margin-top: .2rem; }
-
-.modulo-prod .cosecha-kpi--green { background: linear-gradient(135deg, #166534, #22c55e); }
-
-.modulo-prod .cosecha-kpi--teal { background: linear-gradient(135deg, #0f766e, #14b8a6); }
-
-.modulo-prod .cosecha-kpi--amber { background: linear-gradient(135deg, #b45309, #f59e0b); }
-
-.modulo-prod .cosecha-kpi--violet { background: linear-gradient(135deg, #5b21b6, #8b5cf6); }
-
-.modulo-prod .cosecha-tabla thead th {
-
-    background: #f0fdf4;
-
-    border-bottom: 2px solid #bbf7d0;
-
-    font-size: .72rem;
-
-    text-transform: uppercase;
-
-    letter-spacing: .04em;
-
-    color: #166534;
-
-    font-weight: 700;
-
-    white-space: nowrap;
-
-}
-
-.modulo-prod .cosecha-tabla tbody tr:hover { background: #f8fffb; }
-
-.modulo-prod .cosecha-lote-nombre {
-
-    font-weight: 700;
-
-    color: #14532d;
-
-    font-size: .95rem;
-
-}
-
-.modulo-prod .cosecha-cantidad {
-
-    font-size: 1.05rem;
-
-    font-weight: 800;
-
-    color: #15803d;
-
-}
-
-.modulo-prod .btn-ir-lote {
-
-    background: #ecfdf5;
-
-    border: 1px solid #86efac;
-
-    color: #166534;
-
-    font-weight: 600;
-
-    font-size: .8rem;
-
-    border-radius: 8px;
-
-    padding: .35rem .75rem;
-
-    white-space: nowrap;
-
-}
-
-.modulo-prod .btn-ir-lote:hover {
-
-    background: #166534;
-
-    border-color: #166534;
-
-    color: #fff;
-
-    text-decoration: none;
-
-}
-
-.modulo-prod .cosecha-meta {
-    font-size: .78rem;
-    color: #64748b;
-}
-.modulo-prod .cos-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: .3rem;
-    padding: .28rem .62rem;
-    border-radius: 999px;
-    font-size: .74rem;
-    font-weight: 600;
-    border: 1px solid transparent;
-    white-space: nowrap;
-}
-.modulo-prod .cos-chip--emerald { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-.modulo-prod .cos-chip--amber { background: #fffbeb; color: #b45309; border-color: #fde68a; }
-.modulo-prod .cos-chip--rose { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
-.modulo-prod .cos-chip--slate { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
-.modulo-prod .cos-chip--sky { background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
-.modulo-prod #filtrosProduccionPanel .selector-catalogo-wrapper {
-    margin-bottom: 0;
-}
-.modulo-prod #filtrosProduccionPanel .filtros-form-actions {
-    margin-top: 0;
-}
-</style>
-
-@endpush
 
 
 
@@ -202,75 +29,13 @@
 
 
 
-    <div class="cosecha-hero">
-
-        <h2><i class="fas fa-tractor mr-2"></i>Cosechas completadas por lote</h2>
-
-        <p>
-
-            Consulta el resultado de cada parcela ya cosechada. Aquí aparece <strong>una cosecha por lote</strong>.
-
-            Para registrar o gestionar el ciclo (certificación, almacén, etc.) use el <strong>lote</strong> correspondiente.
-
-        </p>
-
+    <x-operacion.encabezado titulo="Cosechas registradas" descripcion="Consulta cantidades, presentaciones y equivalencias conservadas. El registro y los siguientes pasos se gestionan desde cada lote." />
+    <div class="op-metricas">
+        <x-operacion.metrica :valor="$stats['total'] ?? 0" etiqueta="Cosechas registradas" />
+        <x-operacion.metrica :valor="\App\Support\CosechaDecimal::mostrar($stats['kg_total'] ?? '0')" unidad="kg" etiqueta="Volumen con equivalencia" />
+        <x-operacion.metrica :valor="\App\Support\CosechaDecimal::mostrar($stats['promedio'] ?? '0')" unidad="kg" etiqueta="Promedio con equivalencia" />
+        <x-operacion.metrica :valor="$stats['lotes'] ?? 0" etiqueta="Lotes cosechados" />
     </div>
-
-
-
-    <div class="row mb-3">
-
-        <div class="col-6 col-lg-3 mb-2 mb-lg-0">
-
-            <div class="cosecha-kpi cosecha-kpi--green">
-
-                <div class="cosecha-kpi__val">{{ $stats['total'] ?? 0 }}</div>
-
-                <div class="cosecha-kpi__lbl">Lotes cosechados</div>
-
-            </div>
-
-        </div>
-
-        <div class="col-6 col-lg-3 mb-2 mb-lg-0">
-
-            <div class="cosecha-kpi cosecha-kpi--teal">
-
-                <div class="cosecha-kpi__val">{{ number_format($stats['kg_total'] ?? 0, 0) }}<span style="font-size:.85rem"> kg</span></div>
-
-                <div class="cosecha-kpi__lbl">Volumen total</div>
-
-            </div>
-
-        </div>
-
-        <div class="col-6 col-lg-3 mb-2 mb-lg-0">
-
-            <div class="cosecha-kpi cosecha-kpi--amber">
-
-                <div class="cosecha-kpi__val">{{ number_format($stats['promedio'] ?? 0, 0) }}<span style="font-size:.85rem"> kg</span></div>
-
-                <div class="cosecha-kpi__lbl">Promedio por lote</div>
-
-            </div>
-
-        </div>
-
-        <div class="col-6 col-lg-3">
-
-            <div class="cosecha-kpi cosecha-kpi--violet">
-
-                <div class="cosecha-kpi__val"><i class="fas fa-map-marked-alt" style="font-size:1.2rem"></i></div>
-
-                <div class="cosecha-kpi__lbl">Solo lectura — gestione en Lotes</div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
 
     <div class="card card-outline card-success card-modulo-main elevation-1">
 
@@ -282,7 +47,7 @@
 
                 Listado
 
-                <span class="badge badge-light border ml-2">{{ $producciones->total() }} lote(s)</span>
+                <span class="badge badge-light border ml-2">{{ $producciones->total() }} cosechas</span>
 
             </h3>
 
@@ -306,7 +71,7 @@
 
                         <label class="small text-muted mb-1">Buscar</label>
 
-                        <input type="text" name="buscar" class="form-control form-control-sm" value="{{ request('buscar') }}" placeholder="Lote, semilla, responsable…">
+                        <input type="text" name="buscar" class="form-control form-control-sm" value="{{ request('buscar') }}" placeholder="Lote, semilla u observación…">
 
                     </div>
 
@@ -426,8 +191,11 @@
                                     @endif
                                 </td>
                                 <td class="text-right">
-                                    <span class="cosecha-cantidad">{{ number_format($p->cantidad ?? 0, 2) }}</span>
-                                    <span class="text-muted">{{ $p->unidadMedida->abreviatura ?? 'kg' }}</span>
+                                    @php $presentacion = app(\App\Services\CosechaPresentacionService::class)->paraProduccion($p); @endphp
+                                    <span class="cosecha-cantidad">{{ \App\Support\CosechaDecimal::mostrar($p->cantidad) }}</span>
+                                    <span class="text-muted">{{ $presentacion['unidad_abreviatura'] ?? $p->unidadMedida?->abreviatura ?? $p->unidadMedida?->nombre ?? 'Unidad sin registrar' }}</span>
+                                    <div class="cosecha-meta">{{ $presentacion['calibre_nombre'] ?? 'Presentación histórica sin factor' }}</div>
+                                    <div class="cosecha-meta">{{ \App\Support\CosechaDecimal::mostrar($p->cantidad_base) }}{{ $p->cantidad_base !== null ? ' kg equivalentes' : ' · equivalencia no registrada' }}</div>
                                     @if($almacenActivo?->almacen)
                                         <div class="mt-1">
                                             <span class="cos-chip cos-chip--sky"><i class="fas fa-warehouse"></i>{{ $almacenActivo->almacen->nombre }}</span>

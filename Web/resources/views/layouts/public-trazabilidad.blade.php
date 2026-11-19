@@ -37,8 +37,9 @@
 
         @stack('styles')
     </style>
+    @vite('resources/css/agrofusion-ui.css')
 </head>
-<body>
+<body class="ag-ui ag-public">
     <main class="trz-public-page">
         <div class="trz-public-inner">
             @yield('content')

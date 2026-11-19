@@ -279,7 +279,7 @@ class LoteController extends Controller
         return response()->json($ubicacion->validarMarcador($lat, $lng));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, bool $devolverModelo = false)
     {
         $data = $request->validate([
             'usuarioid' => ['nullable', 'exists:usuario,usuarioid', $this->reglaResponsableLote($request->user())],
@@ -350,6 +350,10 @@ class LoteController extends Controller
         LoteDefaults::registrarHistorialInicial($lote);
         $this->asignarSiembraInicialSiCorresponde($lote, (int) $request->user()->usuarioid);
         $this->notificaciones->loteAsignado($lote);
+
+        if ($devolverModelo) {
+            return $lote->fresh();
+        }
 
         return redirect()
             ->route('lotes.index')
@@ -615,12 +619,15 @@ class LoteController extends Controller
         ));
     }
 
-    public function update(Request $request, Lote $lote)
+    public function update(Request $request, Lote $lote, bool $devolverModelo = false)
     {
         $this->autorizarLoteGestion($request, $lote);
         $lote->loadMissing('estadoTipo');
 
         if (EstadoLoteCatalogo::loteEsCerrado($lote->estadoTipo?->nombre)) {
+            if ($devolverModelo) {
+                throw ValidationException::withMessages(['loteid' => 'Este lote ya fue cosechado y no puede modificarse.']);
+            }
             return redirect()
                 ->route('lotes.trazabilidad', $lote)
                 ->with('info', 'Este lote ya fue cosechado y no puede modificarse.');
@@ -638,13 +645,18 @@ class LoteController extends Controller
         ]);
 
         $anteriorUsuarioid = (int) $lote->usuarioid;
+        $camposEnviados = $request->attributes->get('lote_campos_enviados', []);
         $data['insumosemillaid'] = $this->resolverInsumoSemilla($data['insumosemillaid'] ?? null);
-        $data['cultivoid'] = LoteCultivoResolver::resolver($data['insumosemillaid']);
-        $data['cantidad_semilla_planificada'] = $this->resolverCantidadSemillaPlanificada(
-            $data['insumosemillaid'],
-            (float) $data['superficie'],
-            $data['cantidad_semilla_planificada'] ?? null
-        );
+        $data['cultivoid'] = $devolverModelo && ! in_array('insumosemillaid', $camposEnviados, true)
+            ? $lote->cultivoid : LoteCultivoResolver::resolver($data['insumosemillaid']);
+        $data['cantidad_semilla_planificada'] = $devolverModelo
+            && (! in_array('cantidad_semilla_planificada', $camposEnviados, true) || $data['cantidad_semilla_planificada'] === null)
+            ? $data['cantidad_semilla_planificada']
+            : $this->resolverCantidadSemillaPlanificada(
+                $data['insumosemillaid'],
+                (float) $data['superficie'],
+                $data['cantidad_semilla_planificada'] ?? null
+            );
 
         $this->validarPlanificacionAlGuardar($request, $data);
 
@@ -656,10 +668,17 @@ class LoteController extends Controller
             isset($data['longitud']) ? (float) $data['longitud'] : null,
             $lote->loteid
         );
+        if ($devolverModelo && (! in_array('ubicacion', $camposEnviados, true) || $request->input('ubicacion') === null)) {
+            $data['ubicacion'] = $request->input('ubicacion');
+        }
         $lote->update(LoteDefaults::enrich($data, false));
         $lote->refresh();
         $this->asignarSiembraInicialSiCorresponde($lote, (int) $request->user()->usuarioid);
         $this->notificaciones->loteAsignado($lote, $anteriorUsuarioid);
+
+        if ($devolverModelo) {
+            return $lote->fresh();
+        }
 
         return redirect()->route('lotes.index')->with('success', 'Lote actualizado.');
     }

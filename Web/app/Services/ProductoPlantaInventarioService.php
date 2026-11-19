@@ -107,7 +107,7 @@ class ProductoPlantaInventarioService
                     'tipoinsumoid' => $tipoId,
                     'unidadmedidaid' => $grupo['unidadmedidaid'],
                     'stock' => $grupo['cantidad'],
-                    'stockminimo' => InsumoCatalogo::UMBRAL_ALERTA_STOCK,
+                    'stockminimo' => null,
                     'descripcion' => 'Producto terminado de planta — sincronizado desde almacenaje de lotes.',
                     'almacenid' => $grupo['almacen']->almacenid,
                     'codigo_trazabilidad' => 'PT-'.now()->format('Ymd').'-'.strtoupper(substr(uniqid(), -6)),

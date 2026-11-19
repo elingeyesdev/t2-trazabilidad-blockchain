@@ -336,16 +336,21 @@ class LoteProduccionParametrosService
     {
         $requeridos = $this->parametrosRequeridosParaAsignacion($asignacion);
 
-        if ($requeridos === []) {
-            return [];
-        }
-
+        $permitidos = array_column($requeridos, null, 'variableestandarid');
         $porId = [];
-        foreach ($ingresados as $fila) {
+        foreach ($ingresados as $indice => $fila) {
             $id = (int) ($fila['variableestandarid'] ?? 0);
-            if ($id > 0) {
-                $porId[$id] = (float) ($fila['valor'] ?? 0);
+            if (! isset($permitidos[$id]) || isset($porId[$id])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parametros.'.$indice.'.variableestandarid' => 'El parámetro no pertenece a esta etapa o está repetido.']);
             }
+            if (! is_numeric($fila['valor'] ?? null) || ! is_finite((float) $fila['valor'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parametros.'.$indice.'.valor' => 'Indique un número finito.']);
+            }
+            $valor = \Brick\Math\BigDecimal::of((string) $fila['valor']);
+            if ($valor->isLessThan((string) $permitidos[$id]['valor_minimo']) || $valor->isGreaterThan((string) $permitidos[$id]['valor_maximo'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['parametros.'.$indice.'.valor' => 'El valor está fuera del rango configurado para esta etapa.']);
+            }
+            $porId[$id] = (string) $valor->stripTrailingZeros();
         }
 
         $salida = [];
@@ -374,7 +379,8 @@ class LoteProduccionParametrosService
                 'variableestandarid' => $varId,
                 'nombre' => $req['nombre'],
                 'unidad' => $req['unidad'] ?? null,
-                'valor' => $valor,
+                'valor' => (float) $valor,
+                'valor_decimal' => $valor,
                 'valor_minimo' => (float) $req['valor_minimo'],
                 'valor_maximo' => (float) $req['valor_maximo'],
                 'cumple' => true,
@@ -479,6 +485,7 @@ class LoteProduccionParametrosService
                 'nombre' => (string) ($p['nombre'] ?? '—'),
                 'unidad' => $p['unidad'] ?? null,
                 'valor' => (float) $p['valor'],
+                'valor_decimal' => (string) ($p['valor_decimal'] ?? $p['valor']),
                 'valor_minimo' => (float) ($p['valor_minimo'] ?? 0),
                 'valor_maximo' => (float) ($p['valor_maximo'] ?? 0),
             ];

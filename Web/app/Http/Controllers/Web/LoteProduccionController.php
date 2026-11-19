@@ -63,8 +63,13 @@ class LoteProduccionController extends Controller
         $baseQuery = LoteProduccionPedido::query();
         $this->aplicarFiltroOperarioPlanta($baseQuery, $user);
 
+        $almacenesVisibles = $user->can('inventario.view') ? \App\Support\AlmacenAcceso::idsVisibles($user) : [];
         $lotesQuery = (clone $baseQuery)
-            ->with(['pedido', 'unidadMedida', 'materiasPrimas.insumo', 'procesoPlanta', 'evaluacionesFinales', 'almacenajes'])
+            ->with(['pedido', 'unidadMedida', 'materiasPrimas.insumo.unidadMedida',
+                'materiasPrimas' => fn ($q) => $q->whereHas('insumo', fn ($i) => $i->whereIn('almacenid', $almacenesVisibles))
+                    ->where(fn ($partida) => $partida->whereNull('materiaprimaloteid')->orWhereHas('materiaPrimaLote', fn ($m) => $m->whereIn('almacenid', $almacenesVisibles)))
+                    ->where(fn ($partida) => $partida->whereNull('inventario_presentacion_loteid')->orWhereHas('presentacionLote', fn ($m) => $m->whereIn('almacenid', $almacenesVisibles))),
+                'procesoPlanta', 'evaluacionesFinales', 'almacenajes'])
             ->orderByDesc('fecha_creacion');
 
         if ($productoFiltro !== '') {
@@ -162,6 +167,14 @@ class LoteProduccionController extends Controller
             $plantillaLabel = $pltOld?->nombre;
         }
 
+        $materiasAnteriores = collect(old('materias', []))->filter(fn ($fila) => is_array($fila) && isset($fila['insumoid']) && is_scalar($fila['insumoid']))->map(function ($fila) use ($almacenes) {
+            $insumo = \App\Models\Insumo::whereIn('almacenid', $almacenes->pluck('almacenid'))->with('unidadMedida')->find((int) $fila['insumoid']);
+            if (! $insumo) { return null; }
+            $existencia = app(\App\Services\InventarioExistenciaService::class)->resumen($insumo);
+            return ['id' => $insumo->insumoid, 'label' => $insumo->nombre, 'meta' => 'Existencia del almacén seleccionado',
+                'stock' => $existencia['cantidad_disponible'], 'unidad' => $insumo->unidadMedida?->abreviatura ?? '',
+                'cantidad' => $fila['cantidad'] ?? '', 'partida' => $fila['partida'] ?? null, 'existencia' => $existencia];
+        })->filter()->values();
         $empaquesPlanta = EmpaquePlantaCatalogo::opcionesSelect();
 
         return view('procesamiento.index', compact(
@@ -181,6 +194,7 @@ class LoteProduccionController extends Controller
             'procesosPlanta',
             'plantillaLabel',
             'empaquesPlanta',
+            'materiasAnteriores',
         ));
     }
 
@@ -193,14 +207,8 @@ class LoteProduccionController extends Controller
 
         $this->autorizarLoteOperarioPlanta($loteProduccion, auth()->user());
 
+        $recorridoProduccion = app(\App\Services\ProduccionPlantaRecorridoService::class)->consultar($loteProduccion, auth()->user());
         $loteProduccion->load(['pedido', 'unidadMedida', 'materiasPrimas.insumo.unidadMedida', 'almacenajes']);
-
-        if ($loteProduccion->almacenajes->isNotEmpty() && ! $loteProduccion->hora_fin) {
-            $loteProduccion->update([
-                'hora_fin' => $loteProduccion->almacenajes->max('fecha_almacenaje') ?? now(),
-            ]);
-            $loteProduccion->refresh();
-        }
 
         $dash = $this->trazabilidad->dashboardLote($loteProduccion);
         $procesosPlanta = ProcesoPlantaCatalogo::paraTransformacion();
@@ -247,13 +255,6 @@ class LoteProduccionController extends Controller
         $loteProduccion->load('plantillaTransformacion.pasos.proceso', 'plantillaTransformacion.pasos.maquina');
 
         $rutaService = app(LoteProduccionRutaService::class);
-        $rutaService->asegurarRuta($loteProduccion);
-        $rutaService->repararEmpaquetadoAlFinal($loteProduccion);
-        $loteProduccion->refresh();
-
-        $this->asignacionEtapa->sincronizarPromocionCola($loteProduccion);
-        $this->transformacion->limpiarAsignacionesObsoletas($loteProduccion);
-
         $rutaPlantilla = $this->transformacion->rutaPlantilla($loteProduccion);
         $siguientePasoPlantilla = $this->transformacion->siguientePasoPlantilla($loteProduccion);
         $user = auth()->user();
@@ -305,6 +306,7 @@ class LoteProduccionController extends Controller
         $asignacionesPlanLote = $this->transformacion->asignacionesActivas($loteProduccion);
 
         return view('procesamiento.show', array_merge($dash, [
+            'recorridoProduccion' => $recorridoProduccion,
             'lote' => $loteProduccion,
             'rutaPlantilla' => $rutaPlantilla,
             'siguientePasoPlantilla' => $siguientePasoPlantilla,
@@ -562,7 +564,7 @@ class LoteProduccionController extends Controller
             if ($respondeJson) {
                 return response()->json([
                     'ok' => false,
-                    'message' => 'No se pudo completar la etapa. '.$e->getMessage(),
+                    'message' => 'No se pudo completar la etapa. Intente nuevamente.',
                 ], 500);
             }
 
@@ -657,7 +659,7 @@ class LoteProduccionController extends Controller
         );
     }
 
-    public function certificar(Request $request, LoteProduccionPedido $loteProduccion): RedirectResponse
+    public function certificar(\App\Http\Requests\EmisionCertificadoRequest $request, LoteProduccionPedido $loteProduccion): RedirectResponse
     {
         abort_unless(UsuarioRol::gestionaPlanta($request->user()), 403);
 
@@ -675,24 +677,10 @@ class LoteProduccionController extends Controller
             return back()->withErrors(['observaciones' => 'Indique el motivo del no conforme.'])->withInput();
         }
 
-        EvaluacionFinalLoteProduccion::updateOrCreate(
-            ['loteproduccionpedidoid' => $loteProduccion->loteproduccionpedidoid],
-            [
-                'inspector_usuarioid' => $request->user()->usuarioid,
-                'razon' => $data['razon'],
-                'observaciones' => $data['observaciones'] ?? null,
-                'recomendaciones' => $data['recomendaciones'] ?? null,
-                'fecha_evaluacion' => now(),
-            ]
-        );
-
-        if ($data['razon'] === EvaluacionFinalLoteProduccion::RAZON_NO_CONFORME) {
-            $loteProduccion->almacenajes()->delete();
-            $loteProduccion->update(['hora_fin' => now()]);
-            $mensaje = 'Lote marcado como no conforme. No puede ingresar a almacén; el lote queda cerrado.';
-        } else {
-            $mensaje = 'Lote certificado. Ya puede registrar el almacenaje del producto terminado.';
-        }
+        app(\App\Services\CertificadoEmisionService::class)->emitirPlanta($request->user(), $loteProduccion, [
+            ...$data, 'solicitud_id' => $request->validated('solicitud_id'),
+        ]);
+        $mensaje = 'Nueva evaluación registrada. Las emisiones anteriores se conservan en el historial.';
 
         $redirect = $request->input('redirect_to') === 'certificaciones-planta'
             ? route('certificaciones-planta.index')
@@ -707,94 +695,109 @@ class LoteProduccionController extends Controller
     {
         abort_unless(UsuarioRol::gestionaPlanta($request->user()), 403);
 
-        if (! $this->trazabilidad->evaluacionAprobada($loteProduccion)) {
-            if ($this->trazabilidad->loteRechazado($loteProduccion)) {
-                return back()->with('error', 'Este lote fue marcado como no conforme y no puede ingresar a almacén.');
+        abort_unless(\App\Support\ProduccionPlantaAcceso::puedeVer($request->user(), $loteProduccion), 404);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($request, $loteProduccion) {
+            $loteProduccion = LoteProduccionPedido::whereKey($loteProduccion->getKey())->lockForUpdate()->firstOrFail();
+            if (! $this->trazabilidad->evaluacionAprobada($loteProduccion)) {
+                if ($this->trazabilidad->loteRechazado($loteProduccion)) {
+                    return back()->with('error', 'Este lote fue marcado como no conforme y no puede ingresar a almacén.');
+                }
+
+                return back()->with('error', 'Debe certificar el lote (resultado «Certificado») antes de almacenar.');
             }
 
-            return back()->with('error', 'Debe certificar el lote (resultado «Certificado») antes de almacenar.');
-        }
+            $data = $request->validate([
+                'almacenid' => ['required', 'integer', 'exists:almacen,almacenid'],
+                'condicion' => ['required', 'string', Rule::in(AlmacenajeLoteCondiciones::opciones())],
+                'observaciones' => ['nullable', 'string', 'max:500'],
+            ]);
 
-        $data = $request->validate([
-            'almacenid' => ['required', 'integer', 'exists:almacen,almacenid'],
-            'condicion' => ['required', 'string', Rule::in(AlmacenajeLoteCondiciones::opciones())],
-            'observaciones' => ['nullable', 'string', 'max:500'],
-        ]);
+            if (! ProductoPlantaCatalogo::loteTieneEmpaquePlanificado($loteProduccion)) {
+                return back()->with('error', 'Este lote no tiene empaque planificado. Vuelva a crear el lote indicando presentación comercial.');
+            }
 
-        if (! ProductoPlantaCatalogo::loteTieneEmpaquePlanificado($loteProduccion)) {
-            return back()->with('error', 'Este lote no tiene empaque planificado. Vuelva a crear el lote indicando presentación comercial.');
-        }
+            $loteProduccion->loadMissing('materiasPrimas.insumo.unidadMedida', 'unidadMedida', 'presentacion');
 
-        $loteProduccion->loadMissing('materiasPrimas.insumo.unidadMedida', 'unidadMedida', 'presentacion');
+            $resumen = ProductoPlantaCatalogo::resumenProduccion($loteProduccion, $this->capacidadService);
+            $cantidad = (float) ($resumen['cantidad'] ?? 0);
+            $cantidadKg = (float) ($resumen['kg'] ?? 0);
 
-        $resumen = ProductoPlantaCatalogo::resumenProduccion($loteProduccion, $this->capacidadService);
-        $cantidad = (float) ($resumen['cantidad'] ?? 0);
-        $cantidadKg = (float) ($resumen['kg'] ?? 0);
+            if ($cantidad <= 0 || $cantidadKg <= 0) {
+                return back()->with('error', 'No hay materia prima registrada para calcular el empaquetado.');
+            }
 
-        if ($cantidad <= 0 || $cantidadKg <= 0) {
-            return back()->with('error', 'No hay materia prima registrada para calcular el empaquetado.');
-        }
+            $almacen = Almacen::query()->with('unidadMedida')->findOrFail($data['almacenid']);
+            if (($almacen->ambito ?? '') !== AlmacenAmbito::PLANTA) {
+                return back()->with('error', 'Seleccione un almacén de planta.');
+            }
 
-        $almacen = Almacen::query()->with('unidadMedida')->findOrFail($data['almacenid']);
-        if (($almacen->ambito ?? '') !== AlmacenAmbito::PLANTA) {
-            return back()->with('error', 'Seleccione un almacén de planta.');
-        }
+            \App\Support\AlmacenAcceso::asegurarPuedeGestionar($request->user(), $almacen);
+            $almacen = Almacen::whereKey($almacen->getKey())->lockForUpdate()->firstOrFail();
+            $capacidadAlmacen = $this->capacidadService->resumen($almacen);
+            if ($cantidadKg > $capacidadAlmacen['disponible_kg']) {
+                return back()->with('error',
+                    'La cantidad del lote excede la capacidad disponible del almacén. Disponible: '.
+                    round($capacidadAlmacen['disponible_kg'], 2).' kg'
+                );
+            }
 
-        $capacidadAlmacen = $this->capacidadService->resumen($almacen);
-        if ($cantidadKg > $capacidadAlmacen['disponible_kg']) {
-            return back()->with('error',
-                'La cantidad del lote excede la capacidad disponible del almacén. Disponible: '.
-                round($capacidadAlmacen['disponible_kg'], 2).' kg'
+            $ingreso = AlmacenajeLoteProduccion::create([
+                'loteproduccionpedidoid' => $loteProduccion->loteproduccionpedidoid,
+                'almacenid' => $almacen->almacenid,
+                'ubicacion' => $almacen->nombre,
+                'cantidad' => $cantidad,
+                'condicion' => $data['condicion'],
+                'observaciones' => ($data['observaciones'] ?? null)
+                    ?: 'Producto terminado: '.$loteProduccion->nombre,
+                'fecha_almacenaje' => now(),
+            ]);
+
+            $insumoTerminado = $this->inventarioPlanta->sincronizarLoteAlmacenado($loteProduccion, $almacen);
+            $presentacion = $this->presentacionPlanta->resolverPresentacionParaLote($loteProduccion, $insumoTerminado);
+            $partida = $this->inventarioPresentacion->ingresar(
+                (int) $almacen->almacenid,
+                (int) $insumoTerminado->insumoid,
+                (int) $presentacion->insumo_presentacionid,
+                (int) $loteProduccion->loteproduccionpedidoid,
+                $loteProduccion->codigo_lote,
+                $cantidad,
+                $cantidadKg
             );
-        }
 
-        AlmacenajeLoteProduccion::create([
-            'loteproduccionpedidoid' => $loteProduccion->loteproduccionpedidoid,
-            'almacenid' => $almacen->almacenid,
-            'ubicacion' => $almacen->nombre,
-            'cantidad' => $cantidad,
-            'condicion' => $data['condicion'],
-            'observaciones' => ($data['observaciones'] ?? null)
-                ?: 'Producto terminado: '.$loteProduccion->nombre,
-            'fecha_almacenaje' => now(),
-        ]);
+            $ingreso->forceFill([
+                'insumoid' => $insumoTerminado->getKey(),
+                'insumo_presentacionid' => $presentacion->getKey(),
+                'inventario_presentacion_loteid' => $partida->getKey(),
+                'datos_ingreso' => [
+                    'producto' => $insumoTerminado->nombre, 'presentacion' => $presentacion->nombre,
+                    'cantidad_unidades' => \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($cantidad)),
+                    'cantidad_kg' => \App\Support\InventarioDecimal::texto(\App\Support\InventarioDecimal::unidades($cantidadKg)),
+                    'unidad' => $presentacion->etiquetaUnidad(),
+                    'almacenid' => (int) $almacen->getKey(), 'almacen' => $almacen->nombre,
+                    'fecha' => $ingreso->fecha_almacenaje->toIso8601String(),
+                ],
+            ])->save();
 
-        $this->inventarioPlanta->sincronizarLoteAlmacenado($loteProduccion, $almacen);
-        $insumoTerminado = \App\Models\Insumo::query()
-            ->where('almacenid', $almacen->almacenid)
-            ->whereRaw('LOWER(TRIM(nombre)) = ?', [mb_strtolower(trim(LoteProduccionNombre::productoDesdeLote($loteProduccion)))])
-            ->where('tipoinsumoid', $this->inventarioPlanta->tipoProductoTerminadoId())
-            ->firstOrFail();
+            $loteProduccion->update([
+                'cantidad_objetivo' => $cantidad,
+                'cantidad_producida' => $cantidad,
+                'insumo_presentacionid' => $presentacion->insumo_presentacionid,
+                'unidadmedidaid' => ProductoPlantaCatalogo::resolverUnidadMedidaId(
+                    ProductoPlantaCatalogo::nombreProducto($loteProduccion),
+                    $loteProduccion->unidadmedidaid
+                ) ?? $loteProduccion->unidadmedidaid,
+            ]);
 
-        $presentacion = $this->presentacionPlanta->resolverPresentacionParaLote($loteProduccion, $insumoTerminado);
-        $this->inventarioPresentacion->ingresar(
-            (int) $almacen->almacenid,
-            (int) $insumoTerminado->insumoid,
-            (int) $presentacion->insumo_presentacionid,
-            (int) $loteProduccion->loteproduccionpedidoid,
-            $loteProduccion->codigo_lote,
-            $cantidad,
-            $cantidadKg
-        );
+            if (! $loteProduccion->hora_fin) {
+                $loteProduccion->update(['hora_fin' => now()]);
+            }
 
-        $loteProduccion->update([
-            'cantidad_objetivo' => $cantidad,
-            'cantidad_producida' => $cantidad,
-            'insumo_presentacionid' => $presentacion->insumo_presentacionid,
-            'unidadmedidaid' => ProductoPlantaCatalogo::resolverUnidadMedidaId(
-                ProductoPlantaCatalogo::nombreProducto($loteProduccion),
-                $loteProduccion->unidadmedidaid
-            ) ?? $loteProduccion->unidadmedidaid,
-        ]);
-
-        if (! $loteProduccion->hora_fin) {
-            $loteProduccion->update(['hora_fin' => now()]);
-        }
-
-        return redirect()
-            ->route('procesamiento.show', $loteProduccion)
-            ->with('success', 'Almacenaje registrado: '.number_format($cantidad, 0).' '
-                .$presentacion->etiquetaUnidad().' de «'.$presentacion->nombre.'». Lote completado.');
+            return redirect()
+                ->route('procesamiento.show', $loteProduccion)
+                ->with('success', 'Almacenaje registrado: '.number_format($cantidad, 0).' '
+                    .$presentacion->etiquetaUnidad().' de «'.$presentacion->nombre.'». Lote completado.');
+        }, 5);
     }
 
     public function completar(LoteProduccionPedido $loteProduccion): RedirectResponse
@@ -889,7 +892,10 @@ class LoteProduccionController extends Controller
             'observaciones' => ['nullable', 'string', 'max:500'],
             'materias' => ['required', 'array', 'size:1'],
             'materias.*.insumoid' => ['required', 'integer', 'exists:insumo,insumoid'],
-            'materias.*.cantidad' => ['required', 'numeric', 'min:0.001'],
+            'materias.*.cantidad' => ['required', 'regex:/^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/D'],
+            'materias.*.materiaprimaloteid' => ['nullable', 'integer', 'min:0'],
+            'materias.*.partida' => ['nullable', 'string', 'max:40'],
+            'materias.*.inventario_presentacion_loteid' => ['nullable', 'integer', 'min:1'],
             'plantillatransformacionid' => ['nullable', 'integer', 'exists:plantilla_transformacion,plantillatransformacionid'],
             'empaque_catalogo_slug' => ['required', 'string', 'max:40'],
             'modo_planificacion' => ['required', 'string', Rule::in([EmpaquePlantaCatalogo::MODO_EMPAQUES, EmpaquePlantaCatalogo::MODO_MATERIA_PRIMA])],
@@ -929,10 +935,12 @@ class LoteProduccionController extends Controller
         }
 
         $lineas = collect($data['materias'])
-            ->map(fn (array $m) => [
+            ->map(fn (array $m) => app(\App\Services\InventarioExistenciaService::class)->seleccion([
                 'insumoid' => (int) $m['insumoid'],
-                'cantidad' => (float) $m['cantidad'],
-            ])
+                'cantidad' => (string) $m['cantidad'],
+                'materiaprimaloteid' => isset($m['materiaprimaloteid']) ? (int) $m['materiaprimaloteid'] : null,
+                'partida' => $m['partida'] ?? null, 'inventario_presentacion_loteid' => $m['inventario_presentacion_loteid'] ?? null,
+            ]))
             ->all();
 
         foreach ($lineas as $linea) {
@@ -1058,6 +1066,9 @@ class LoteProduccionController extends Controller
                 'stock' => (float) ($mp->insumo?->stock ?? 0) + (float) $mp->cantidad_usada,
                 'unidad' => $mp->insumo?->unidadMedida?->abreviatura ?? $mp->insumo?->unidadMedida?->nombre ?? 'ud',
                 'cantidad' => (float) $mp->cantidad_usada,
+                'materiaprimaloteid' => $mp->materiaprimaloteid,
+                'inventario_presentacion_loteid' => $mp->inventario_presentacion_loteid,
+                'existencia' => $mp->insumo ? app(\App\Services\InventarioExistenciaService::class)->resumen($mp->insumo) : null,
             ];
         })->values();
 
@@ -1092,7 +1103,10 @@ class LoteProduccionController extends Controller
             $rules['producto'] = ['required', 'string', 'max:100'];
             $rules['materias'] = ['required', 'array', 'size:1'];
             $rules['materias.*.insumoid'] = ['required', 'integer', 'exists:insumo,insumoid'];
-            $rules['materias.*.cantidad'] = ['required', 'numeric', 'min:0.001'];
+            $rules['materias.*.cantidad'] = ['required', 'regex:/^(?:0|[1-9][0-9]{0,10})(?:\.[0-9]{1,3})?$/D'];
+            $rules['materias.*.materiaprimaloteid'] = ['nullable', 'integer', 'min:0'];
+            $rules['materias.*.partida'] = ['nullable', 'string', 'max:40'];
+            $rules['materias.*.inventario_presentacion_loteid'] = ['nullable', 'integer', 'min:1'];
         }
 
         $request->merge(['pedidoid' => $request->input('pedidoid') ?: null]);
@@ -1102,10 +1116,12 @@ class LoteProduccionController extends Controller
         $lineas = null;
         if ($puedeEditarMaterias) {
             $lineas = collect($data['materias'])
-                ->map(fn (array $m) => [
+                ->map(fn (array $m) => app(\App\Services\InventarioExistenciaService::class)->seleccion([
                     'insumoid' => (int) $m['insumoid'],
-                    'cantidad' => (float) $m['cantidad'],
-                ])
+                    'cantidad' => (string) $m['cantidad'],
+                'materiaprimaloteid' => isset($m['materiaprimaloteid']) ? (int) $m['materiaprimaloteid'] : null,
+                'partida' => $m['partida'] ?? null, 'inventario_presentacion_loteid' => $m['inventario_presentacion_loteid'] ?? null,
+            ]))
                 ->all();
         }
 
@@ -1164,11 +1180,7 @@ class LoteProduccionController extends Controller
 
     private function aplicarFiltroOperarioPlanta($query, ?Usuario $user): void
     {
-        if (! UsuarioRol::debeAcotarLotesProduccionPorAsignacion($user)) {
-            return;
-        }
-
-        $query->whereHas('asignacionesEtapa', fn ($q) => $q->where('operador_usuarioid', (int) $user->usuarioid));
+        \App\Support\ProduccionPlantaAcceso::scope($query, $user);
     }
 
     private function autorizarLoteOperarioPlanta(LoteProduccionPedido $lote, ?Usuario $user): void

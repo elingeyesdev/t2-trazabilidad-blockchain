@@ -28,7 +28,6 @@ class AlmacenInventarioController extends Controller
         $insumo->load(['tipo', 'unidadMedida', 'almacen']);
         $estadoStock = InsumoCatalogo::estadoStockAlmacen($insumo);
 
-        $inventarioPresentacion->asegurarInventarioDesdeStock((int) $almacen->almacenid, (int) $insumo->insumoid);
 
         $empaquetajes = InsumoPresentacion::query()
             ->with('tipoEmpaque')
@@ -99,14 +98,14 @@ class AlmacenInventarioController extends Controller
         $payload = [
             'nombre' => $data['nombre'],
             'unidadmedidaid' => $data['unidadmedidaid'],
-            'stock' => (float) $data['stock'],
-            'stockminimo' => (float) ($data['stockminimo'] ?? $insumo->stockminimo ?? InsumoCatalogo::UMBRAL_ALERTA_STOCK),
+            'stock' => $data['stock'],
+            'stockminimo' => $data['stockminimo'] ?? null,
             'descripcion' => $data['descripcion'] ?? $insumo->descripcion,
         ];
 
         $payload = $this->aplicarImagenProducto($request, $payload, $insumo);
 
-        $insumo->update($payload);
+        app(\App\Services\InventarioMovimientoService::class)->actualizarFicha($request->user(), $insumo, $payload, $request->input('motivo_ajuste'), $request->filled('materiaprimaloteid') ? (int) $request->input('materiaprimaloteid') : null);
 
         return $this->redirigirDespuesInventario($request, $ctx, $almacen, 'Producto actualizado en el almacén.');
     }
@@ -182,6 +181,10 @@ class AlmacenInventarioController extends Controller
 
     private function autorizarProducto(Request $request, Almacen $almacen, Insumo $insumo, string $ambito, bool $gestion): void
     {
+        abort_unless(\App\Support\AlmacenAcceso::puedeVer($request->user(), $almacen), 403);
+        if ($gestion) {
+            \App\Support\AlmacenAcceso::asegurarPuedeGestionar($request->user(), $almacen);
+        }
         abort_unless(
             in_array($ambito, [AlmacenAmbito::MAYORISTA, AlmacenAmbito::PLANTA], true),
             404

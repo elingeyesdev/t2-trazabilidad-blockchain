@@ -443,7 +443,7 @@
 
                             <span class="badge badge-success mr-1 mb-1">
 
-                                {{ $pm['nombre'] }}: {{ number_format($pm['valor'], 1) }}@if(!empty($pm['unidad'])) {{ $pm['unidad'] }}@endif
+                                {{ $pm['nombre'] }}: {{ $pm['valor_decimal'] ?? $pm['valor'] }}@if(!empty($pm['unidad'])) {{ $pm['unidad'] }}@endif
 
                             </span>
 

@@ -231,6 +231,12 @@ class FaseE1IntegridadFuncionalTest extends TestCase
         ]);
         $proceso = ProcesoPlanta::create(['nombre' => 'Preparación de Materias Primas', 'activo' => true]);
         $maquina = MaquinaPlanta::create(['nombre' => 'L-100', 'codigo' => 'L-E1', 'activo' => true]);
+        \App\Models\ProcesoMaquinaPlanta::create([
+            'procesoplantaid' => $proceso->procesoplantaid,
+            'maquinaplantaid' => $maquina->maquinaplantaid,
+            'orden_paso' => 1,
+            'nombre' => 'Preparación de Materias Primas',
+        ]);
         $variable = VariableEstandar::create([
             'codigo' => 'TEMP-E1',
             'nombre' => 'Temperatura',

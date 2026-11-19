@@ -84,9 +84,11 @@
                     ])
 
                     <div class="mb-3 mt-3 mb-0">
-                        <label class="fw-semibold small text-secondary" for="siembraModalObservaciones">Comentario opcional</label>
-                        <textarea name="observaciones" id="siembraModalObservaciones" class="form-control" rows="2" maxlength="250"
-                                  placeholder="Ej: Surcos 1-4, buen estado del suelo…">{{ old('observaciones') }}</textarea>
+                        <label class="fw-semibold small text-secondary" for="siembraModalObservaciones">Resultado de la siembra *</label>
+                        <textarea name="resultado" required id="siembraModalObservaciones" class="form-control" rows="2" maxlength="250"
+                                  placeholder="Ej: Surcos 1-4 sembrados, buen estado del suelo…">{{ old('resultado') }}</textarea>
+ @include('lotes.partials.consumo-cierre-siembra')
+                        @error('resultado')<div class="text-danger small">{{ $message }}</div>@enderror
                     </div>
                 </div>
 
@@ -115,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function () {
         );
     }
 
-    @if($errors->has('evidencia_foto') || $errors->has('observaciones'))
+    @if($errors->has('evidencia_foto') || $errors->has('resultado') || $errors->has('consumos'))
     if (window.jQuery) {
         window.jQuery('#modalCompletarSiembra').modal('show');
     }

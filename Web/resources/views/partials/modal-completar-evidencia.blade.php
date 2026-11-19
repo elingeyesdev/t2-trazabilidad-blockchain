@@ -108,6 +108,12 @@
                     <hr class="my-3" id="actividadModalSeparadorFoto" style="display: none;">
 
                     <div id="actividadModalSeccionFoto" style="display: none;">
+                        <div class="form-group">
+                            <label for="actividadResultado">Resultado de la actividad <span class="text-danger">*</span></label>
+                            <textarea id="actividadResultado" name="resultado" required maxlength="250" rows="3" class="form-control">{{ old('resultado') }}</textarea>
+                            @error('resultado')<div class="text-danger small">{{ $message }}</div>@enderror
+                            @error('consumos')<div class="text-danger small">{{ $message }}</div>@enderror
+                        </div>
                         <label class="font-weight-bold d-block mb-2">
                             <i class="fas fa-camera text-success mr-1"></i> Foto de evidencia <span class="text-danger">*</span>
                         </label>
@@ -330,22 +336,35 @@
 
         var insumosWrap = document.getElementById('actividadModalInsumos');
         var insumos = data.insumos || [];
+        var consumosAnteriores = Object.values(@json(old('consumos', [])) || {}).filter(fila => fila && typeof fila === 'object');
         if (insumos.length > 0) {
             var insHtml = '<p class="small text-uppercase text-muted font-weight-bold mb-2 mt-2">'
                 + '<i class="fas fa-flask mr-1"></i> Insumos a aplicar</p>';
-            insumos.forEach(function (ins) {
+            insumos.forEach(function (ins, indice) {
                 insHtml += '<div class="actividad-insumo-card">';
                 if (ins.imagen) {
                     insHtml += '<img src="' + escHtml(ins.imagen) + '" alt="">';
                 } else {
                     insHtml += '<div class="text-muted" style="width:48px;text-align:center;"><i class="fas fa-box fa-lg"></i></div>';
                 }
+                var consumoAnterior = consumosAnteriores.find(function (fila) { return Number(fila.insumoid) === Number(ins.insumoid); });
+                var partidas = ins.existencia?.partidas || [];
+                var opcionesPartida = '<option value="">Selecciona la partida utilizada</option>';
+                if (Number(ins.existencia?.cantidad_sin_partida || 0) > 0) opcionesPartida += '<option value="0">Sin partida histórica · sin fecha registrada</option>';
+                partidas.forEach(function (partida) {
+                    opcionesPartida += '<option value="' + (partida.materiaprimaloteid ? 'm:' + Number(partida.materiaprimaloteid) : 'p:' + Number(partida.inventario_presentacion_loteid)) + '"' + (partida.utilizable && Number(partida.cantidad_fisica) > 0 ? '' : ' disabled') + '>' + escHtml(partida.referencia || ('#' + partida.materiaprimaloteid)) + ' · ' + escHtml(partida.fecha_vencimiento || 'Sin fecha registrada') + ' · ' + escHtml(partida.vencimiento_estado.replaceAll('_', ' ')) + '</option>';
+                });
+                var selectorPartida = partidas.length ? '<label class="small mt-2">Partida utilizada</label><select name="consumos[' + indice + '][partida]" class="form-control form-control-sm" required>' + opcionesPartida + '</select>' : '';
                 insHtml += '<div><strong>' + escHtml(ins.nombre) + '</strong>'
                     + '<div class="text-success font-weight-bold">'
-                    + fmtNum(ins.cantidad) + ' ' + escHtml(ins.unidad || 'ud')
-                    + '</div></div></div>';
+                    + '<label class="small" for="consumo-real-' + indice + '">Cantidad utilizada (' + escHtml(ins.unidad || 'ud') + ')</label>'
+                    + '<input type="hidden" name="consumos[' + indice + '][insumoid]" value="' + Number(ins.insumoid) + '">'
+                    + '<input type="hidden" name="consumos[' + indice + '][almacenid]" value="' + Number(ins.almacenid) + '">'
+                    + '<input id="consumo-real-' + indice + '" type="number" required min="0.001" step="0.001" class="form-control form-control-sm" name="consumos[' + indice + '][cantidad]" value="' + escHtml(consumoAnterior?.cantidad ?? ins.cantidad) + '">'
+                    + selectorPartida + '</div></div></div>';
             });
             insumosWrap.innerHTML = insHtml;
+            insumosWrap.querySelectorAll('select[name$="[partida]"]').forEach(function (selector, indice) { var anterior = consumosAnteriores.find(function (fila) { return Number(fila.insumoid) === Number(insumos[indice].insumoid); }); if (anterior) selector.value = anterior.partida || (anterior.materiaprimaloteid ? 'm:' + anterior.materiaprimaloteid : (anterior.inventario_presentacion_loteid ? 'p:' + anterior.inventario_presentacion_loteid : '0')); });
             insumosWrap.style.display = '';
         }
 
@@ -467,7 +486,7 @@
         });
     });
 
-    @if($errors->has('evidencia_foto'))
+    @if($errors->has('evidencia_foto') || $errors->has('resultado') || $errors->has('consumos') || $errors->has('consumos.*'))
     if (window.jQuery) {
         window.jQuery(function () {
             window.jQuery('#modalCompletarEvidencia').modal('show');

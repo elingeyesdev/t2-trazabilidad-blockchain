@@ -370,78 +370,9 @@ class AlmacenMovimientoController extends Controller
             return $this->storeIngresoAgricola($request, $ctx);
         }
 
-        $data = $request->validate([
-            'almacenid' => 'required|exists:almacen,almacenid',
-            'insumoid' => 'required|exists:insumo,insumoid',
-            'tipo_movimiento_almacenid' => 'required|exists:tipo_movimiento_almacen,tipo_movimiento_almacenid',
-            'fecha' => 'required|date',
-            'cantidad' => 'required|numeric|min:0.001',
-            'referencia' => 'nullable|string|max:100',
-            'destino_motivo' => 'nullable|string|max:150',
-            'observaciones' => 'nullable|string|max:1000',
-        ]);
-
-        $user = $request->user();
-
-        $tipo = TipoMovimientoAlmacen::query()
-            ->whereKey($data['tipo_movimiento_almacenid'])
-            ->where('naturaleza', $naturaleza)
-            ->where('activo', true)
-            ->firstOrFail();
-
-        $insumo = Insumo::query()->findOrFail($data['insumoid']);
-        if ((int) $insumo->almacenid !== (int) $data['almacenid']) {
-            return back()->withInput()->withErrors([
-                'insumoid' => 'El insumo no pertenece al almacén seleccionado. Elija un insumo de ese mismo almacén.',
-            ]);
-        }
-
-        $almacen = Almacen::query()->with('unidadMedida')->findOrFail($data['almacenid']);
-        abort_unless($this->almacenVisible($ctx['ambito'], (int) $almacen->almacenid, $user), 403, 'El almacén no pertenece a este módulo o no es suyo.');
-        if ($ctx['ambito'] === AlmacenAmbito::MAYORISTA) {
-            MayoristaAccess::asegurarPuedeGestionar($user, $almacen);
-        } elseif ($ctx['ambito'] === AlmacenAmbito::AGRICOLA) {
-            abort_unless(CampoAccess::puedeGestionarAlmacen($user, $almacen), 403);
-        } elseif ($ctx['ambito'] === AlmacenAmbito::PLANTA) {
-            abort_unless(PlantaAccess::puedeGestionarAlmacen($user, $almacen), 403);
-        }
-        $insumo->loadMissing('unidadMedida');
-
-        if ($tipo->naturaleza === 'ingreso') {
-            try {
-                $this->capacidadService->validarIngresoKg(
-                    $almacen,
-                    $this->capacidadService->convertirAKg((float) $data['cantidad'], $insumo->unidadMedida)
-                );
-            } catch (\Illuminate\Validation\ValidationException $e) {
-                return back()->withInput()->withErrors($e->errors());
-            }
-        }
-
-        if ($tipo->naturaleza === 'salida' && ! $insumo->tieneStockSuficiente((float) $data['cantidad'])) {
-            return back()->withInput()->withErrors([
-                'cantidad' => 'Stock insuficiente. Disponible: '.number_format((float) $insumo->stock, 3),
-            ]);
-        }
-
-        try {
-            DB::transaction(function () use ($data, $insumo, $tipo, $user) {
-                AlmacenMovimiento::create($data + [
-                    'usuarioid' => $user->usuarioid,
-                    'tipo_movimiento_almacenid' => $tipo->tipo_movimiento_almacenid,
-                ]);
-
-                if ($tipo->naturaleza === 'ingreso') {
-                    $insumo->incrementarStock((float) $data['cantidad']);
-                } else {
-                    $insumo->decrementarStock((float) $data['cantidad']);
-                }
-            });
-        } catch (\Throwable $e) {
-            return back()->withInput()->withErrors([
-                'cantidad' => $e->getMessage(),
-            ]);
-        }
+        $almacen = Almacen::query()->findOrFail($request->input('almacenid'));
+        abort_unless(AlmacenAmbito::resolverAmbito($almacen) === $ctx['ambito'], 403);
+        app(\App\Services\InventarioMovimientoService::class)->registrar($user, $request->all(), $naturaleza);
 
         return redirect()
             ->route($ctx['rutaPrefijo'].'.movimientos.index', ['naturaleza' => $naturaleza])
@@ -529,10 +460,14 @@ class AlmacenMovimientoController extends Controller
                     'insumoid' => 'Para cosecha debe elegir un insumo de tipo Material de Siembra.',
                 ]);
             }
-            $cantidadStock = $this->capacidadService->convertirDesdeKg((float) $data['cantidad'], $insumo->unidadMedida);
+            $factor = \App\Support\CosechaDecimal::factorUnidad($insumo->unidadMedida);
+            if ($factor === null) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['cantidad' => 'La unidad del producto no tiene una conversión a kg configurada.']);
+            }
+            $cantidadStock = (string) \Brick\Math\BigDecimal::of(\App\Support\CosechaDecimal::cantidad($data['cantidad']))->dividedBy($factor, 6, \Brick\Math\RoundingMode::HALF_UP);
             $prefijoObs = '[Ingreso manual — Cosecha] ';
         } else {
-            $cantidadStock = (float) $data['cantidad'];
+            $cantidadStock = (string) $data['cantidad'];
             $prefijoObs = '[Ingreso manual — Insumo] ';
         }
 
@@ -554,32 +489,15 @@ class AlmacenMovimientoController extends Controller
             return back()->withInput()->withErrors($e->errors());
         }
 
-        try {
-            DB::transaction(function () use ($data, $almacen, $insumo, $tipo, $user, $cantidadStock, $prefijoObs) {
-                if ((int) $insumo->almacenid !== (int) $almacen->almacenid) {
-                    $insumo->almacenid = $almacen->almacenid;
-                    $insumo->save();
-                }
-
-                AlmacenMovimiento::create([
-                    'almacenid' => $almacen->almacenid,
-                    'insumoid' => $insumo->insumoid,
-                    'tipo_movimiento_almacenid' => $tipo->tipo_movimiento_almacenid,
-                    'usuarioid' => $user->usuarioid,
-                    'fecha' => $data['fecha'],
-                    'cantidad' => $cantidadStock,
-                    'referencia' => 'Inventario inicial / manual',
-                    'destino_motivo' => $almacen->nombre,
-                    'observaciones' => $prefijoObs.($data['observaciones'] ?? ''),
-                ]);
-
-                $insumo->incrementarStock($cantidadStock);
-            });
-        } catch (\Throwable $e) {
-            return back()->withInput()->withErrors([
-                'cantidad' => $e->getMessage(),
-            ]);
-        }
+        abort_unless((int) $insumo->almacenid === (int) $almacen->almacenid, 404);
+        app(\App\Services\InventarioMovimientoService::class)->registrar($user, [
+            'almacenid' => $almacen->almacenid, 'insumoid' => $insumo->insumoid,
+            'tipo_movimiento_almacenid' => $tipo->tipo_movimiento_almacenid, 'fecha' => $data['fecha'],
+            'cantidad' => (string) $cantidadStock, 'destino_motivo' => $data['observaciones'] ?? null,
+            'referencia' => 'Inventario inicial / manual', 'observaciones' => $prefijoObs.($data['observaciones'] ?? ''),
+            'lote_proveedor' => $request->input('lote_proveedor'), 'fecha_vencimiento' => $request->input('fecha_vencimiento'),
+            'materiaprimaloteid' => $request->input('materiaprimaloteid'),
+        ], 'ingreso');
 
         return redirect()
             ->route($ctx['rutaPrefijo'].'.movimientos.index', ['naturaleza' => 'ingreso'])

@@ -1,103 +1,59 @@
-@extends('layouts.app')
-
-@section('title', 'Actividad | AgroFusion')
-@section('page_title', 'Detalle de actividad')
-
+@extends('layouts.tabler-lotes')
+@section('title', 'Detalle de actividad | AgroFusion')
+@section('header')<h1 class="page-title">Detalle de actividad</h1>@endsection
 @section('content')
-@php
-    $completada = $actividad->fechafin !== null;
-@endphp
+@php($completada = $actividad->fechafin !== null)
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0">
-            <i class="fas fa-tasks mr-2"></i>{{ $actividad->tipoActividad->nombre ?? 'Actividad' }}
-        </h3>
-        <span class="badge badge-{{ $completada ? 'success' : 'warning' }}">
-            {{ $completada ? 'Completada' : 'Pendiente' }}
-        </span>
-    </div>
-
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>Lote:</strong> {{ $actividad->lote->nombre ?? '—' }}</p>
-                <p><strong>Responsable:</strong> {{ trim(($actividad->usuario->nombre ?? '').' '.($actividad->usuario->apellido ?? '')) ?: '—' }}</p>
-                <p><strong>Prioridad:</strong> {{ $actividad->prioridad->nombre ?? '—' }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Fecha planificada:</strong>
-                    @if($actividad->fecha_planificada)
-                        {{ \Carbon\Carbon::parse($actividad->fecha_planificada)->format('d/m/Y') }}
-                    @else
-                        <span class="text-muted">—</span>
-                    @endif
-                </p>
-                <p><strong>Fecha inicio real:</strong>
-                    {{ $actividad->fechainicio ? \Carbon\Carbon::parse($actividad->fechainicio)->format('d/m/Y H:i') : '—' }}
-                </p>
-                <p><strong>Fecha fin real:</strong>
-                    @if($completada)
-                        {{ \Carbon\Carbon::parse($actividad->fechafin)->format('d/m/Y H:i') }}
-                    @else
-                        <span class="text-muted">Pendiente de ejecución</span>
-                    @endif
-                </p>
-            </div>
-        </div>
-
-        @if($actividad->descripcion)
-            <p class="mb-1"><strong>Descripción:</strong></p>
-            <p class="text-muted">{{ $actividad->descripcion }}</p>
-        @endif
-
-        @if($actividad->observaciones)
-            <p class="mb-1"><strong>Observaciones:</strong></p>
-            <p class="text-muted">{{ $actividad->observaciones }}</p>
-        @endif
-
-        @if($completada && $actividad->evidencia_foto_path)
-            @php $evidenciaUrl = asset('storage/'.$actividad->evidencia_foto_path); @endphp
-            <div class="mt-3">
-                <p class="mb-2"><strong><i class="fas fa-camera mr-1"></i> Evidencia fotográfica</strong></p>
-                <a href="{{ $evidenciaUrl }}" target="_blank" rel="noopener" class="d-inline-block">
-                    <img src="{{ $evidenciaUrl }}"
-                         alt="Evidencia: {{ $actividad->tipoActividad->nombre ?? 'Actividad' }}"
-                         class="img-fluid rounded border shadow-sm"
-                         style="max-width: 320px; max-height: 240px; object-fit: cover; cursor: zoom-in;">
-                </a>
-            </div>
-        @endif
-    </div>
-
-    <div class="card-footer d-flex flex-wrap justify-content-between align-items-center">
-        <a href="{{ route('actividades.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left mr-1"></i> Volver
-        </a>
-        <div class="d-flex flex-wrap" style="gap: 6px;">
-            @if(!empty($puedeMarcarCompletada))
-                <button type="button" class="btn btn-success btn-completar-evidencia"
-                    data-action="{{ route('actividades.marcar-realizada', $actividad) }}"
-                    data-resumen-url="{{ route('actividades.resumen-completar', $actividad) }}"
-                    data-titulo="{{ $actividad->descripcion ?: ($actividad->tipoActividad->nombre ?? 'Actividad') }}"
-                    data-lote="{{ $actividad->lote->nombre ?? 'Sin lote' }}">
-                    <i class="fas fa-check mr-1"></i> Marcar como completada
-                </button>
-            @endif
-            @can('lotes.update')
-                <a href="{{ route('actividades.edit', $actividad) }}" class="btn btn-warning">
-                    <i class="fas fa-edit mr-1"></i> Editar
-                </a>
-                <form action="{{ route('actividades.destroy', $actividad) }}" method="POST" class="d-inline on-submit-confirm">
-                    @csrf @method('DELETE')
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-trash mr-1"></i> Eliminar
-                    </button>
-                </form>
-            @endcan
-        </div>
-    </div>
+ <div class="card-header justify-content-between gap-2 flex-wrap">
+  <h2 class="card-title">{{ $actividad->descripcion ?: ($actividad->tipoActividad?->nombre ?? 'Actividad') }}</h2>
+  <span class="badge {{ $completada ? 'bg-success-lt' : 'bg-warning-lt' }}">{{ $completada ? 'Completada' : 'Pendiente' }}</span>
+ </div>
+ <div class="card-body">
+  <dl class="row">
+   <dt class="col-sm-4">Lote</dt><dd class="col-sm-8">{{ $actividad->lote?->nombre }}</dd>
+   <dt class="col-sm-4">Tipo</dt><dd class="col-sm-8">{{ $actividad->tipoActividad?->nombre }}</dd>
+   <dt class="col-sm-4">Trabajador asignado</dt><dd class="col-sm-8">{{ trim(($actividad->usuario?->nombre ?? '').' '.($actividad->usuario?->apellido ?? '')) ?: 'Sin asignación' }}</dd>
+   <dt class="col-sm-4">Responsable del cierre</dt><dd class="col-sm-8">{{ $completada ? (trim(($actividad->ejecutor?->nombre ?? '').' '.($actividad->ejecutor?->apellido ?? '')) ?: 'No registrado') : 'Pendiente de ejecución' }}</dd>
+   <dt class="col-sm-4">Fecha de cierre</dt><dd class="col-sm-8">{{ $actividad->fechafin?->format('d/m/Y H:i') ?? 'Pendiente de ejecución' }}</dd>
+  </dl>
+  @if($consulta['resultado'])<h3 class="h4">Resultado</h3><p class="text-break">{{ $consulta['resultado'] }}</p>@endif
+  @if($actividad->observaciones)<h3 class="h4">Observaciones de planificación</h3><p class="text-break">{{ $actividad->observaciones }}</p>@endif
+  <h3 class="h4">Fotografía de la actividad</h3>
+  @if($consulta['evidencia_estado'] === 'disponible')
+   <a href="{{ $consulta['evidencia_foto_url'] }}" target="_blank" rel="noopener" aria-label="Abrir fotografía de esta actividad">
+    <img src="{{ $consulta['evidencia_foto_url'] }}" alt="Fotografía del trabajo realizado: {{ $actividad->descripcion }}" class="img-fluid rounded border mb-2" style="max-height: 420px; object-fit: contain;" id="fotoActividad">
+   </a>
+   <p class="small text-secondary" id="estadoFotoActividad">Selecciona la fotografía para ampliarla.</p>
+  @elseif($consulta['evidencia_estado'] === 'no_disponible')
+   <p class="text-warning">Esta actividad tiene una fotografía registrada, pero el archivo no está disponible.</p>
+  @else
+   <p class="text-secondary">Esta actividad no tiene fotografía registrada</p>
+  @endif
+  <h3 class="h4 mt-4">Insumos utilizados</h3>
+  @if($consulta['consumos'] !== [])
+   <div class="table-responsive"><table class="table table-vcenter">
+    <thead><tr><th>Insumo</th><th>Cantidad</th><th>Unidad</th><th>Almacén de origen</th></tr></thead>
+    <tbody>@foreach($consulta['consumos'] as $fila)
+     <tr><td>{{ $fila['nombre'] ?? 'Nombre no registrado' }} <small class="text-secondary">#{{ $fila['insumoid'] }}</small></td>
+      <td>{{ $fila['cantidad'] }}</td><td>{{ $fila['unidad'] ?? 'No registrada' }}@if(!$fila['unidad_historica'])<small class="d-block text-secondary">Catálogo actual; unidad histórica no registrada</small>@endif</td>
+      <td>{{ $fila['almacenid'] !== null ? '#'.$fila['almacenid'] : 'No registrado' }}</td></tr>
+    @endforeach</tbody>
+   </table></div>
+  @else
+   <p class="text-secondary">Esta actividad no registra consumo de insumos</p>
+  @endif
+ </div>
+ <div class="card-footer d-flex gap-2 flex-wrap">
+  <a href="{{ route('actividades.index') }}" class="btn btn-outline-secondary">Volver a actividades</a>
+  <a href="{{ route('lotes.trazabilidad', $actividad->loteid) }}" class="btn btn-outline-primary">Ver lote</a>
+ </div>
 </div>
-
-@include('partials.modal-completar-evidencia')
-@include('partials.modal-ver-evidencia')
 @endsection
+@push('scripts')
+<script>
+document.getElementById('fotoActividad')?.addEventListener('error', function () {
+ this.hidden = true;
+ document.getElementById('estadoFotoActividad').textContent = 'La fotografía registrada no pudo cargarse. Vuelve a intentar abrirla.';
+});
+</script>
+@endpush

@@ -19,6 +19,7 @@ class InventarioPresentacionLote extends Model
         'referencia_lote',
         'cantidad_unidades',
         'cantidad_kg',
+        'fecha_vencimiento',
     ];
 
     protected $casts = [
@@ -27,8 +28,9 @@ class InventarioPresentacionLote extends Model
         'insumoid' => 'integer',
         'insumo_presentacionid' => 'integer',
         'loteproduccionpedidoid' => 'integer',
-        'cantidad_unidades' => 'float',
-        'cantidad_kg' => 'float',
+        'cantidad_unidades' => 'decimal:6',
+        'cantidad_kg' => 'decimal:6',
+        'fecha_vencimiento' => 'date',
     ];
 
     public function almacen(): BelongsTo

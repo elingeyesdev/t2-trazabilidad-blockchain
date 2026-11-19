@@ -14,14 +14,28 @@ class LoteProduccionMateriaPrima extends Model
         'loteproduccionpedidoid',
         'materiaprimaloteid',
         'insumoid',
+        'inventario_presentacion_loteid',
+        'cantidad_unidades_consumidas',
+        'almacen_movimientoid',
         'cantidad_planificada',
         'cantidad_usada',
     ];
 
     protected $casts = [
-        'cantidad_planificada' => 'float',
-        'cantidad_usada'       => 'float',
+        'cantidad_planificada' => 'decimal:6',
+        'cantidad_usada'       => 'decimal:6',
+        'cantidad_unidades_consumidas' => 'decimal:6',
     ];
+
+    public function movimientoConsumo(): BelongsTo
+    {
+        return $this->belongsTo(AlmacenMovimiento::class, 'almacen_movimientoid', 'almacen_movimientoid');
+    }
+
+    public function presentacionLote(): BelongsTo
+    {
+        return $this->belongsTo(InventarioPresentacionLote::class, 'inventario_presentacion_loteid', 'inventario_presentacion_loteid');
+    }
 
     public function loteProduccionPedido(): BelongsTo
     {
