@@ -37,6 +37,8 @@ class PedidoDistribucionController extends Controller
 {
     public function index(Request $request): View
     {
+        $request->validate(['q' => ['nullable', 'string', 'max:150'], 'desde' => ['nullable', 'date_format:Y-m-d'],
+            'hasta' => ['nullable', 'date_format:Y-m-d', ...($request->filled('desde') ? ['after_or_equal:desde'] : [])], 'puntoventaid' => ['nullable', 'integer', 'min:1'], 'almacenid' => ['nullable', 'integer', 'min:1']]);
         $user = $request->user();
         $esBandejaMayorista = PedidoDistribucionVista::esBandejaMayorista($request, $user);
 
@@ -44,6 +46,7 @@ class PedidoDistribucionController extends Controller
             PedidoDistribucion::query()->with([
                 'puntoVenta.minorista',
                 'detalles.insumo.unidadMedida',
+                'detalles.insumo.almacen',
                 'detalles.presentacion',
                 'almacenMayoristaOrigen',
                 'creadoPor',
@@ -83,6 +86,9 @@ class PedidoDistribucionController extends Controller
             });
         }
 
+        foreach (['desde' => '>=', 'hasta' => '<='] as $campo => $operador) {
+            if ($request->filled($campo)) { $query->whereDate('fechapedido', $operador, $request->input($campo)); }
+        }
         $pedidos = $query->orderByDesc('pedidodistribucionid')->get();
 
         $pendientes = $pedidos->filter(fn (PedidoDistribucion $p) => PedidoDistribucionCatalogo::pendienteAprobacionMayorista($p));
@@ -94,6 +100,10 @@ class PedidoDistribucionController extends Controller
             $user
         )->get();
 
+        if ($esBandejaMayorista) {
+            $puntosVenta = PuntoVenta::where('activo', true)->whereHas('pedidosDistribucion',
+                fn ($p) => PuntoVentaAccess::scopePedidosDelUsuario($p, $user))->orderBy('nombre')->get();
+        }
         $filtroPdvId = $request->integer('puntoventaid') ?: null;
         $filtroPdvNombre = $filtroPdvId
             ? ($puntosVenta->firstWhere('puntoventaid', $filtroPdvId)?->nombre ?? '')
@@ -104,7 +114,7 @@ class PedidoDistribucionController extends Controller
         $esMinorista = UsuarioRol::esMinorista($user);
 
         $almacenesMayorista = $esBandejaMayorista
-            ? AlmacenAmbito::scope(Almacen::query()->where('activo', true), AlmacenAmbito::MAYORISTA)->orderBy('nombre')->get()
+            ? AlmacenAmbito::scope(Almacen::query()->where('activo', true)->whereIn('almacenid', MayoristaAccess::idsAlmacenesOperados($user)), AlmacenAmbito::MAYORISTA)->orderBy('nombre')->get()
             : collect();
 
         $viewData = compact(

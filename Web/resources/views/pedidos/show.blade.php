@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
 
 @section('title', 'Pedido '.$pedido->numero_solicitud.' | AgroFusion')
 @section('page_title', 'Detalle del pedido')
@@ -26,6 +27,7 @@
 
 @section('content')
 @include('pedidos.partials.decision-registrada', ['pedidoDecision' => $pedido])
+@include('pedidos.partials.enlace-entrega', ['pedido' => $pedido])
 @include('recepcion.enlace-pedido', ['pedido' => $pedido])
 @php
     $itemsCount = $pedido->detalles?->count() ?? 0;

@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
 
 @php
     $tituloPagina = ($esTransportista ?? false) ? 'Mis envíos' : 'Envíos';
@@ -15,49 +16,21 @@
 @section('content')
 @include('logistica.partials.envios-seccion-nav')
 <div class="envios-wrap page-envios-lista">
-    @if($esTransportista ?? false)
-        <div class="alert alert-info envios-alert d-flex flex-wrap justify-content-between align-items-center">
-            <span><i class="fas fa-truck mr-1"></i> Envíos asignados: almacén agrícola → planta y planta → puntos de venta en un solo listado.</span>
-            <a href="{{ route('logistica.transportista.ingresos') }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">
-                <i class="fas fa-coins mr-1"></i> Mis ingresos
-            </a>
-        </div>
-    @else
-        <div class="alert alert-light border envios-alert">
-            <i class="fas fa-route text-success mr-1"></i>
-            <strong>Envíos unificados:</strong> solicitudes agrícolas hacia planta y rutas de distribución hacia minoristas en una sola lista.
-            El costo del servicio (Bs) lo define logística al planificar cada ruta.
-        </div>
-    @endif
-
+    <x-operacion.encabezado titulo="Pedidos, envíos y entregas" descripcion="Consulte el trayecto, el estado del transporte y los comprobantes de recepción." />
     @if($resumenEnvios ?? null)
-    <div class="row env-resumen mb-3">
-        @foreach([
-            ['total', 'Total envíos', 'clipboard-list', 'bg-success'],
-            ['asignados', 'Pendientes de salida', 'user-clock', 'bg-warning'],
-            ['en_camino', 'En camino a planta', 'shipping-fast', 'bg-info'],
-            ['recibidos', 'Recibidos en planta', 'warehouse', 'bg-primary'],
-            ['recibidos_hoy', 'Llegadas hoy', 'check-circle', 'bg-secondary'],
-        ] as [$key, $label, $icon, $bg])
-        <div class="col-6 col-lg mb-2">
-            <div class="small-box {{ $bg }} metric-card">
-                <div class="inner">
-                    <h3>{{ $resumenEnvios[$key] ?? 0 }}</h3>
-                    <p>{{ $label }}</p>
-                </div>
-                <div class="icon"><i class="fas fa-{{ $icon }}"></i></div>
-            </div>
-        </div>
+    <div class="op-metricas">
+        @foreach(['total' => 'Envíos registrados', 'asignados' => 'Pendientes de salida', 'en_camino' => 'En camino', 'recibidos' => 'Entregas confirmadas'] as $key => $label)
+            <x-operacion.metrica :valor="$resumenEnvios[$key] ?? 0" :etiqueta="$label" />
         @endforeach
     </div>
     @endif
 
     <div class="card envios-filtros-card mb-3">
         <div class="card-body py-3">
-            <form method="GET" action="{{ $urlListado }}" class="form-row align-items-end">
+            <form method="GET" action="{{ $urlListado }}" class="form-row align-items-end op-envios-filtros">
                 <div class="col-md-3 mb-2 mb-md-0">
-                    <label class="small text-muted mb-1">Buscar</label>
-                    <input type="search" name="q" class="form-control form-control-sm"
+                    <label for="envios-buscar" class="small text-muted mb-1">Buscar</label>
+                    <input id="envios-buscar" type="search" name="q" class="form-control form-control-sm"
                            value="{{ request('q') }}" placeholder="Código, cultivo, planta, chofer…">
                 </div>
                 @unless($esTransportista ?? false)
@@ -88,38 +61,36 @@
                 </div>
                 @endif
                 <div class="col-md-2 mb-2 mb-md-0">
-                    <label class="small text-muted mb-1">Vehículo</label>
-                    <input type="text" name="vehiculo" class="form-control form-control-sm"
+                    <label for="envios-vehiculo" class="small text-muted mb-1">Vehículo</label>
+                    <input type="text" id="envios-vehiculo" name="vehiculo" class="form-control form-control-sm"
                            value="{{ request('vehiculo') }}" placeholder="Placa">
                 </div>
                 @endunless
                 <div class="col-md-2 mb-2 mb-md-0">
-                    <label class="small text-muted mb-1">Estado solicitud</label>
-                    <select name="estado" class="custom-select custom-select-sm">
+                    <label for="envios-estado" class="small text-muted mb-1">Estado del pedido (agrícola)</label>
+                    <select id="envios-estado" name="estado" class="custom-select custom-select-sm">
                         <option value="">Todos</option>
                         @foreach($estadosPedido ?? [] as $estVal => $estLabel)
                             <option value="{{ $estVal }}" @selected(request('estado') === $estVal)>{{ $estLabel }}</option>
                         @endforeach
                     </select>
                 </div>
-                @unless($esTransportista ?? false)
                 <div class="col-md-2 mb-2 mb-md-0">
-                    <label class="small text-muted mb-1">Situación transporte</label>
-                    <select name="estado_logistica" class="custom-select custom-select-sm">
+                    <label for="envios-estado_logistica" class="small text-muted mb-1">Estado del transporte</label>
+                    <select id="envios-estado_logistica" name="estado_logistica" class="custom-select custom-select-sm">
                         <option value="">Todas</option>
                         @foreach($estadosLogistica ?? [] as $estVal => $estLabel)
                             <option value="{{ $estVal }}" @selected(request('estado_logistica') === $estVal)>{{ $estLabel }}</option>
                         @endforeach
                     </select>
                 </div>
-                @endunless
                 <div class="col-md-2 mb-2 mb-md-0">
-                    <label class="small text-muted mb-1">Desde</label>
-                    <input type="date" name="desde" class="form-control form-control-sm" value="{{ request('desde') }}">
+                    <label for="envios-desde" class="small text-muted mb-1">Desde</label>
+                    <input type="date" id="envios-desde" name="desde" class="form-control form-control-sm" value="{{ request('desde') }}">
                 </div>
                 <div class="col-md-2 mb-2 mb-md-0">
-                    <label class="small text-muted mb-1">Hasta</label>
-                    <input type="date" name="hasta" class="form-control form-control-sm" value="{{ request('hasta') }}">
+                    <label for="envios-hasta" class="small text-muted mb-1">Hasta</label>
+                    <input type="date" id="envios-hasta" name="hasta" class="form-control form-control-sm" value="{{ request('hasta') }}">
                 </div>
                 <div class="col-auto mb-2 mb-md-0">
                     <label class="small text-muted mb-1 d-block">&nbsp;</label>
@@ -150,22 +121,13 @@
                 @endcan
             </div>
         </div>
-        <div class="card-body pb-2">
-            <div class="row">
-                @forelse($items as $item)
-                    @include('logistica.envios.partials.envio-lista-card', ['item' => $item])
-                @empty
-                    <div class="col-12">
-                        <div class="envios-lista-empty">
-                            <i class="fas fa-inbox d-block"></i>
-                            <p class="mb-2">No hay envíos con esos filtros.</p>
-                            @can('pedidos.create')
-                                <a href="{{ route('pedidos.create') }}">Registrar nuevo envío</a>
-                            @endcan
-                        </div>
-                    </div>
-                @endforelse
-            </div>
+        <div class="table-responsive">
+            <table class="table table-hover op-tabla-movil mb-0">
+                <thead><tr><th>Envío</th><th>Origen / Destino</th><th>Carga</th><th>Transporte</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody>@forelse($items as $item)
+                    @include('logistica.envios.partials.envio-lista-fila', ['item' => $item])
+                @empty<tr><td colspan="6" class="op-vacio">No hay envíos con estos filtros. Limpie la búsqueda para volver a verlos.</td></tr>@endforelse</tbody>
+            </table>
         </div>
         @if($items->hasPages())
         <div class="card-footer bg-white">{{ $items->links() }}</div>

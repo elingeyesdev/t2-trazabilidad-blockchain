@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
 
 @section('title', 'Traslado '.$ruta->codigo)
 @section('page_title', ($esVistaMayorista ?? false) ? 'Recepción desde planta' : 'Traslado planta → mayorista')

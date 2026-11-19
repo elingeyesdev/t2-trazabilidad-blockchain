@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
 
 @section('title', $pedido->numero_solicitud)
 @section('page_title', 'Pedido '.$pedido->numero_solicitud)
@@ -383,6 +384,7 @@
 
 @section('content')
 @include('pedidos.partials.decision-registrada', ['pedidoDecision' => $pedido])
+@include('pedidos.partials.enlace-entrega', ['pedido' => $pedido])
 @include('recepcion.enlace-pedido', ['pedido' => $pedido])
     @php
         $det = $pedido->detalles->first();

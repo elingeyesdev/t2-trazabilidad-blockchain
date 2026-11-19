@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
 
 @section('title', 'Editar pedido #'.$pedido->pedidoid.' | AgroFusion')
 @section('page_title', 'Editar pedido')
