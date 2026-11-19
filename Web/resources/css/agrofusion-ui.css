@@ -3,6 +3,7 @@
 @import './agrofusion-shell.css';
 @import './agrofusion-modules.css';
 @import './agrofusion-operaciones.css';
+@import './agrofusion-pedidos-entregas.css';
 
 /* Shared visual system. Operational Bootstrap runtimes stay in their own layouts. */
 :root {

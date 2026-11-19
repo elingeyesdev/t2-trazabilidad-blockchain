@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
 
 @section('title', $ruta->codigo.' | AgroFusion')
 @section('page_title', 'Ruta de distribución')

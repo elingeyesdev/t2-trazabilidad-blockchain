@@ -1,0 +1,44 @@
+/* Pedidos y entregas usan las mismas superficies que inventario y planta. */
+.ag-pedidos-entregas .op-filtros { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; align-items:end; }
+.ag-pedidos-entregas .op-filtros .form-group { margin:0; min-width:0; }
+.ag-pedidos-entregas .op-listado-cabecera,
+.ag-pedidos-entregas .op-comprobante { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.ag-pedidos-entregas .op-comprobante + .op-comprobante { margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+.ag-pedidos-entregas .op-linea-pedido + .op-linea-pedido { margin-top:8px; }
+.ag-pedidos-entregas .op-estado { display:inline-block; padding:3px 8px; border-radius:4px; background:#f1f3f5; color:var(--txt-2); font-size:12px; font-weight:500; line-height:1.5; }
+.ag-pedidos-entregas :is(.op-estado--confirmado,.op-estado--success,.op-estado--recibido) { background:var(--brand-lt); color:var(--brand-dk); }
+.ag-pedidos-entregas :is(.op-estado--warning,.op-estado--agricola,.op-estado--produccion) { background:#fff7e6; color:#8a5b18; }
+.ag-pedidos-entregas :is(.op-estado--danger,.op-estado--rechazado) { background:#fbeeee; color:#9b3535; }
+.ag-pedidos-entregas :is(.op-estado--primary,.op-estado--info,.op-estado--camino,.op-estado--logistica) { background:#eef3f8; color:#405e7a; }
+body.ag-ui .ag-pedidos-entregas :is(.env-hero,.ruta-hero,.pdv-revision-banner,.env-decision-head,.wizard-header,.env-seccion-nav) { background:var(--surface) !important; background-image:none !important; border:1px solid var(--border); border-radius:4px; box-shadow:none; color:var(--txt-1); }
+body.ag-ui .ag-pedidos-entregas :is(.env-hero-titulo,.ruta-hero-codigo,.pdv-pedido-titulo) { font-size:20px; font-weight:600; color:var(--txt-1); }
+body.ag-ui .ag-pedidos-entregas .env-seccion-nav__link { border-radius:3px; font-weight:500; box-shadow:none; }
+body.ag-ui .ag-pedidos-entregas .env-seccion-nav__link.active { background:var(--brand-lt); color:var(--brand-dk); box-shadow:none; }
+body.ag-ui .ag-pedidos-entregas :is(.envios-lista-card,.envios-filtros-card) { border-top-width:1px; }
+body.ag-ui .ag-pedidos-entregas .op-tabla-movil :is(th,td) { white-space:normal; overflow-wrap:anywhere; }
+body.ag-ui .ag-pedidos-entregas .op-tabla-movil .op-acciones { min-width:130px; }
+body.ag-ui .ag-pedidos-entregas .op-tabla-movil .btn { white-space:normal; }
+body.ag-ui .ag-pedidos-entregas :is(.pdv-paso-card,.pdv-info-tile,.env-paso-mini) { box-shadow:none; border-radius:4px; }
+body.ag-ui .ag-pedidos-entregas :is(.pdv-revision-banner__icon,.env-decision-icon) { display:none; }
+@media(max-width:991px) { .ag-pedidos-entregas .op-filtros { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:767px) {
+    .ag-pedidos-entregas .op-tabla-movil thead { display:none; }
+    .ag-pedidos-entregas .op-tabla-movil,
+    .ag-pedidos-entregas .op-tabla-movil :is(tbody,tr,td) { display:block; width:100%; }
+    body.ag-ui .ag-pedidos-entregas .op-tabla-movil tr { padding:12px 16px; border-bottom:1px solid var(--border); }
+    body.ag-ui .ag-pedidos-entregas .op-tabla-movil tbody td { padding:6px 0; border:0; }
+    .ag-pedidos-entregas .op-tabla-movil td[data-label]::before { content:attr(data-label); display:block; color:var(--txt-3); font-size:11px; margin-bottom:4px; }
+    body.ag-ui .ag-pedidos-entregas .op-tabla-movil .btn { min-height:38px; }
+    .ag-pedidos-entregas .op-tabla-movil .op-acciones { justify-content:flex-start; }
+}
+@media(max-width:575px) {
+    body.ag-ui .ag-pedidos-entregas .wizard-progress .row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:0; }
+    body.ag-ui .ag-pedidos-entregas .wizard-progress .step-item { max-width:none; width:auto; padding:0; min-width:0; }
+    body.ag-ui .ag-pedidos-entregas .wizard-progress .step-badge { width:32px; height:32px; padding:0; line-height:32px; font-size:16px; border-radius:4px; }
+    body.ag-ui .ag-pedidos-entregas .wizard-progress :is(.step-title,.step-label) { overflow-wrap:normal; word-break:normal; }
+    .ag-pedidos-entregas .op-filtros { grid-template-columns:minmax(0,1fr); }
+    .ag-pedidos-entregas .op-comprobante > a { width:100%; }
+    .ag-pedidos-entregas :is(.pdv-info-grid,.env-hero-top,.pdv-form-grid) { grid-template-columns:minmax(0,1fr); }
+    .ag-pedidos-entregas .op-envios-filtros .col-auto { flex:1 1 100%; }
+    .ag-pedidos-entregas .op-envios-filtros .col-auto .btn { width:100%; }
+}

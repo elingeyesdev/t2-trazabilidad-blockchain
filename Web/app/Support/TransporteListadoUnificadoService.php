@@ -22,6 +22,8 @@ final class TransporteListadoUnificadoService
      */
     public function prepararListado(Request $request): array
     {
+        $request->validate(['q' => ['nullable', 'string', 'max:150'], 'desde' => ['nullable', 'date_format:Y-m-d'],
+            'hasta' => ['nullable', 'date_format:Y-m-d', ...($request->filled('desde') ? ['after_or_equal:desde'] : [])], 'vehiculo' => ['nullable', 'string', 'max:40']]);
         $user = $request->user();
         $esTransportista = UsuarioRol::esTransportista($user);
         $filtroTransportista = (int) $request->query('transportista', 0);
@@ -178,11 +180,11 @@ final class TransporteListadoUnificadoService
         }
 
         if ($request->filled('desde')) {
-            $query->whereDate('fecha_salida', '>=', $request->string('desde')->toString());
+            $query->whereDate(\Illuminate\Support\Facades\DB::raw('COALESCE(fecha_salida, created_at)'), '>=', $request->string('desde')->toString());
         }
 
         if ($request->filled('hasta')) {
-            $query->whereDate('fecha_salida', '<=', $request->string('hasta')->toString());
+            $query->whereDate(\Illuminate\Support\Facades\DB::raw('COALESCE(fecha_salida, created_at)'), '<=', $request->string('hasta')->toString());
         }
 
         return $query;
