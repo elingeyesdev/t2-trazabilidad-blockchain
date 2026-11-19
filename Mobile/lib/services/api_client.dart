@@ -120,6 +120,63 @@ class ApiClient {
     }
   }
 
+  Future<Uint8List> getBytes(
+    String path, {
+    bool authenticated = true,
+    String? bearerToken,
+  }) async {
+    final uri = config.endpoint(path);
+    final abort = Completer<void>();
+    final request =
+        http.AbortableRequest('GET', uri, abortTrigger: abort.future)
+          ..followRedirects = false
+          ..headers['Accept'] = 'image/*, application/octet-stream';
+
+    try {
+      final token = authenticated
+          ? bearerToken ?? await _sessionStorage.readToken()
+          : null;
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await _client
+          .send(request)
+          .then(http.Response.fromStream)
+          .timeout(
+            config.timeout,
+            onTimeout: () {
+              abort.complete();
+              throw TimeoutException('La API no respondió a tiempo.');
+            },
+          );
+
+      if (response.statusCode == 401 && authenticated) {
+        await _expireSession(token);
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw _httpError(response);
+      }
+      if (response.bodyBytes.isEmpty) {
+        throw const ApiException('La fotografía recibida está vacía.');
+      }
+      return response.bodyBytes;
+    } on TimeoutException {
+      throw const ApiException(
+        'La descarga de la fotografía tardó demasiado. Intenta de nuevo.',
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        'No se pudo conectar con el servidor para cargar la fotografía.',
+      );
+    } on PlatformException {
+      throw const ApiException(
+        'No se pudo acceder al almacenamiento de sesión.',
+      );
+    }
+  }
+
   Future<void> _expireSession(String? requestToken) async {
     try {
       final current = await _sessionStorage.readToken();

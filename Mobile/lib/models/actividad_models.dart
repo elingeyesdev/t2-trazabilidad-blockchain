@@ -200,23 +200,26 @@ class ActividadEditableData {
     required this.id,
     required this.loteId,
     required this.description,
+    this.loteName,
     this.responsableId,
     this.ejecutorId,
+    this.closingResponsibleName,
+    this.closedAt,
     this.observations,
     this.resultado,
     this.evidenceUrl,
+    this.evidenceStatus,
+    this.hasEvidence = false,
     this.consumos = const [],
     this.isCompleted = false,
   });
 
   factory ActividadEditableData.fromJson(Map<String, dynamic> row) {
     final id = _asInt(row['actividadid']) ?? 0;
-    final loteId =
-        _asInt(row['loteid']) ??
-        (row['lote'] is Map<String, dynamic>
-            ? _asInt((row['lote'] as Map<String, dynamic>)['loteid'])
-            : null) ??
-        0;
+    final loteMap = row['lote'] is Map<String, dynamic>
+        ? row['lote'] as Map<String, dynamic>
+        : null;
+    final loteId = _asInt(row['loteid']) ?? _asInt(loteMap?['loteid']) ?? 0;
     final responsableId =
         _asInt(row['usuarioid']) ??
         (row['usuario'] is Map<String, dynamic>
@@ -227,15 +230,29 @@ class ActividadEditableData {
         (row['ejecutor'] is Map<String, dynamic>
             ? _asInt((row['ejecutor'] as Map<String, dynamic>)['usuarioid'])
             : null);
+    final closingResponsibleName =
+        _personName(row['responsable_cierre']) ?? _personName(row['ejecutor']);
+    final evidenceUrl = _asText(row['evidencia_foto_url']);
+    final evidenceStatus = _asText(row['evidencia_estado'])?.toLowerCase();
+    final hasEvidence =
+        row['tiene_evidencia'] == true ||
+        evidenceUrl != null ||
+        evidenceStatus == 'disponible' ||
+        evidenceStatus == 'no_disponible';
     return ActividadEditableData(
       id: id,
       loteId: loteId,
+      loteName: _asText(loteMap?['nombre']),
       description: _asText(row['descripcion']) ?? 'Actividad #$id',
       responsableId: responsableId,
       ejecutorId: ejecutorId,
+      closingResponsibleName: closingResponsibleName,
+      closedAt: _asText(row['fechafin']),
       observations: _asText(row['observaciones']),
       resultado: _asText(row['resultado']),
-      evidenceUrl: _asText(row['evidencia_foto_url']),
+      evidenceUrl: evidenceUrl,
+      evidenceStatus: evidenceStatus,
+      hasEvidence: hasEvidence,
       consumos: ActividadConsumoRecord.listFromJson(row['consumos']),
       isCompleted: row['fechafin'] != null,
     );
@@ -243,14 +260,33 @@ class ActividadEditableData {
 
   final int id;
   final int loteId;
+  final String? loteName;
   final String description;
   final int? responsableId;
   final int? ejecutorId;
+  final String? closingResponsibleName;
+  final String? closedAt;
   final String? observations;
   final String? resultado;
   final String? evidenceUrl;
+  final String? evidenceStatus;
+  final bool hasEvidence;
   final List<ActividadConsumoRecord> consumos;
   final bool isCompleted;
+
+  bool get isEvidenceAvailable =>
+      evidenceStatus == 'disponible' ||
+      (evidenceStatus == null && evidenceUrl != null);
+
+  bool get isEvidenceUnavailable => evidenceStatus == 'no_disponible';
+}
+
+String? _personName(Object? value) {
+  if (value is! Map<String, dynamic>) return null;
+  final first = _asText(value['nombre']);
+  final last = _asText(value['apellido']);
+  final parts = [?first, ?last];
+  return parts.isEmpty ? null : parts.join(' ');
 }
 
 class AlmacenOption {

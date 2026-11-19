@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
@@ -13,6 +14,7 @@ import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
 import 'module_access_denied.dart';
+import 'module_detail_screen.dart';
 
 class LoteActivityHistoryScreen extends StatefulWidget {
   const LoteActivityHistoryScreen({
@@ -165,6 +167,7 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
         constraints: const BoxConstraints(maxWidth: 640),
         child: ListView(
           key: ValueKey((widget.loteId, page.currentPage)),
+          dragStartBehavior: DragStartBehavior.down,
           padding: const EdgeInsets.fromLTRB(20, 6, 20, 48),
           children: [
             Container(
@@ -226,7 +229,16 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
             for (final activity in page.records)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: ActivityHistoryCard(activity: activity),
+                child: ActivityHistoryCard(
+                  activity: activity,
+                  onTap: () => Navigator.of(context).pushNamed(
+                    '${AppModule.actividades.route}/${activity.id}',
+                    arguments: ActivityDetailArgs(
+                      returnToLoteId: widget.loteId,
+                      returnToLoteName: widget.loteName,
+                    ),
+                  ),
+                ),
               ),
             if (page.lastPage > 1) ...[
               const SizedBox(height: 12),

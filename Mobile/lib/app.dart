@@ -330,6 +330,14 @@ class _AgroFusionAppState extends State<AgroFusionApp>
           };
           final id = int.tryParse(rawId);
           if (module == null || id == null || id <= 0) return null;
+          final detailArgs = settings.arguments is ActivityDetailArgs
+              ? settings.arguments as ActivityDetailArgs
+              : null;
+          final initialNotice =
+              detailArgs?.initialNotice ??
+              (settings.arguments is String
+                  ? settings.arguments as String
+                  : null);
           return MaterialPageRoute<void>(
             settings: settings,
             builder: (_) => _sessionGate(
@@ -340,9 +348,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 user: _auth.user!,
                 service: ModuleService(_api),
                 onRefreshPermissions: _auth.restoreSession,
-                initialNotice: settings.arguments is String
-                    ? settings.arguments as String
-                    : null,
+                initialNotice: initialNotice,
+                returnToLoteId: detailArgs?.returnToLoteId,
+                returnToLoteName: detailArgs?.returnToLoteName,
                 onLoteUpdated: module == AppModule.lotes
                     ? () => _loteUpdates.value++
                     : null,

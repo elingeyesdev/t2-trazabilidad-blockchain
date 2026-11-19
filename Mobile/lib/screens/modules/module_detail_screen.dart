@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../models/actividad_models.dart';
@@ -21,6 +23,18 @@ import 'actividad_form_screen.dart';
 import 'lote_form_screen.dart';
 import 'module_access_denied.dart';
 
+class ActivityDetailArgs {
+  const ActivityDetailArgs({
+    this.initialNotice,
+    this.returnToLoteId,
+    this.returnToLoteName,
+  });
+
+  final String? initialNotice;
+  final int? returnToLoteId;
+  final String? returnToLoteName;
+}
+
 class ModuleDetailScreen extends StatefulWidget {
   const ModuleDetailScreen({
     super.key,
@@ -30,6 +44,8 @@ class ModuleDetailScreen extends StatefulWidget {
     required this.service,
     required this.onRefreshPermissions,
     this.initialNotice,
+    this.returnToLoteId,
+    this.returnToLoteName,
     this.onLoteUpdated,
     this.onActividadUpdated,
   });
@@ -40,6 +56,8 @@ class ModuleDetailScreen extends StatefulWidget {
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
   final String? initialNotice;
+  final int? returnToLoteId;
+  final String? returnToLoteName;
   final VoidCallback? onLoteUpdated;
   final VoidCallback? onActividadUpdated;
 
@@ -50,6 +68,8 @@ class ModuleDetailScreen extends StatefulWidget {
 class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   late Future<ModuleRecord> _request = _load();
   late String? _notice = widget.initialNotice;
+  Future<Uint8List>? _evidenceRequest;
+  int? _evidenceActivityId;
   final _obsFormKey = GlobalKey<FormState>();
   final _obsController = TextEditingController();
   bool _editingObservations = false;
@@ -68,9 +88,76 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       widget.service.loadDetail(widget.module, widget.user, widget.recordId);
 
   void _refresh() => setState(() {
+    _evidenceRequest = null;
+    _evidenceActivityId = null;
     _request = _load();
     _request.ignore();
   });
+
+  Future<Uint8List>? _ensureEvidenceRequest(ModuleRecord record) {
+    final actividad = record.actividadData;
+    if (_isLote ||
+        actividad == null ||
+        !actividad.isCompleted ||
+        !actividad.isEvidenceAvailable) {
+      return null;
+    }
+    if (_evidenceRequest == null || _evidenceActivityId != record.id) {
+      _evidenceActivityId = record.id;
+      _evidenceRequest = widget.service.loadActividadEvidence(
+        widget.user,
+        record.id,
+      );
+      _evidenceRequest!.ignore();
+    }
+    return _evidenceRequest;
+  }
+
+  void _retryEvidence(int actividadId) => setState(() {
+    _evidenceActivityId = actividadId;
+    _evidenceRequest = widget.service.loadActividadEvidence(
+      widget.user,
+      actividadId,
+    );
+    _evidenceRequest!.ignore();
+  });
+
+  Future<void> _openEvidenceViewer(Uint8List bytes, String title) =>
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => Dialog.fullscreen(
+          backgroundColor: Colors.black,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              leading: IconButton(
+                tooltip: 'Cerrar vista ampliada',
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+              title: Text(title, overflow: TextOverflow.ellipsis),
+            ),
+            body: Center(
+              child: InteractiveViewer(
+                key: const ValueKey('actividad.evidencia.viewer'),
+                minScale: 0.8,
+                maxScale: 4.0,
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Icon(
+                    Icons.broken_image_outlined,
+                    size: 72,
+                    color: Colors.white70,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 
   Future<void> _editLote(ModuleRecord record) async {
     final result = await Navigator.of(context).pushNamed(
@@ -122,6 +209,8 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       widget.onLoteUpdated?.call();
       setState(() {
         _editingObservations = false;
+        _evidenceRequest = null;
+        _evidenceActivityId = null;
         _notice =
             'La actividad "${result.record.title}" fue completada con su fotografía.';
         _request = _load();
@@ -192,7 +281,28 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
     }
   }
 
+  void _openLoteHistory(int loteId, String? loteName) {
+    final navigator = Navigator.of(context);
+    final historyRoute = '${AppModule.lotes.route}/$loteId/historial';
+    if (widget.returnToLoteId == loteId) {
+      var foundHistory = false;
+      navigator.popUntil((route) {
+        foundHistory = route.settings.name == historyRoute;
+        return foundHistory || route.isFirst;
+      });
+      if (!foundHistory) {
+        navigator.pushNamed(historyRoute, arguments: loteName);
+      }
+      return;
+    }
+    navigator.pushNamed(historyRoute, arguments: loteName);
+  }
+
   void _backToList() {
+    if (!_isLote && widget.returnToLoteId != null) {
+      _openLoteHistory(widget.returnToLoteId!, widget.returnToLoteName);
+      return;
+    }
     final navigator = Navigator.of(context);
     final listRoute = widget.module.route;
     var foundList = false;
@@ -217,10 +327,14 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           onRefreshPermissions: widget.onRefreshPermissions,
         );
       }
+      final returningToHistory = !_isLote && widget.returnToLoteId != null;
+      final backLabel = returningToHistory
+          ? 'Volver al historial del lote'
+          : 'Volver a la lista';
       return Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            tooltip: 'Volver a la lista',
+            tooltip: backLabel,
             onPressed: _backToList,
             icon: const Icon(Icons.arrow_back_rounded),
           ),
@@ -258,7 +372,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           child: OutlinedButton.icon(
             onPressed: _backToList,
             icon: const Icon(Icons.arrow_back_rounded),
-            label: const Text('Volver a la lista'),
+            label: Text(backLabel),
           ),
         ),
       );
@@ -267,14 +381,24 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
   Widget _details(ModuleRecord record) {
     final look = widget.module.look;
+    final actividad = record.actividadData;
     final fields = <MapEntry<String, String>>[
       ...(record.fieldInfo?.details ?? record.details).entries.where(
         (field) =>
             field.key != 'Identificador' &&
             (record.fieldInfo?.status == null || field.key != 'Estado'),
       ),
-      if (!_isLote && record.actividadData?.resultado != null)
-        MapEntry('Resultado', record.actividadData!.resultado!),
+      if (!_isLote &&
+          actividad != null &&
+          actividad.isCompleted &&
+          actividad.closingResponsibleName != null)
+        MapEntry('Responsable de cierre', actividad.closingResponsibleName!),
+      if (!_isLote && actividad != null) ...[
+        if (actividad.resultado != null)
+          MapEntry('Resultado', actividad.resultado!)
+        else if (actividad.isCompleted)
+          const MapEntry('Resultado', 'Sin resultado registrado'),
+      ],
     ];
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -436,38 +560,94 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   ],
                 ),
               ),
+              if (!_isLote && actividad != null && actividad.isCompleted) ...[
+                const SizedBox(height: 24),
+                SectionTitle('Fotografía de evidencia', color: look.tone),
+                const SizedBox(height: 14),
+                _buildEvidenceSection(record, actividad),
+              ],
               if (!_isLote &&
-                  (record.actividadData?.consumos.isNotEmpty ?? false)) ...[
+                  actividad != null &&
+                  (actividad.isCompleted || actividad.consumos.isNotEmpty)) ...[
                 const SizedBox(height: 24),
                 SectionTitle('Insumos utilizados', color: look.tone),
                 const SizedBox(height: 14),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(AppTheme.radius),
-                    border: Border.all(color: AppTheme.ink, width: 2),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (
-                        var i = 0;
-                        i < record.actividadData!.consumos.length;
-                        i++
-                      ) ...[
-                        if (i > 0) const Divider(height: 1),
-                        DetailField(
-                          label: record.actividadData!.consumos[i].name,
-                          value: record
-                              .actividadData!
-                              .consumos[i]
-                              .formattedQuantity,
-                        ),
+                if (actividad.consumos.isNotEmpty)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                      border: Border.all(color: AppTheme.ink, width: 2),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < actividad.consumos.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          DetailField(
+                            label: actividad.consumos[i].name,
+                            value: actividad.consumos[i].formattedQuantity,
+                          ),
+                        ],
                       ],
+                    ),
+                  )
+                else
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message: 'Sin insumos registrados en esta actividad.',
+                  ),
+              ],
+              if (!_isLote &&
+                  actividad != null &&
+                  actividad.loteId > 0 &&
+                  AppModule.lotes.canOpen(widget.user)) ...[
+                const SizedBox(height: 24),
+                PressableCard(
+                  key: const ValueKey('actividad.ver_historial_lote'),
+                  onTap: () => _openLoteHistory(
+                    actividad.loteId,
+                    actividad.loteName ?? widget.returnToLoteName,
+                  ),
+                  color: AppTheme.maizeSoft,
+                  child: Row(
+                    children: [
+                      const IconMedallion(
+                        icon: Icons.history_rounded,
+                        tone: AppTheme.maize,
+                        ink: AppTheme.ink,
+                        size: 52,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.returnToLoteId == actividad.loteId
+                                  ? 'Volver al historial del lote'
+                                  : 'Historial del lote',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              actividad.loteName ?? 'Lote #${actividad.loteId}',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppTheme.ink),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 32,
+                        color: AppTheme.ink,
+                      ),
                     ],
                   ),
                 ),
@@ -575,6 +755,118 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildEvidenceSection(
+    ModuleRecord record,
+    ActividadEditableData actividad,
+  ) {
+    if (actividad.isEvidenceUnavailable) {
+      return const AppNotice(
+        tone: AppNoticeTone.info,
+        message:
+            'Fotografía no disponible: el archivo registrado no está disponible en el servidor.',
+      );
+    }
+    if (!actividad.isEvidenceAvailable) {
+      return const AppNotice(
+        tone: AppNoticeTone.info,
+        message: 'Sin fotografía registrada para esta actividad.',
+      );
+    }
+    final evidenceFuture = _ensureEvidenceRequest(record);
+    return FutureBuilder<Uint8List>(
+      future: evidenceFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(AppTheme.radius),
+              border: Border.all(color: AppTheme.ink, width: 2),
+            ),
+            child: const Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 12),
+                Expanded(child: Text('Cargando fotografía de evidencia...')),
+              ],
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          final error = snapshot.error;
+          final message = error is ApiException
+              ? error.message
+              : 'No se pudo cargar la fotografía de evidencia.';
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppNotice(tone: AppNoticeTone.error, message: message),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('actividad.evidencia.reintentar'),
+                  onPressed: () => _retryEvidence(record.id),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Reintentar carga'),
+                ),
+              ),
+            ],
+          );
+        }
+        final bytes = snapshot.requireData;
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(AppTheme.radius),
+            border: Border.all(color: AppTheme.ink, width: 2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              InkWell(
+                key: const ValueKey('actividad.evidencia.imagen'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _openEvidenceViewer(bytes, record.title),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.memory(
+                    bytes,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const SizedBox(
+                      height: 180,
+                      child: Center(
+                        child: Icon(Icons.broken_image_outlined, size: 64),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('actividad.evidencia.ampliar'),
+                  onPressed: () => _openEvidenceViewer(bytes, record.title),
+                  icon: const Icon(Icons.zoom_in_rounded),
+                  label: const Text('Ampliar fotografía'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
 
 import '../models/actividad_models.dart';
@@ -483,5 +485,23 @@ class ModuleService {
     }
     final response = await _api.request('GET', AppModule.insumos.endpoint);
     return InsumoOption.listFromJson(response);
+  }
+
+  Future<Uint8List> loadActividadEvidence(
+    AuthUser user,
+    int actividadId,
+  ) async {
+    if (!AppModule.actividades.canOpen(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta fotografía.',
+        statusCode: 403,
+      );
+    }
+    if (actividadId <= 0) {
+      throw const ApiException('La actividad solicitada no es válida.');
+    }
+    return _api.getBytes(
+      '${AppModule.actividades.endpoint}/$actividadId/evidencia',
+    );
   }
 }
