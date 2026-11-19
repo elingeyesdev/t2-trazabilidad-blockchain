@@ -199,8 +199,30 @@ class AlmacenExistencia {
   double get disponibleValue =>
       double.tryParse(cantidadDisponible.replaceAll(',', '.')) ?? 0;
 
+  double get vencidaValue =>
+      double.tryParse(cantidadVencida.replaceAll(',', '.')) ?? 0;
+
+  double get reservadaValue =>
+      double.tryParse(cantidadReservada.replaceAll(',', '.')) ?? 0;
+
   double get sinPartidaValue =>
       double.tryParse(cantidadSinPartida.replaceAll(',', '.')) ?? 0;
+
+  List<ExistenciaPartida> get partidasVencidas => partidas
+      .where(
+        (p) =>
+            p.vencimientoEstado == 'vencido' &&
+            (double.tryParse(p.cantidadFisica.replaceAll(',', '.')) ?? 0) > 0,
+      )
+      .toList();
+
+  List<ExistenciaPartida> get partidasProximasAVencer => partidas
+      .where(
+        (p) =>
+            p.vencimientoEstado == 'proximo_a_vencer' &&
+            (double.tryParse(p.cantidadFisica.replaceAll(',', '.')) ?? 0) > 0,
+      )
+      .toList();
 
   String get formattedDisponible =>
       '${formatInventarioDecimal(cantidadDisponible)} $unidad';
@@ -208,7 +230,156 @@ class AlmacenExistencia {
   String get formattedFisica =>
       '${formatInventarioDecimal(cantidadFisica)} $unidad';
 
+  String get formattedVencida =>
+      '${formatInventarioDecimal(cantidadVencida)} $unidad';
+
   String get dropdownLabel => '$nombre ($formattedDisponible disp.)';
+}
+
+class AlmacenFiltroOption {
+  const AlmacenFiltroOption({required this.id, required this.name});
+
+  final int id;
+  final String name;
+
+  static List<AlmacenFiltroOption> listFromJson(Object? json) {
+    final rows = json is Map<String, dynamic> ? json['data'] : json;
+    if (rows is! List) {
+      throw const ApiException('No pudimos interpretar los almacenes.');
+    }
+    final result = <AlmacenFiltroOption>[];
+    for (final row in rows) {
+      if (row is! Map<String, dynamic>) continue;
+      if (row['activo'] == false) continue;
+      final id = _asInt(row['almacenid']);
+      final name = _asText(row['nombre']);
+      if (id == null || id <= 0 || name == null) continue;
+      result.add(AlmacenFiltroOption(id: id, name: name));
+    }
+    return result;
+  }
+}
+
+enum InventarioAlertKind { vencido, proximoAVencer, stockBajo }
+
+class InventarioAlertItem {
+  const InventarioAlertItem({
+    required this.kind,
+    required this.almacenId,
+    required this.almacenNombre,
+    required this.insumoId,
+    required this.productoNombre,
+    required this.cantidadText,
+    this.fechaVencimiento,
+    this.minimoText,
+    this.referenciaPartida,
+  });
+
+  final InventarioAlertKind kind;
+  final int almacenId;
+  final String almacenNombre;
+  final int insumoId;
+  final String productoNombre;
+  final String cantidadText;
+  final String? fechaVencimiento;
+  final String? minimoText;
+  final String? referenciaPartida;
+
+  String get statusLabel => switch (kind) {
+    InventarioAlertKind.vencido => 'Vencido',
+    InventarioAlertKind.proximoAVencer => 'Próximo a vencer',
+    InventarioAlertKind.stockBajo => 'Existencias bajas',
+  };
+
+  String get detailSummary => switch (kind) {
+    InventarioAlertKind.vencido =>
+      'Cantidad vencida: $cantidadText · Fecha de vencimiento: ${fechaVencimiento ?? 'Sin fecha'}',
+    InventarioAlertKind.proximoAVencer =>
+      'Cantidad próxima a vencer: $cantidadText · Vence el ${fechaVencimiento ?? 'Sin fecha'}',
+    InventarioAlertKind.stockBajo =>
+      'Disponible: $cantidadText · Mínimo configurado: ${minimoText ?? 'No definido'}',
+  };
+}
+
+List<InventarioAlertItem> buildAlertsFromExistencias({
+  required int almacenId,
+  required String almacenNombre,
+  required List<AlmacenExistencia> items,
+}) {
+  final alerts = <InventarioAlertItem>[];
+  for (final item in items) {
+    final vencidas = item.partidasVencidas;
+    if (vencidas.isNotEmpty) {
+      for (final partida in vencidas) {
+        alerts.add(
+          InventarioAlertItem(
+            kind: InventarioAlertKind.vencido,
+            almacenId: almacenId,
+            almacenNombre: almacenNombre,
+            insumoId: item.insumoId,
+            productoNombre: item.nombre,
+            cantidadText:
+                '${formatInventarioDecimal(partida.cantidadFisica)} ${item.unidad}',
+            fechaVencimiento: partida.fechaVencimiento,
+            referenciaPartida: partida.referencia,
+          ),
+        );
+      }
+    } else if (item.vencidaValue > 0) {
+      alerts.add(
+        InventarioAlertItem(
+          kind: InventarioAlertKind.vencido,
+          almacenId: almacenId,
+          almacenNombre: almacenNombre,
+          insumoId: item.insumoId,
+          productoNombre: item.nombre,
+          cantidadText: item.formattedVencida,
+        ),
+      );
+    }
+
+    for (final partida in item.partidasProximasAVencer) {
+      alerts.add(
+        InventarioAlertItem(
+          kind: InventarioAlertKind.proximoAVencer,
+          almacenId: almacenId,
+          almacenNombre: almacenNombre,
+          insumoId: item.insumoId,
+          productoNombre: item.nombre,
+          cantidadText:
+              '${formatInventarioDecimal(partida.cantidadFisica)} ${item.unidad}',
+          fechaVencimiento: partida.fechaVencimiento,
+          referenciaPartida: partida.referencia,
+        ),
+      );
+    }
+
+    if (item.existenciasBajas) {
+      alerts.add(
+        InventarioAlertItem(
+          kind: InventarioAlertKind.stockBajo,
+          almacenId: almacenId,
+          almacenNombre: almacenNombre,
+          insumoId: item.insumoId,
+          productoNombre: item.nombre,
+          cantidadText: item.formattedDisponible,
+          minimoText: item.minimo == null
+              ? null
+              : '${formatInventarioDecimal(item.minimo!)} ${item.unidad}',
+        ),
+      );
+    }
+  }
+  alerts.sort((a, b) {
+    final kindCmp = a.kind.index.compareTo(b.kind.index);
+    if (kindCmp != 0) return kindCmp;
+    final dateA = a.fechaVencimiento ?? '9999-99-99';
+    final dateB = b.fechaVencimiento ?? '9999-99-99';
+    final dateCmp = dateA.compareTo(dateB);
+    if (dateCmp != 0) return dateCmp;
+    return a.productoNombre.compareTo(b.productoNombre);
+  });
+  return alerts;
 }
 
 class AlmacenExistenciasPage {
