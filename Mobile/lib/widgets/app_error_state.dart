@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../theme/app_theme.dart';
 import 'app_empty_state.dart';
 
 class AppErrorState extends StatelessWidget {
@@ -16,7 +18,9 @@ class AppErrorState extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       child: AppEmptyState(
-        icon: Icons.cloud_off_outlined,
+        icon: Icons.cloud_off_rounded,
+        tone: AppTheme.claySoft,
+        ink: AppTheme.clay,
         title: 'No pudimos cargar la información',
         message: message,
         action: FilledButton.icon(

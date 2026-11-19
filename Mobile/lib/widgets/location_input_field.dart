@@ -119,11 +119,44 @@ class _LocationInputFieldState extends State<LocationInputField> {
   DeviceLocation? _captured;
 
   @override
+  void initState() {
+    super.initState();
+    final initial = _parseCoordinates();
+    if (initial != null) {
+      _captured = initial;
+    }
+  }
+
+  @override
   void dispose() {
     _locationFocus.dispose();
     if (widget.latitudeController == null) _latController.dispose();
     if (widget.longitudeController == null) _lngController.dispose();
     super.dispose();
+  }
+
+  DeviceLocation? _parseCoordinates() {
+    final lat = double.tryParse(
+      _latController.text.trim().replaceAll(',', '.'),
+    );
+    final lng = double.tryParse(
+      _lngController.text.trim().replaceAll(',', '.'),
+    );
+    if (lat != null &&
+        lng != null &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180) {
+      return DeviceLocation(
+        latitude: lat,
+        longitude: lng,
+        address: widget.controller.text.trim().isEmpty
+            ? null
+            : widget.controller.text.trim(),
+      );
+    }
+    return null;
   }
 
   Future<void> _useDeviceLocation() async {
@@ -177,31 +210,16 @@ class _LocationInputFieldState extends State<LocationInputField> {
   }
 
   void _syncManualCoordinates() {
-    final lat = double.tryParse(
-      _latController.text.trim().replaceAll(',', '.'),
-    );
-    final lng = double.tryParse(
-      _lngController.text.trim().replaceAll(',', '.'),
-    );
-    if (lat != null &&
-        lng != null &&
-        lat >= -90 &&
-        lat <= 90 &&
-        lng >= -180 &&
-        lng <= 180) {
-      final updated = DeviceLocation(
-        latitude: lat,
-        longitude: lng,
-        address: widget.controller.text.trim().isEmpty
-            ? null
-            : widget.controller.text.trim(),
-      );
-      setState(() => _captured = updated);
-      widget.onCoordinatesChanged?.call(updated);
-    } else {
-      setState(() => _captured = null);
-      widget.onCoordinatesChanged?.call(null);
-    }
+    final updated = _parseCoordinates();
+    setState(() => _captured = updated);
+    widget.onCoordinatesChanged?.call(updated);
+  }
+
+  void _clearCoordinates() {
+    _latController.clear();
+    _lngController.clear();
+    setState(() => _captured = null);
+    widget.onCoordinatesChanged?.call(null);
   }
 
   @override
@@ -306,6 +324,16 @@ class _LocationInputFieldState extends State<LocationInputField> {
                     ),
                   ),
                 ),
+                if (widget.allowManualCoordinates)
+                  IconButton(
+                    tooltip: 'Quitar coordenadas',
+                    onPressed: !widget.enabled ? null : _clearCoordinates,
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: AppTheme.forest,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -363,7 +391,16 @@ class _LocationInputFieldState extends State<LocationInputField> {
                         labelText: 'Latitud (opcional)',
                         hintText: '-17.7833',
                       ),
-                      validator: validateLatitude,
+                      validator: (value) {
+                        final rangeError = validateLatitude(value);
+                        if (rangeError != null) return rangeError;
+                        final hasLat = value != null && value.trim().isNotEmpty;
+                        final hasLng = _lngController.text.trim().isNotEmpty;
+                        if (!hasLat && hasLng) {
+                          return 'Indica también la latitud o deja ambas vacías.';
+                        }
+                        return null;
+                      },
                       onChanged: (_) => _syncManualCoordinates(),
                     ),
                   ),
@@ -384,7 +421,16 @@ class _LocationInputFieldState extends State<LocationInputField> {
                         labelText: 'Longitud (opcional)',
                         hintText: '-63.1821',
                       ),
-                      validator: validateLongitude,
+                      validator: (value) {
+                        final rangeError = validateLongitude(value);
+                        if (rangeError != null) return rangeError;
+                        final hasLng = value != null && value.trim().isNotEmpty;
+                        final hasLat = _latController.text.trim().isNotEmpty;
+                        if (!hasLng && hasLat) {
+                          return 'Indica también la longitud o deja ambas vacías.';
+                        }
+                        return null;
+                      },
                       onChanged: (_) => _syncManualCoordinates(),
                     ),
                   ),

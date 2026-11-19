@@ -1,5 +1,8 @@
+import 'actividad_models.dart';
 import 'api_exception.dart';
+import 'cosecha_models.dart';
 import 'field_record_info.dart';
+import 'lote_models.dart';
 
 class ModulePage {
   const ModulePage(this.records, {this.currentPage = 1, this.lastPage = 1});
@@ -62,6 +65,9 @@ class ModuleRecord {
     required this.title,
     required this.details,
     this.fieldInfo,
+    this.loteData,
+    this.actividadData,
+    this.cosechaData,
   });
 
   factory ModuleRecord.fromJson(
@@ -87,6 +93,10 @@ class ModuleRecord {
       return result.isEmpty ? null : result;
     }
 
+    final cosechaData = idField == 'produccionid'
+        ? CosechaDetailData.fromJson(row)
+        : null;
+
     return ModuleRecord(
       id: row[idField] as int,
       title:
@@ -102,6 +112,11 @@ class ModuleRecord {
         'actividadid' => FieldRecordInfo.actividad(row),
         _ => null,
       },
+      loteData: idField == 'loteid' ? LoteEditableData.fromJson(row) : null,
+      actividadData: idField == 'actividadid'
+          ? ActividadEditableData.fromJson(row)
+          : null,
+      cosechaData: cosechaData,
     );
   }
 
@@ -113,4 +128,7 @@ class ModuleRecord {
   final String title;
   final Map<String, String> details;
   final FieldRecordInfo? fieldInfo;
+  final LoteEditableData? loteData;
+  final ActividadEditableData? actividadData;
+  final CosechaDetailData? cosechaData;
 }

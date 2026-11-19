@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
@@ -6,11 +7,14 @@ import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/module_palette.dart';
 import '../../widgets/activity_history_card.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
+import '../../widgets/field_kit.dart';
 import 'module_access_denied.dart';
+import 'module_detail_screen.dart';
 
 class LoteActivityHistoryScreen extends StatefulWidget {
   const LoteActivityHistoryScreen({
@@ -96,6 +100,7 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
               onPressed: loading ? null : () => _showPage(_page),
               icon: const Icon(Icons.refresh_rounded),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         body: SafeArea(
@@ -104,6 +109,8 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
               : error is ApiException && error.statusCode == 404
               ? const AppEmptyState(
                   icon: Icons.search_off_rounded,
+                  tone: AppTheme.maizeSoft,
+                  ink: Color(0xFF5F4100),
                   title: 'El lote ya no está disponible',
                   message: 'Vuelve a la lista de lotes para actualizarla.',
                 )
@@ -116,20 +123,11 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
                 )
               : _activities(snapshot.requireData),
         ),
-        bottomNavigationBar: DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppTheme.line)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-              child: OutlinedButton.icon(
-                onPressed: _backToLote,
-                icon: const Icon(Icons.arrow_back_rounded),
-                label: const Text('Volver al lote'),
-              ),
-            ),
+        bottomNavigationBar: BottomActionBar(
+          child: OutlinedButton.icon(
+            onPressed: _backToLote,
+            icon: const Icon(Icons.arrow_back_rounded),
+            label: const Text('Volver al lote'),
           ),
         ),
       );
@@ -142,7 +140,9 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
       return Semantics(
         liveRegion: true,
         child: AppEmptyState(
-          icon: Icons.event_note_outlined,
+          icon: Icons.event_note_rounded,
+          tone: AppTheme.maizeSoft,
+          ink: const Color(0xFF5F4100),
           title: firstPage
               ? 'No hay actividades para mostrar'
               : 'Esta página no tiene actividades',
@@ -161,36 +161,91 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
         ),
       );
     }
+    final look = AppModule.lotes.look;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: ListView(
           key: ValueKey((widget.loteId, page.currentPage)),
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          dragStartBehavior: DragStartBehavior.down,
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 48),
           children: [
-            Text(
-              'Lote #${widget.loteId}',
-              style: Theme.of(context).textTheme.bodyMedium,
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: look.tone,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.ink, width: 2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ModuleMark(AppModule.lotes, size: 36, solid: true),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Lote #${widget.loteId}',
+                          style: TextStyle(
+                            color: look.ink,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      widget.loteName ?? 'Lote #${widget.loteId}',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.sort_rounded, size: 18, color: look.ink),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Más recientes primero, según su fecha de inicio.',
+                          style: TextStyle(
+                            color: look.ink,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              widget.loteName ?? 'Lote #${widget.loteId}',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 12),
-            const Text('Más recientes primero, según su fecha de inicio.'),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             for (final activity in page.records)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: ActivityHistoryCard(activity: activity),
+                child: ActivityHistoryCard(
+                  activity: activity,
+                  onTap: () => Navigator.of(context).pushNamed(
+                    '${AppModule.actividades.route}/${activity.id}',
+                    arguments: ActivityDetailArgs(
+                      returnToLoteId: widget.loteId,
+                      returnToLoteName: widget.loteName,
+                    ),
+                  ),
+                ),
               ),
             if (page.lastPage > 1) ...[
               const SizedBox(height: 12),
               Wrap(
                 alignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 16,
+                spacing: 12,
                 runSpacing: 12,
                 children: [
                   OutlinedButton(
@@ -199,7 +254,10 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
                         : null,
                     child: const Text('Anterior'),
                   ),
-                  Text('Página ${page.currentPage} de ${page.lastPage}'),
+                  Text(
+                    'Página ${page.currentPage} de ${page.lastPage}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   FilledButton(
                     onPressed: page.currentPage < page.lastPage
                         ? () => _showPage(page.currentPage + 1)

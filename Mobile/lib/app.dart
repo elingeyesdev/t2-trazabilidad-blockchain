@@ -1,18 +1,25 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import 'config/api_config.dart';
 import 'controllers/auth_controller.dart';
+import 'models/actividad_models.dart';
+import 'models/lote_models.dart';
 import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/modules/actividad_close_screen.dart';
+import 'screens/modules/actividad_form_screen.dart';
+import 'screens/modules/cosecha_form_screen.dart';
+import 'screens/modules/lote_activity_history_screen.dart';
+import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
-import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/module_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
@@ -23,16 +30,23 @@ import 'services/session_storage.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_error_state.dart';
 import 'widgets/app_loading.dart';
+import 'widgets/location_input_field.dart';
 
 class AgroFusionApp extends StatefulWidget {
   const AgroFusionApp({
     super.key,
     this.apiClient,
     this.sessionStorage = const SessionStorage(),
+    this.requestLocation,
+    this.capturePhoto,
+    this.selectEvidenceFile,
   });
 
   final ApiClient? apiClient;
   final SessionStorage sessionStorage;
+  final Future<DeviceLocation?> Function()? requestLocation;
+  final Future<XFile?> Function()? capturePhoto;
+  final Future<XFile?> Function()? selectEvidenceFile;
 
   @override
   State<AgroFusionApp> createState() => _AgroFusionAppState();
@@ -49,6 +63,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   late final AuthController _auth = AuthController(
     AuthService(_api, widget.sessionStorage),
   );
+  final ValueNotifier<int> _loteUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _actividadUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _cosechaUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -67,6 +84,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _loteUpdates.dispose();
+    _actividadUpdates.dispose();
+    _cosechaUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -175,6 +195,13 @@ class _AgroFusionAppState extends State<AgroFusionApp>
               user: _auth.user!,
               service: ModuleService(_api),
               onRefreshPermissions: _auth.restoreSession,
+              loteUpdates: module == AppModule.lotes ? _loteUpdates : null,
+              actividadUpdates: module == AppModule.actividades
+                  ? _actividadUpdates
+                  : null,
+              cosechaUpdates: module == AppModule.producciones
+                  ? _cosechaUpdates
+                  : null,
             ),
             requiresAuthentication: true,
             module: module,
@@ -188,6 +215,92 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'actividades', 'nueva']) {
+          final loteArg = settings.arguments is LoteOption
+              ? settings.arguments as LoteOption
+              : null;
+          return MaterialPageRoute<ActividadFormResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => ActividadFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                initialLoteId: loteArg?.id,
+                initialLoteName: loteArg?.name,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.actividades,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'actividades',
+          final rawId,
+          'cerrar',
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<ActividadCloseResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => ActividadCloseScreen(
+                key: ValueKey(_auth.user),
+                actividadId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                initialData: settings.arguments is ActividadEditableData
+                    ? settings.arguments as ActividadEditableData
+                    : null,
+                capturePhoto: widget.capturePhoto,
+                selectFile: widget.selectEvidenceFile,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.actividades,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'lotes', 'nuevo']) {
+          return MaterialPageRoute<LoteFormResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => LoteFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                requestLocation: widget.requestLocation,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.lotes,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'lotes', final rawId, 'editar']) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<LoteFormResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => LoteFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                loteId: id,
+                initialData: settings.arguments is LoteEditableData
+                    ? settings.arguments as LoteEditableData
+                    : null,
+                requestLocation: widget.requestLocation,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.lotes,
+            ),
+          );
         }
         if (uri.pathSegments case [
           'modules',
@@ -215,14 +328,43 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             ),
           );
         }
+        if (uri.pathSegments case ['modules', 'producciones', 'nueva']) {
+          final loteArg = settings.arguments is LoteOption
+              ? settings.arguments as LoteOption
+              : null;
+          return MaterialPageRoute<CosechaFormResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => CosechaFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                initialLoteId: loteArg?.id,
+                initialLoteName: loteArg?.name,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.producciones,
+            ),
+          );
+        }
         if (uri.pathSegments case ['modules', final endpoint, final rawId]) {
           final module = switch (endpoint) {
             'lotes' => AppModule.lotes,
             'actividades' => AppModule.actividades,
+            'producciones' => AppModule.producciones,
             _ => null,
           };
           final id = int.tryParse(rawId);
           if (module == null || id == null || id <= 0) return null;
+          final detailArgs = settings.arguments is ActivityDetailArgs
+              ? settings.arguments as ActivityDetailArgs
+              : null;
+          final initialNotice =
+              detailArgs?.initialNotice ??
+              (settings.arguments is String
+                  ? settings.arguments as String
+                  : null);
           return MaterialPageRoute<void>(
             settings: settings,
             builder: (_) => _sessionGate(
@@ -233,6 +375,13 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 user: _auth.user!,
                 service: ModuleService(_api),
                 onRefreshPermissions: _auth.restoreSession,
+                initialNotice: initialNotice,
+                returnToLoteId: detailArgs?.returnToLoteId,
+                returnToLoteName: detailArgs?.returnToLoteName,
+                onLoteUpdated: module == AppModule.lotes
+                    ? () => _loteUpdates.value++
+                    : null,
+                onActividadUpdated: () => _actividadUpdates.value++,
               ),
               requiresAuthentication: true,
               module: module,
