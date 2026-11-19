@@ -25,6 +25,7 @@
 @endpush
 
 @section('content')
+@include('recepcion.enlace-pedido', ['pedido' => $pedido])
 @php
     $itemsCount = $pedido->detalles?->count() ?? 0;
     $totalKg = \Brick\Math\BigDecimal::zero();

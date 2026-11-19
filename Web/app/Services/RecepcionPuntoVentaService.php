@@ -274,7 +274,10 @@ class RecepcionPuntoVentaService
     private function gruposConsolidadosConDetalle(Collection $detalles): array
     {
         $resultado = [];
-        foreach (PedidoDistribucionConsolidacion::consolidar($detalles) as $grupo) {
+        foreach ($detalles->filter(fn ($d) => isset($d->datos_solicitud['cantidad_kg'], $d->datos_solicitud['peso_neto_kg'])) as $detalle) {
+            $resultado[] = ['detalle' => $detalle, 'grupo' => ['cantidad_kg' => $detalle->datos_solicitud['cantidad_kg']]];
+        }
+        foreach (PedidoDistribucionConsolidacion::consolidar($detalles->reject(fn ($d) => isset($d->datos_solicitud['cantidad_kg'], $d->datos_solicitud['peso_neto_kg']))) as $grupo) {
             $representante = $detalles->first(
                 fn (DetallePedidoDistribucion $d) => in_array(
                     (int) $d->detallepedidodistribucionid,
@@ -303,6 +306,9 @@ class RecepcionPuntoVentaService
     ): float {
         $grupo = $item['grupo'];
         $detalle = $item['detalle'];
+        if (isset($detalle->datos_solicitud['cantidad_kg'], $detalle->datos_solicitud['peso_neto_kg'])) {
+            return $this->ingresarDetalleConservado($detalle, $pedido, $usuario, $almacenPdv, $tipoIngreso);
+        }
         $cantidad = (float) $grupo['cantidad'];
         $kgMovimiento = (float) $grupo['cantidad_kg'];
 
@@ -460,5 +466,47 @@ class RecepcionPuntoVentaService
         }
 
         return $kgMovimiento;
+    }
+
+    /** Las solicitudes EDT 5.1 conservan su equivalencia y se acreditan por línea y pedido. */
+    private function ingresarDetalleConservado(DetallePedidoDistribucion $detalle, PedidoDistribucion $pedido, Usuario $usuario, Almacen $destino, TipoMovimientoAlmacen $tipo): float
+    {
+        $detalle->loadMissing(['insumo', 'presentacion', 'inventarioPresentacionLote']);
+        $origen = $detalle->insumo;
+        $presentacion = $detalle->presentacion;
+        if (! $origen || ! $presentacion) {
+            throw new \InvalidArgumentException('La línea no conserva su producto y presentación de origen.');
+        }
+        $cantidad = \App\Support\CosechaDecimal::cantidad($detalle->getRawOriginal('cantidad'));
+        $kg = \App\Support\CosechaDecimal::cantidad($detalle->datos_solicitud['cantidad_kg']);
+        $marca = '[Recepción PDV] '.$pedido->numero_solicitud.' · línea '.$detalle->getKey();
+        if (AlmacenMovimiento::where('almacenid', $destino->getKey())->where('referencia', $pedido->numero_solicitud)->where('observaciones', $marca)->exists()) {
+            return 0.0;
+        }
+        Almacen::whereKey($destino->getKey())->lockForUpdate()->firstOrFail();
+        $producto = Insumo::where('almacenid', $destino->getKey())->where('nombre', $origen->nombre)->lockForUpdate()->first();
+        if (! $producto) {
+            $producto = Insumo::create(['nombre' => $origen->nombre, 'almacenid' => $destino->getKey(), 'unidadmedidaid' => $origen->unidadmedidaid,
+                'tipoinsumoid' => $origen->tipoinsumoid, 'stock' => 0, 'codigo_trazabilidad' => 'TRZ-PDV-'.Str::uuid()]);
+        }
+        // No se reemplaza la presentación anterior si el catálogo cambió después del pedido.
+        $presDestino = InsumoPresentacion::firstOrCreate(['insumoid' => $producto->getKey(),
+            'nombre' => $detalle->datos_solicitud['presentacion'] ?? $presentacion->nombre,
+            'peso_neto_kg' => $detalle->datos_solicitud['peso_neto_kg']],
+            ['tipo_envase' => $presentacion->tipo_envase, 'tipoempaqueid' => $presentacion->tipoempaqueid, 'activo' => true]);
+        app(InventarioExistenciaService::class)->bloquear([(int) $producto->getKey()]);
+        $producto->refresh();
+        $stockAntes = \App\Support\InventarioDecimal::unidades($producto->getRawOriginal('stock'));
+        $loteOrigen = $detalle->inventarioPresentacionLote;
+        $lote = $this->inventarioPresentacion->ingresar((int) $destino->getKey(), (int) $producto->getKey(), (int) $presDestino->getKey(),
+            $loteOrigen?->loteproduccionpedidoid, $loteOrigen?->referencia_lote ?? $detalle->referencia_lote,
+            $cantidad, $kg, $loteOrigen?->fecha_vencimiento?->toDateString());
+        $producto->update(['stock' => \App\Support\InventarioDecimal::texto($stockAntes + \App\Support\InventarioDecimal::unidades($kg))]);
+        AlmacenMovimiento::create(['almacenid' => $destino->getKey(), 'insumoid' => $producto->getKey(), 'usuarioid' => $usuario->getKey(),
+            'tipo_movimiento_almacenid' => $tipo->getKey(), 'insumo_presentacionid' => $presDestino->getKey(),
+            'inventario_presentacion_loteid' => $lote->getKey(), 'fecha' => now()->toDateString(), 'cantidad' => $kg,
+            'cantidad_unidades' => $cantidad, 'referencia' => $pedido->numero_solicitud, 'destino_motivo' => $destino->nombre, 'observaciones' => $marca]);
+
+        return (float) $kg;
     }
 }

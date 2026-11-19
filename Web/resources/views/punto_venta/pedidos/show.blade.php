@@ -382,6 +382,7 @@
 @endpush
 
 @section('content')
+@include('recepcion.enlace-pedido', ['pedido' => $pedido])
     @php
         $det = $pedido->detalles->first();
         $badge = \App\Support\PedidoDistribucionCatalogo::badgeEstado($pedido);

@@ -103,6 +103,8 @@ Route::get('/recepcion/{token}', [RecepcionQrPublicaController::class, 'show'])-
 
 Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
 
+    Route::get('/recepciones-envio/{recepcion}/comprobante', [\App\Http\Controllers\Api\EnvioMovilController::class, 'comprobante'])->whereNumber('recepcion')->name('recepcion.comprobante');
+
     Route::get('/api/cierre/firmas-estado', [CierreFirmasEstadoController::class, 'show'])->name('cierre.firmas-estado');
     Route::post('/recepcion/{token}', [RecepcionQrPublicaController::class, 'firmar'])->name('recepcion.publica.firmar');
 

@@ -22,16 +22,37 @@ class RecepcionQrFirmaService
 
     public function ensureToken(RutaDistribucion|EnvioAsignacionMultiple $operacion): RecepcionQrEnvio
     {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($operacion) {
+            if (\Illuminate\Support\Facades\DB::getDriverName() === 'sqlite') {
+                $operacion->newQuery()->whereKey($operacion->getKey())->update(['estado' => \Illuminate\Support\Facades\DB::raw('estado')]);
+            }
+            $operacion->newQuery()->whereKey($operacion->getKey())->lockForUpdate()->firstOrFail();
+
+            return $this->tokenOperacion($operacion);
+        }, 5);
+    }
+
+    private function nuevoCodigo(array $operacion): RecepcionQrEnvio
+    {
+        $token = $this->generarTokenUnico();
+        $qr = new RecepcionQrEnvio;
+        $qr->forceFill($operacion + ['token' => hash('sha256', $token), 'token_cifrado' => $token])->save();
+
+        return $qr;
+    }
+
+    private function tokenOperacion(RutaDistribucion|EnvioAsignacionMultiple $operacion): RecepcionQrEnvio
+    {
         if ($operacion instanceof RutaDistribucion) {
             $existente = RecepcionQrEnvio::query()
                 ->where('rutadistribucionid', $operacion->rutadistribucionid)
+                ->whereNull('clave_operacion')
                 ->first();
             if ($existente) {
                 return $existente;
             }
 
-            return RecepcionQrEnvio::create([
-                'token' => $this->generarTokenUnico(),
+            return $this->nuevoCodigo([
                 'rutadistribucionid' => $operacion->rutadistribucionid,
             ]);
         }
@@ -43,8 +64,7 @@ class RecepcionQrFirmaService
             return $existente;
         }
 
-        return RecepcionQrEnvio::create([
-            'token' => $this->generarTokenUnico(),
+        return $this->nuevoCodigo([
             'envioasignacionmultipleid' => $operacion->envioasignacionmultipleid,
         ]);
     }
@@ -68,6 +88,29 @@ class RecepcionQrFirmaService
 
         $firmaTransportista = (bool) ($resumen['firma_transportista'] ?? false);
         $firmaRecepcion = (bool) ($resumen['firma_recepcion'] ?? false);
+
+        $resumen['qr_recepciones'] = [];
+        $tieneLineas = $operacion instanceof EnvioAsignacionMultiple
+            ? $operacion->pedido?->detalles()->exists()
+            : ($operacion->esTrasladoPlantaMayorista() ? $operacion->detallesTraslado()->exists() : $operacion->pedidos()->exists());
+        if ($firmaTransportista && $tieneLineas) {
+            $service = app(EnvioRecepcionQrService::class);
+            foreach ($service->emitir($operacion) as $qrDestino) {
+                $user = auth()->user();
+                if ($user && ($service->puedeConfirmar($qrDestino, $user, $operacion)
+                    || (int) $operacion->transportista_usuarioid === (int) $user->getKey())) {
+                    $resumen['qr_recepciones'][] = ['id' => $qrDestino->getKey(),
+                        'destinatario' => $qrDestino->destinatario_usuarioid ? Usuario::find($qrDestino->destinatario_usuarioid)?->nombre : 'Receptor del destino',
+                        'url' => $qrDestino->utilizado_en ? null : $service->url($qrDestino),
+                        'utilizado' => $qrDestino->utilizado_en !== null,
+                        'comprobante' => $qrDestino->utilizado_en ? route('recepcion.comprobante', $qrDestino->getKey()) : null];
+                }
+            }
+            if ($resumen['qr_recepciones'] !== []) {
+                $resumen['esperando_firma_qr'] = collect($resumen['qr_recepciones'])->contains('utilizado', false);
+                return $resumen;
+            }
+        }
 
         if ($firmaTransportista && ! $firmaRecepcion) {
             $qr = $this->ensureToken($operacion);
@@ -111,7 +154,8 @@ class RecepcionQrFirmaService
 
     public function resolverPorToken(string $token): RecepcionQrEnvio
     {
-        $qr = RecepcionQrEnvio::query()->where('token', $token)->first();
+        $qr = RecepcionQrEnvio::query()->where('token', hash('sha256', $token))
+            ->orWhere(fn ($q) => $q->whereNull('token_cifrado')->where('token', $token))->first();
         if ($qr === null) {
             throw new InvalidArgumentException('El enlace de recepción no es válido o ya expiró.');
         }

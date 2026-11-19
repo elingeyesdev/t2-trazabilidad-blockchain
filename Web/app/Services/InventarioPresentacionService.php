@@ -134,8 +134,8 @@ class InventarioPresentacionService
         int $presentacionId,
         ?int $loteProduccionId,
         ?string $referenciaLote,
-        float $unidades,
-        float $kg,
+        float|string $unidades,
+        float|string $kg,
         ?string $fechaVencimiento = null
     ): InventarioPresentacionLote {
         return DB::transaction(function () use ($almacenId, $insumoId, $presentacionId, $loteProduccionId, $referenciaLote, $unidades, $kg, $fechaVencimiento) {

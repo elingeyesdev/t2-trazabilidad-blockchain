@@ -63,6 +63,18 @@ $recursoProtegido = function (string $uri, string $controller, string $modulo, ?
 
 Route::name('api.')->group(function () use ($recursoProtegido) {
 
+    Route::middleware('auth:sanctum')->group(function () {
+        $controller = \App\Http\Controllers\Api\EnvioMovilController::class;
+        Route::post('envios/qr/resolver', [$controller, 'resolver']);
+        Route::get('envios/{tipo}', [$controller, 'index'])->where('tipo', 'agricola|distribucion|traslado');
+        Route::get('envios/{tipo}/{envio}', [$controller, 'show'])->whereNumber('envio')->where('tipo', 'agricola|distribucion|traslado');
+        Route::post('envios/{tipo}/{envio}/codigos', [$controller, 'codigos'])->whereNumber('envio')->where('tipo', 'agricola|distribucion|traslado');
+        Route::post('envios/{tipo}/{envio}/recepcion', [$controller, 'confirmar'])->whereNumber('envio')->where('tipo', 'agricola|distribucion|traslado');
+        Route::get('recepciones-envio/{recepcion}', [$controller, 'recepcion'])->whereNumber('recepcion');
+        Route::get('recepciones-envio/{recepcion}/firma', [$controller, 'firma'])->whereNumber('recepcion');
+        Route::get('recepciones-envio/{recepcion}/comprobante', [$controller, 'comprobante'])->whereNumber('recepcion');
+    });
+
     Route::prefix('planta')->middleware('auth:sanctum')->group(function () {
         $controller = \App\Http\Controllers\Api\PlantaTrabajoController::class;
         Route::get('lotes-produccion/{loteProduccion}', [\App\Http\Controllers\Api\ProduccionPlantaRecorridoController::class, 'show'])->whereNumber('loteProduccion')->middleware('action.permission:lote_produccion,read');
