@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
+import '../models/cosecha_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
 import '../navigation/app_module.dart';
@@ -71,9 +72,11 @@ class ModuleService {
     AuthUser user,
     int id,
   ) async {
-    if (module != AppModule.lotes && module != AppModule.actividades) {
+    if (module != AppModule.lotes &&
+        module != AppModule.actividades &&
+        module != AppModule.producciones) {
       throw ArgumentError(
-        'El detalle está disponible para lotes y actividades.',
+        'El detalle está disponible para lotes, actividades y cosechas.',
       );
     }
     if (!module.canOpen(user)) {
@@ -86,11 +89,17 @@ class ModuleService {
       throw const ApiException('El registro solicitado no es válido.');
     }
     final response = await _api.request('GET', '${module.endpoint}/$id');
+    final fallbackTitle = switch (module) {
+      AppModule.lotes => 'Lote',
+      AppModule.actividades => 'Actividad',
+      AppModule.producciones => 'Cosecha',
+      _ => module.label,
+    };
     final record = ModuleRecord.fromJson(
       response,
       idField: module.idField,
       titleField: module.titleField,
-      fallbackTitle: module == AppModule.lotes ? 'Lote' : 'Actividad',
+      fallbackTitle: fallbackTitle,
       fields: {
         ...module.fields,
         if (module == AppModule.lotes) ...{
@@ -502,6 +511,79 @@ class ModuleService {
     }
     return _api.getBytes(
       '${AppModule.actividades.endpoint}/$actividadId/evidencia',
+    );
+  }
+
+  Future<List<CosechaUnidadOption>> loadCosechaUnidades(AuthUser user) async {
+    if (!CosechaPermissions.canCreate(user) &&
+        !user.permissions.contains('catalogos.view')) {
+      throw const ApiException(
+        'No tienes permiso para consultar las unidades de medida.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'unidadesmedida');
+    return CosechaUnidadOption.listFromJson(response);
+  }
+
+  Future<CosechaConfiguracion> loadCosechaConfiguracion(
+    AuthUser user,
+    int loteId,
+  ) async {
+    if (!AppModule.lotes.canOpen(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las presentaciones de este lote.',
+        statusCode: 403,
+      );
+    }
+    if (loteId <= 0) {
+      throw const ApiException('El lote solicitado no es válido.');
+    }
+    final response = await _api.request(
+      'GET',
+      'lotes/$loteId/presentaciones-cosecha',
+    );
+    return CosechaConfiguracion.fromJson(response);
+  }
+
+  Future<ModuleRecord> createCosecha(
+    AuthUser user, {
+    required int loteId,
+    required String cantidad,
+    required int unidadMedidaId,
+    int? catalogoTamanoConteoId,
+    String? fechaCosecha,
+    String? observaciones,
+  }) async {
+    if (!CosechaPermissions.canCreate(user)) {
+      throw const ApiException(
+        'No tienes permiso para registrar cosechas.',
+        statusCode: 403,
+      );
+    }
+    final cleanCantidad = cantidad.trim().replaceAll(',', '.');
+    final cleanFecha = fechaCosecha?.trim();
+    final cleanObs = observaciones?.trim();
+    final body = <String, Object?>{
+      'loteid': loteId,
+      'cantidad': cleanCantidad,
+      'unidadmedidaid': unidadMedidaId,
+      'catalogotamanoconteoid': ?catalogoTamanoConteoId,
+      if (cleanFecha != null && cleanFecha.isNotEmpty)
+        'fechacosecha': cleanFecha,
+      if (cleanObs != null && cleanObs.isNotEmpty) 'observaciones': cleanObs,
+    };
+    final response = await _api.request(
+      'POST',
+      AppModule.producciones.endpoint,
+      body: body,
+    );
+    return ModuleRecord.fromJson(
+      response,
+      idField: AppModule.producciones.idField,
+      titleField: AppModule.producciones.titleField,
+      fallbackTitle: 'Cosecha',
+      fields: AppModule.producciones.fields,
     );
   }
 }

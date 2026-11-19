@@ -1,5 +1,6 @@
 import 'actividad_models.dart';
 import 'api_exception.dart';
+import 'cosecha_models.dart';
 import 'field_record_info.dart';
 import 'lote_models.dart';
 
@@ -66,6 +67,7 @@ class ModuleRecord {
     this.fieldInfo,
     this.loteData,
     this.actividadData,
+    this.cosechaData,
   });
 
   factory ModuleRecord.fromJson(
@@ -91,6 +93,10 @@ class ModuleRecord {
       return result.isEmpty ? null : result;
     }
 
+    final cosechaData = idField == 'produccionid'
+        ? CosechaDetailData.fromJson(row)
+        : null;
+
     return ModuleRecord(
       id: row[idField] as int,
       title:
@@ -110,6 +116,7 @@ class ModuleRecord {
       actividadData: idField == 'actividadid'
           ? ActividadEditableData.fromJson(row)
           : null,
+      cosechaData: cosechaData,
     );
   }
 
@@ -123,4 +130,5 @@ class ModuleRecord {
   final FieldRecordInfo? fieldInfo;
   final LoteEditableData? loteData;
   final ActividadEditableData? actividadData;
+  final CosechaDetailData? cosechaData;
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../models/actividad_models.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/cosecha_models.dart';
 import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
@@ -16,6 +17,7 @@ import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
 import '../../widgets/record_status_badge.dart';
 import 'actividad_form_screen.dart';
+import 'cosecha_form_screen.dart';
 import 'lote_form_screen.dart';
 import 'module_access_denied.dart';
 
@@ -28,6 +30,7 @@ class ModuleScreen extends StatefulWidget {
     required this.onRefreshPermissions,
     this.loteUpdates,
     this.actividadUpdates,
+    this.cosechaUpdates,
   });
 
   final AppModule module;
@@ -36,6 +39,7 @@ class ModuleScreen extends StatefulWidget {
   final VoidCallback onRefreshPermissions;
   final ValueListenable<int>? loteUpdates;
   final ValueListenable<int>? actividadUpdates;
+  final ValueListenable<int>? cosechaUpdates;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
@@ -55,7 +59,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   bool get _supportsSearch =>
       widget.module == AppModule.lotes ||
-      widget.module == AppModule.actividades;
+      widget.module == AppModule.actividades ||
+      widget.module == AppModule.producciones;
 
   bool get _canCreateLote =>
       widget.module == AppModule.lotes &&
@@ -65,11 +70,16 @@ class _ModuleScreenState extends State<ModuleScreen> {
       widget.module == AppModule.actividades &&
       ActividadPermissions.canAssign(widget.user);
 
+  bool get _canCreateCosecha =>
+      widget.module == AppModule.producciones &&
+      CosechaPermissions.canCreate(widget.user);
+
   @override
   void initState() {
     super.initState();
     widget.loteUpdates?.addListener(_onLoteUpdated);
     widget.actividadUpdates?.addListener(_onActividadUpdated);
+    widget.cosechaUpdates?.addListener(_onCosechaUpdated);
   }
 
   @override
@@ -83,12 +93,17 @@ class _ModuleScreenState extends State<ModuleScreen> {
       oldWidget.actividadUpdates?.removeListener(_onActividadUpdated);
       widget.actividadUpdates?.addListener(_onActividadUpdated);
     }
+    if (oldWidget.cosechaUpdates != widget.cosechaUpdates) {
+      oldWidget.cosechaUpdates?.removeListener(_onCosechaUpdated);
+      widget.cosechaUpdates?.addListener(_onCosechaUpdated);
+    }
   }
 
   @override
   void dispose() {
     widget.loteUpdates?.removeListener(_onLoteUpdated);
     widget.actividadUpdates?.removeListener(_onActividadUpdated);
+    widget.cosechaUpdates?.removeListener(_onCosechaUpdated);
     _searchController.dispose();
     super.dispose();
   }
@@ -100,6 +115,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
 
   void _onActividadUpdated() {
     if (!mounted || widget.module != AppModule.actividades) return;
+    _load(_page);
+  }
+
+  void _onCosechaUpdated() {
+    if (!mounted || widget.module != AppModule.producciones) return;
     _load(_page);
   }
 
@@ -131,6 +151,21 @@ class _ModuleScreenState extends State<ModuleScreen> {
         '${AppModule.actividades.route}/${result.record.id}',
         arguments:
             'La actividad "${result.record.title}" fue asignada correctamente.',
+      );
+    }
+  }
+
+  Future<void> _createCosecha() async {
+    FocusScope.of(context).unfocus();
+    final result = await Navigator.of(
+      context,
+    ).pushNamed('${AppModule.producciones.route}/nueva');
+    if (!mounted) return;
+    if (result is CosechaFormResult) {
+      _load(1);
+      await Navigator.of(context).pushNamed(
+        '${AppModule.producciones.route}/${result.record.id}',
+        arguments: 'La cosecha #${result.record.id} se registró correctamente.',
       );
     }
   }
@@ -254,7 +289,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ],
             ),
             floatingActionButton:
-                (_canCreateLote || _canAssignActividad) &&
+                (_canCreateLote || _canAssignActividad || _canCreateCosecha) &&
                     !loading &&
                     !snapshot.hasError
                 ? FloatingActionButton.extended(
@@ -265,12 +300,24 @@ class _ModuleScreenState extends State<ModuleScreen> {
                       borderRadius: BorderRadius.circular(16),
                       side: const BorderSide(color: AppTheme.ink, width: 2),
                     ),
-                    onPressed: _canCreateLote ? _createLote : _assignActividad,
+                    onPressed: _canCreateLote
+                        ? _createLote
+                        : (_canAssignActividad
+                              ? _assignActividad
+                              : _createCosecha),
                     icon: Icon(
-                      _canCreateLote ? Icons.add_rounded : Icons.assignment_add,
+                      _canCreateLote
+                          ? Icons.add_rounded
+                          : (_canAssignActividad
+                                ? Icons.assignment_add
+                                : Icons.grass_rounded),
                     ),
                     label: Text(
-                      _canCreateLote ? 'Nuevo lote' : 'Asignar actividad',
+                      _canCreateLote
+                          ? 'Nuevo lote'
+                          : (_canAssignActividad
+                                ? 'Asignar actividad'
+                                : 'Registrar cosecha'),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
@@ -319,7 +366,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
         }
       }
       final text = _normalize(
-        '${record.title} ${record.details.values.join(' ')} ${record.fieldInfo?.details.values.join(' ') ?? ''}',
+        '${record.title} ${record.details.values.join(' ')} ${record.fieldInfo?.details.values.join(' ') ?? ''} ${record.cosechaData?.toSummaryMap().values.join(' ') ?? ''}',
       );
       return terms.every(text.contains);
     }).toList();
@@ -441,7 +488,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     20,
                     4,
                     20,
-                    _canCreateLote || _canAssignActividad ? 92 : 20,
+                    _canCreateLote || _canAssignActividad || _canCreateCosecha
+                        ? 92
+                        : 20,
                   ),
                   itemCount: records.length,
                   itemBuilder: (context, index) => _recordCard(records[index]),
@@ -533,7 +582,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
   Widget _recordCard(ModuleRecord record) {
     final look = widget.module.look;
     final info = record.fieldInfo;
-    final fields = (info?.summary ?? record.details).entries
+    final cosecha = record.cosechaData;
+    final fields = (cosecha?.toSummaryMap() ?? info?.summary ?? record.details)
+        .entries
         .where((field) => field.key != 'Identificador')
         .toList();
     return Padding(
@@ -551,7 +602,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    record.title,
+                    cosecha != null ? 'Cosecha #${record.id}' : record.title,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   if (info?.status != null) ...[

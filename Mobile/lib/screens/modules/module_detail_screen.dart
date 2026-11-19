@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/actividad_models.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/cosecha_models.dart';
 import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
@@ -77,6 +78,20 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   ApiException? _obsError;
 
   bool get _isLote => widget.module == AppModule.lotes;
+  bool get _isActividad => widget.module == AppModule.actividades;
+  bool get _isCosecha => widget.module == AppModule.producciones;
+
+  String get _screenTitle => switch (widget.module) {
+    AppModule.lotes => 'Detalle del lote',
+    AppModule.producciones => 'Detalle de cosecha',
+    _ => 'Detalle de actividad',
+  };
+
+  String get _recordPrefix => switch (widget.module) {
+    AppModule.lotes => 'Lote',
+    AppModule.producciones => 'Cosecha',
+    _ => 'Actividad',
+  };
 
   @override
   void dispose() {
@@ -323,11 +338,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       final error = snapshot.error;
       if (!loading && error is ApiException && error.statusCode == 403) {
         return ModuleAccessDenied(
-          title: _isLote ? 'Detalle del lote' : 'Detalle de actividad',
+          title: _screenTitle,
           onRefreshPermissions: widget.onRefreshPermissions,
         );
       }
-      final returningToHistory = !_isLote && widget.returnToLoteId != null;
+      final returningToHistory = _isActividad && widget.returnToLoteId != null;
       final backLabel = returningToHistory
           ? 'Volver al historial del lote'
           : 'Volver a la lista';
@@ -338,7 +353,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             onPressed: _backToList,
             icon: const Icon(Icons.arrow_back_rounded),
           ),
-          title: Text(_isLote ? 'Detalle del lote' : 'Detalle de actividad'),
+          title: Text(_screenTitle),
           actions: [
             IconButton(
               tooltip: 'Actualizar detalle',
@@ -382,24 +397,45 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   Widget _details(ModuleRecord record) {
     final look = widget.module.look;
     final actividad = record.actividadData;
-    final fields = <MapEntry<String, String>>[
-      ...(record.fieldInfo?.details ?? record.details).entries.where(
-        (field) =>
-            field.key != 'Identificador' &&
-            (record.fieldInfo?.status == null || field.key != 'Estado'),
-      ),
-      if (!_isLote &&
-          actividad != null &&
-          actividad.isCompleted &&
-          actividad.closingResponsibleName != null)
-        MapEntry('Responsable de cierre', actividad.closingResponsibleName!),
-      if (!_isLote && actividad != null) ...[
-        if (actividad.resultado != null)
-          MapEntry('Resultado', actividad.resultado!)
-        else if (actividad.isCompleted)
-          const MapEntry('Resultado', 'Sin resultado registrado'),
-      ],
-    ];
+    final cosecha = record.cosechaData;
+    final fields = _isCosecha && cosecha != null
+        ? <MapEntry<String, String>>[
+            MapEntry('Lote', cosecha.loteLabel),
+            MapEntry(
+              'Fecha de cosecha',
+              cosecha.fechaCosecha ?? 'Sin registrar',
+            ),
+            MapEntry('Cantidad registrada', cosecha.formattedQuantity),
+            MapEntry(
+              'Presentación',
+              cosecha.calibreNombre ?? 'Sin presentación asignada',
+            ),
+            MapEntry(
+              'Observaciones',
+              cosecha.observaciones ?? 'Sin observaciones',
+            ),
+          ]
+        : <MapEntry<String, String>>[
+            ...(record.fieldInfo?.details ?? record.details).entries.where(
+              (field) =>
+                  field.key != 'Identificador' &&
+                  (record.fieldInfo?.status == null || field.key != 'Estado'),
+            ),
+            if (_isActividad &&
+                actividad != null &&
+                actividad.isCompleted &&
+                actividad.closingResponsibleName != null)
+              MapEntry(
+                'Responsable de cierre',
+                actividad.closingResponsibleName!,
+              ),
+            if (_isActividad && actividad != null) ...[
+              if (actividad.resultado != null)
+                MapEntry('Resultado', actividad.resultado!)
+              else if (actividad.isCompleted)
+                const MapEntry('Resultado', 'Sin resultado registrado'),
+            ],
+          ];
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
@@ -426,7 +462,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            '${_isLote ? 'Lote' : 'Actividad'} #${record.id}',
+                            '$_recordPrefix #${record.id}',
                             style: TextStyle(
                               color: look.ink,
                               fontSize: 16,
@@ -536,7 +572,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
               SectionTitle(
                 _isLote
                     ? 'Información del lote'
-                    : 'Información de la actividad',
+                    : (_isCosecha
+                          ? 'Información de la cosecha'
+                          : 'Información de la actividad'),
                 color: look.tone,
               ),
               const SizedBox(height: 14),
@@ -560,6 +598,75 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   ],
                 ),
               ),
+              if (_isCosecha && cosecha != null) ...[
+                const SizedBox(height: 24),
+                SectionTitle('Cantidades y equivalencias', color: look.tone),
+                const SizedBox(height: 14),
+                if (cosecha.formattedBaseKg != null ||
+                    cosecha.equivalenciaLine != null)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                      border: Border.all(color: AppTheme.ink, width: 2),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (cosecha.formattedBaseKg != null)
+                          DetailField(
+                            label: 'Cantidad base (kg)',
+                            value: cosecha.formattedBaseKg!,
+                          ),
+                        if (cosecha.cantidadEmpaques != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: cosecha.empaqueLabel ?? 'Empaques',
+                            value: '${cosecha.cantidadEmpaques}',
+                          ),
+                        ],
+                        if (cosecha.cantidadUnidades != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Unidades estimadas',
+                            value: '${cosecha.cantidadUnidades} unidades',
+                          ),
+                        ],
+                        if (cosecha.equivalenciaLine != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Resumen de equivalencia',
+                            value: cosecha.equivalenciaLine!,
+                          ),
+                        ],
+                        if (cosecha.pesoPromedioKg != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Peso promedio por unidad',
+                            value:
+                                '${formatCosechaDecimal(cosecha.pesoPromedioKg!)} kg',
+                          ),
+                        ],
+                        if (cosecha.conteoPorEmpaque != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Unidades por empaque',
+                            value: '${cosecha.conteoPorEmpaque}',
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
+                else
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message: 'Sin equivalencias registradas para esta cosecha.',
+                  ),
+              ],
               if (!_isLote && actividad != null && actividad.isCompleted) ...[
                 const SizedBox(height: 24),
                 SectionTitle('Fotografía de evidencia', color: look.tone),
@@ -652,7 +759,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   ),
                 ),
               ],
-              if (!_isLote &&
+              if (_isActividad &&
                   ActividadPermissions.canAddObservations(widget.user)) ...[
                 const SizedBox(height: 20),
                 if (_editingObservations)

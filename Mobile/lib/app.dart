@@ -15,6 +15,7 @@ import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
+import 'screens/modules/cosecha_form_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
@@ -64,6 +65,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   );
   final ValueNotifier<int> _loteUpdates = ValueNotifier(0);
   final ValueNotifier<int> _actividadUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _cosechaUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -84,6 +86,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     WidgetsBinding.instance.removeObserver(this);
     _loteUpdates.dispose();
     _actividadUpdates.dispose();
+    _cosechaUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -195,6 +198,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
               loteUpdates: module == AppModule.lotes ? _loteUpdates : null,
               actividadUpdates: module == AppModule.actividades
                   ? _actividadUpdates
+                  : null,
+              cosechaUpdates: module == AppModule.producciones
+                  ? _cosechaUpdates
                   : null,
             ),
             requiresAuthentication: true,
@@ -322,10 +328,31 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             ),
           );
         }
+        if (uri.pathSegments case ['modules', 'producciones', 'nueva']) {
+          final loteArg = settings.arguments is LoteOption
+              ? settings.arguments as LoteOption
+              : null;
+          return MaterialPageRoute<CosechaFormResult?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => CosechaFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                initialLoteId: loteArg?.id,
+                initialLoteName: loteArg?.name,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.producciones,
+            ),
+          );
+        }
         if (uri.pathSegments case ['modules', final endpoint, final rawId]) {
           final module = switch (endpoint) {
             'lotes' => AppModule.lotes,
             'actividades' => AppModule.actividades,
+            'producciones' => AppModule.producciones,
             _ => null,
           };
           final id = int.tryParse(rawId);
