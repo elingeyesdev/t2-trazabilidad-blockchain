@@ -102,6 +102,7 @@ Route::get('/recepcion/{token}', [RecepcionQrPublicaController::class, 'show'])-
 // RUTAS PROTEGIDAS (REQUIEREN ESTAR LOGUEADO)
 
 Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
+    Route::get('/consulta-recorrido', [\App\Http\Controllers\RecorridoConsultaController::class, 'index'])->name('consulta-recorrido');
     Route::get('/seguimiento-envios/{tipo}/{envio}', [\App\Http\Controllers\Web\EntregaConsultaController::class, 'show'])
         ->whereIn('tipo', ['agricola', 'distribucion', 'traslado'])->whereNumber('envio')->name('envios.seguimiento');
 
