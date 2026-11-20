@@ -274,8 +274,14 @@ class Frente3OwnershipTest extends TestCase
     {
         $conductorA = $this->conductor(TransportistaFlotaCatalogo::AGRICOLA);
         $conductorB = $this->conductor(TransportistaFlotaCatalogo::AGRICOLA);
+        $responsable = $this->actor('jefe_agricultor', ['estado_cuenta' => 'aprobado']);
+        $responsable->givePermissionTo(['incidentes.view', 'incidentes.resolve']);
+        $pedidoA = \App\Models\Pedido::create(['numero_solicitud' => 'PED-INC-A', 'estado' => 'confirmado',
+            'creado_por_usuarioid' => $responsable->getKey(), 'latitud' => -17.7, 'longitud' => -63.1]);
+        \App\Models\DetallePedido::create(['pedidoid' => $pedidoA->getKey(), 'cultivo_personalizado' => 'Tomate', 'cantidad' => '1.000000']);
         EnvioAsignacionMultiple::create([
             'externo_envio_id' => 'ENV-INC-A', 'transportista_usuarioid' => $conductorA->usuarioid,
+            'pedidoid' => $pedidoA->getKey(),
             'estado' => 'asignado', 'fecha_asignacion' => now(),
         ]);
         EnvioAsignacionMultiple::create([
@@ -299,7 +305,8 @@ class Frente3OwnershipTest extends TestCase
 
         $this->post(route('logistica.incidentes.store'), [
             'externo_envio_id' => 'ENV-INC-A', 'tipo' => 'Pinchazo', 'descripcion' => 'En mi viaje',
-        ])->assertRedirect();
+            'responsable_usuarioid' => $responsable->getKey(),
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('incidente_envio', ['externo_envio_id' => 'ENV-INC-A', 'reportadopor_usuarioid' => $conductorA->usuarioid]);
         $this->assertDatabaseMissing('incidente_envio', ['descripcion' => 'En viaje ajeno']);

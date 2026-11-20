@@ -1,54 +1,13 @@
 @extends('layouts.app')
-
-@section('title', 'Editar incidente | AgroFusion')
-@section('page_title', 'Editar incidente')
-
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
+@section('title', 'Editar incidencia | AgroFusion')
+@section('page_title', 'Editar incidencia #'.$incidente->getKey())
 @section('content')
-<section class="content">
-    <div class="container-fluid px-3 px-lg-4">
-        <div class="card card-outline card-success elevation-1">
-            <div class="card-header bg-white py-3"><h5 class="mb-0 font-weight-bold">Editar incidente #{{ $incidente->incidenteenvioid }}</h5></div>
-            <div class="card-body p-4">
-                <form method="POST" action="{{ route('logistica.incidentes.update', $incidente) }}">
-                    @csrf
-                    @method('PUT')
-                    <div class="row">
-                        <div class="col-md-4 form-group">
-                            <label class="small font-weight-bold">ID de envío</label>
-                            <input name="externo_envio_id" class="form-control" value="{{ old('externo_envio_id', $incidente->externo_envio_id) }}">
-                        </div>
-                        <div class="col-md-4 form-group">
-                            <label class="small font-weight-bold">ID pedido</label>
-                            <input type="number" name="pedidoid" class="form-control" value="{{ old('pedidoid', $incidente->pedidoid) }}">
-                        </div>
-                        <div class="col-md-4 form-group">
-                            <label class="small font-weight-bold">Tipo</label>
-                            <input name="tipo" class="form-control" required value="{{ old('tipo', $incidente->tipo) }}">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="small font-weight-bold">Descripción</label>
-                        <textarea name="descripcion" class="form-control" rows="5" required>{{ old('descripcion', $incidente->descripcion) }}</textarea>
-                    </div>
-                    @can('incidentes.resolve')
-                    <div class="form-group">
-                        <label class="small font-weight-bold">Estado</label>
-                        <select name="estado" class="form-control">
-                            <option value="abierto" @selected(old('estado', $incidente->estado) === 'abierto')>Abierto</option>
-                            <option value="pendiente" @selected(old('estado', $incidente->estado) === 'pendiente')>Pendiente</option>
-                            <option value="resuelto" @selected(old('estado', $incidente->estado) === 'resuelto')>Resuelto</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="small font-weight-bold">Nota de resolución</label>
-                        <textarea name="nota_resolucion" class="form-control" rows="2">{{ old('nota_resolucion', $incidente->nota_resolucion) }}</textarea>
-                    </div>
-                    @endcan
-                    <button class="btn btn-success"><i class="fas fa-save mr-1"></i>Guardar cambios</button>
-                    <a href="{{ route('logistica.incidentes.show', $incidente) }}" class="btn btn-outline-secondary">Cancelar</a>
-                </form>
-            </div>
-        </div>
-    </div>
-</section>
+<div class="card"><div class="card-body"><form method="post" action="{{ route('logistica.incidentes.update', $incidente) }}">@csrf @method('PUT')
+<p class="text-muted">El vínculo y la autoría se conservan. La solución se registra únicamente desde el formulario de resolución.</p>
+<div class="form-group"><label for="tipo">Tipo</label><input id="tipo" name="tipo" class="form-control" maxlength="100" required value="{{ old('tipo', $incidente->tipo) }}" @readonly((int)$incidente->reportadopor_usuarioid !== (int)auth()->id())>@error('tipo')<div class="text-danger small">{{ $message }}</div>@enderror</div>
+<div class="form-group"><label for="descripcion">Descripción original del reporte</label><textarea id="descripcion" name="descripcion" class="form-control" rows="5" maxlength="3000" required @readonly((int)$incidente->reportadopor_usuarioid !== (int)auth()->id())>{{ old('descripcion', $incidente->descripcion) }}</textarea>@error('descripcion')<div class="text-danger small">{{ $message }}</div>@enderror</div>
+@if(!$incidente->responsable_usuarioid && $puedeAsignar)<div class="form-group"><label for="responsable_usuarioid">Asignar responsable de atención</label><select id="responsable_usuarioid" name="responsable_usuarioid" class="form-control"><option value="">Seleccione un responsable elegible</option>@foreach($responsables as $r)<option value="{{ $r['usuarioid'] }}" @selected((int)old('responsable_usuarioid') === $r['usuarioid'])>{{ $r['nombre'] }}</option>@endforeach</select>@error('responsable_usuarioid')<div class="text-danger small">{{ $message }}</div>@enderror</div>@else<p>Responsable registrado: {{ $incidente->responsable?->nombre }} {{ $incidente->responsable?->apellido }}</p>@endif
+<div class="op-acciones"><button type="submit" class="btn btn-success">Guardar</button><a class="btn btn-outline-secondary" href="{{ route('logistica.incidentes.show', $incidente) }}">Volver al detalle</a></div>
+</form></div></div>
 @endsection

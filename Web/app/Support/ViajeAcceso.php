@@ -106,17 +106,7 @@ final class ViajeAcceso
             return $query->whereRaw('1 = 0');
         }
 
-        if (UsuarioRol::esAdminGlobal($user) || ! self::esConductor($user)) {
-            return $query;
-        }
-
-        [$codigos, $pedidos] = self::viajesDelConductor($user);
-
-        return $query->where(function (Builder $q) use ($user, $codigos, $pedidos) {
-            $q->where('reportadopor_usuarioid', $user->usuarioid)
-                ->orWhereIn('externo_envio_id', $codigos ?: ['__sin_viajes__'])
-                ->orWhereIn('pedidoid', $pedidos ?: [-1]);
-        });
+        return app(\App\Services\IncidenteReferenciaService::class)->scope($query, $user);
     }
 
     public static function puedeVerIncidente(?Usuario $user, IncidenteEnvio $incidente): bool

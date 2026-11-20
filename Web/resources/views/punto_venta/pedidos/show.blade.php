@@ -383,6 +383,7 @@
 @endpush
 
 @section('content')
+@include('logistica.incidentes.enlace', ['tipoAfectado' => 'pedido_distribucion', 'idAfectado' => $pedido->getKey()])
 @include('pedidos.partials.decision-registrada', ['pedidoDecision' => $pedido])
 @include('pedidos.partials.enlace-entrega', ['pedido' => $pedido])
 @include('recepcion.enlace-pedido', ['pedido' => $pedido])

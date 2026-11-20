@@ -3,65 +3,46 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IncidenteRegistroRequest;
+use App\Http\Requests\IncidenteResolucionRequest;
+use App\Http\Resources\Api\IncidenteEnvioResource;
 use App\Models\IncidenteEnvio;
-use App\Support\ViajeAcceso;
-use Illuminate\Http\JsonResponse;
+use App\Services\IncidenteConsultaService;
+use App\Services\IncidenteReferenciaService;
+use App\Services\IncidenteSeguimientoService;
 use Illuminate\Http\Request;
 
 class IncidenteEnvioController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, IncidenteConsultaService $consulta)
     {
-        $estado = $request->string('estado')->toString();
-        $q = ViajeAcceso::scopeIncidentes(IncidenteEnvio::query(), $request->user())
-            ->with(['reportadoPor', 'resueltoPor', 'pedido'])
-            ->when($estado !== '', fn($query) => $query->where('estado', $estado))
-            ->orderByDesc('created_at');
-
-        $incidentes = $q->paginate(20);
-
-        return response()->json($incidentes);
+        return response()->json($consulta->listado($request));
     }
 
-    public function store(Request $request): JsonResponse
+    public function show(Request $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service)
     {
-        $validated = $request->validate([
-            'externo_envio_id' => ['nullable', 'string', 'max:64'],
-            'pedidoid' => ['nullable', 'integer', 'exists:pedido,pedidoid'],
-            'tipo' => ['required', 'string', 'max:100'],
-            'descripcion' => ['required', 'string', 'max:3000'],
-        ]);
-
-        abort_unless(ViajeAcceso::conductorPuedeReportarEn(
-            $request->user(),
-            $validated['externo_envio_id'] ?? null,
-            isset($validated['pedidoid']) ? (int) $validated['pedidoid'] : null
-        ), 403, 'Solo puede reportar incidentes de sus viajes asignados.');
-
-        $validated['reportadopor_usuarioid'] = auth()->id();
-        $validated['estado'] = 'abierto';
-
-        $incidente = IncidenteEnvio::create($validated);
-
-        return response()->json($incidente, 201);
+        return response()->json((new IncidenteEnvioResource($service->obtener((int) $incidente->getKey(), $request->user())))->resolve($request));
     }
 
-    public function resolve(Request $request, IncidenteEnvio $incidente): JsonResponse
+    public function anidado(Request $request, string $tipo, int $afectado, IncidenteEnvio $incidente, IncidenteReferenciaService $referencias, IncidenteSeguimientoService $service)
     {
-        abort_unless(ViajeAcceso::puedeVerIncidente($request->user(), $incidente), 403);
+        $referencias->buscar($tipo, $afectado, $request->user());
+        abort_unless($incidente->afectado_tipo === $tipo && (int) $incidente->{$referencias->columna($tipo)} === $afectado, 404);
 
-        $validated = $request->validate([
-            'nota_resolucion' => ['nullable', 'string', 'max:2000'],
-        ]);
+        return $this->show($request, $incidente, $service);
+    }
 
-        $incidente->update([
-            'estado' => 'resuelto',
-            'nota_resolucion' => $validated['nota_resolucion'] ?? null,
-            'resueltopor_usuarioid' => auth()->id(),
-            'fecha_resolucion' => now(),
-        ]);
+    public function store(IncidenteRegistroRequest $request, IncidenteSeguimientoService $service)
+    {
+        $incidente = $service->registrar($request->user(), $request->validated());
 
-        return response()->json($incidente->fresh());
+        return response()->json((new IncidenteEnvioResource($service->obtener((int) $incidente->getKey(), $request->user())))->resolve($request), 201);
+    }
+
+    public function resolve(IncidenteResolucionRequest $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service)
+    {
+        $resuelto = $service->resolver($request->user(), (int) $incidente->getKey(), $request->validated('nota_resolucion'));
+
+        return response()->json((new IncidenteEnvioResource($service->obtener((int) $resuelto->getKey(), $request->user())))->resolve($request));
     }
 }
-

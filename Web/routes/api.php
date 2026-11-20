@@ -257,6 +257,11 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     // LOGISTICA OPERATIVA - API GRANULAR
     Route::get('incidentes', [IncidenteEnvioController::class, 'index'])
         ->middleware(['auth:sanctum', 'action.permission:incidentes,read']);
+    Route::get('incidentes/{incidente}', [IncidenteEnvioController::class, 'show'])->whereNumber('incidente')
+        ->middleware(['auth:sanctum', 'action.permission:incidentes,read']);
+    Route::get('incidentes/afectados/{tipo}/{afectado}/{incidente}', [IncidenteEnvioController::class, 'anidado'])
+        ->whereIn('tipo', \App\Services\IncidenteReferenciaService::TIPOS)->whereNumber(['afectado', 'incidente'])
+        ->middleware(['auth:sanctum', 'action.permission:incidentes,read']);
     Route::post('incidentes', [IncidenteEnvioController::class, 'store'])
         ->middleware(['auth:sanctum', 'action.permission:incidentes,create']);
     Route::patch('incidentes/{incidente}/resolver', [IncidenteEnvioController::class, 'resolve'])
