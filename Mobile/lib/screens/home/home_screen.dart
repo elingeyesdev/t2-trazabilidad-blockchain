@@ -390,9 +390,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _shortcut(AppModule module) {
     final look = module.look;
+    const accentInk = Color(0xFF5F4100);
     return PressableCard(
       onTap: () => _open(module),
-      color: look.tone,
+      color: AppTheme.maizeSoft,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,9 +401,24 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ModuleMark(module, size: 52, solid: true),
+              ExcludeSemantics(
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppTheme.maize,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: AppTheme.ink, width: 1),
+                  ),
+                  child: Icon(module.icon, color: AppTheme.ink, size: 28),
+                ),
+              ),
               const Spacer(),
-              Icon(Icons.arrow_forward_rounded, size: 24, color: look.ink),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                size: 24,
+                color: AppTheme.ink,
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -415,7 +431,11 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 2),
           Text(
             look.hint,
-            style: TextStyle(fontSize: 15, height: 1.35, color: look.ink),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.35,
+              color: accentInk,
+            ),
           ),
         ],
       ),
