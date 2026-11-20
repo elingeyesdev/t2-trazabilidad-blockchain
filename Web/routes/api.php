@@ -62,6 +62,8 @@ $recursoProtegido = function (string $uri, string $controller, string $modulo, ?
 };
 
 Route::name('api.')->group(function () use ($recursoProtegido) {
+    Route::get('consulta-recorrido', [\App\Http\Controllers\RecorridoConsultaController::class, 'index'])
+        ->middleware('auth:sanctum')->name('consulta-recorrido');
 
     Route::middleware('auth:sanctum')->group(function () {
         $controller = \App\Http\Controllers\Api\EnvioMovilController::class;
@@ -254,6 +256,11 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
 
     // LOGISTICA OPERATIVA - API GRANULAR
     Route::get('incidentes', [IncidenteEnvioController::class, 'index'])
+        ->middleware(['auth:sanctum', 'action.permission:incidentes,read']);
+    Route::get('incidentes/{incidente}', [IncidenteEnvioController::class, 'show'])->whereNumber('incidente')
+        ->middleware(['auth:sanctum', 'action.permission:incidentes,read']);
+    Route::get('incidentes/afectados/{tipo}/{afectado}/{incidente}', [IncidenteEnvioController::class, 'anidado'])
+        ->whereIn('tipo', \App\Services\IncidenteReferenciaService::TIPOS)->whereNumber(['afectado', 'incidente'])
         ->middleware(['auth:sanctum', 'action.permission:incidentes,read']);
     Route::post('incidentes', [IncidenteEnvioController::class, 'store'])
         ->middleware(['auth:sanctum', 'action.permission:incidentes,create']);

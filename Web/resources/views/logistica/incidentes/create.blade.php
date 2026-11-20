@@ -1,75 +1,18 @@
 @extends('layouts.app')
-
-@section('title', 'Nuevo incidente | AgroFusion')
-@section('page_title', 'Nuevo incidente de envío')
-
-@push('styles')
-<style>.x-card{border:0;border-radius:14px;box-shadow:0 8px 24px rgba(18,38,63,.08)}</style>
-@endpush
-
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
+@section('title', 'Registrar incidencia | AgroFusion')
+@section('page_title', 'Registrar incidencia')
 @section('content')
-<section class="content">
-    <div class="container-fluid px-3 px-lg-4">
-        <div class="card x-card">
-            <div class="card-body p-4">
-                <form method="POST" action="{{ route('logistica.incidentes.store') }}">
-                    @csrf
-                    <div class="row">
-                        <div class="col-md-4 form-group">
-                            <label class="small font-weight-bold">ID de envío (opcional)</label>
-                            <input name="externo_envio_id" class="form-control" value="{{ old('externo_envio_id') }}">
-                        </div>
-                        <div class="col-md-4 form-group">
-                            <label class="small font-weight-bold">ID pedido (opcional)</label>
-                            <input type="number" name="pedidoid" class="form-control" value="{{ old('pedidoid') }}">
-                        </div>
-                        <div class="col-md-4 form-group">
-                            <label class="small font-weight-bold">Tipo</label>
-                            <select name="tipo" id="tipo" class="form-control" required>
-                                <option value="Retraso">Retraso</option>
-                                <option value="Calidad">Calidad</option>
-                                <option value="Daño producto">Daño producto</option>
-                                <option value="Faltante">Faltante</option>
-                                <option value="Operación">Operación</option>
-                                <option value="Reprogramación">Reprogramación</option>
-                                <option value="Otro">Otro</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group d-none" id="tipo-otro-div">
-                        <label class="small font-weight-bold">Especificar tipo</label>
-                        <input id="tipo_otro" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label class="small font-weight-bold">Descripción</label>
-                        <textarea name="descripcion" class="form-control" rows="5" required placeholder="Describa qué ocurrió y el contexto del incidente">{{ old('descripcion') }}</textarea>
-                    </div>
-                    <button class="btn btn-success"><i class="fas fa-save mr-1"></i>Registrar incidente</button>
-                    <a href="{{ route('logistica.incidentes.index') }}" class="btn btn-outline-secondary">Cancelar</a>
-                </form>
-            </div>
-        </div>
-    </div>
-</section>
+<x-operacion.encabezado titulo="Registrar incidencia" descripcion="Seleccione el pedido o viaje afectado y describa el problema. Registrar una incidencia no modifica la operación." />
+<div class="card mb-3"><div class="card-header"><h3 class="card-title">Pedido o envío afectado</h3></div><div class="card-body"><form method="get" action="{{ route('logistica.incidentes.create') }}">
+<div class="form-group"><label for="afectado_ref">Operación autorizada</label><select class="form-control" id="afectado_ref" name="afectado_ref" required><option value="">Seleccione una operación</option>@foreach($opciones as $o)<option value="{{ $o['valor'] }}" @selected($o['valor'] === $tipo.':'.$id)>{{ $o['nombre'] }}</option>@endforeach</select>@error('afectado_id')<div class="text-danger small">{{ $message }}</div>@enderror</div><button class="btn btn-outline-secondary" type="submit">Seleccionar y consultar responsables</button><p class="small text-muted mt-2 mb-0">Se muestran hasta 100 registros recientes por tipo. Una entrega individual se reporta sobre su pedido; una ruta corresponde al viaje completo.</p>
+</form></div></div>
+@if($tipo && $id)<div class="card"><div class="card-header"><h3 class="card-title">Descripción y responsable</h3></div><div class="card-body"><p class="small text-muted">{{ \App\Services\IncidenteReferenciaService::ETIQUETAS[$tipo] }} #{{ $id }}</p><form method="post" action="{{ route('logistica.incidentes.store') }}">@csrf
+<input type="hidden" name="afectado_tipo" value="{{ $tipo }}"><input type="hidden" name="afectado_id" value="{{ $id }}">
+<div class="form-group"><label for="tipo">Tipo de problema</label><input id="tipo" name="tipo" class="form-control @error('tipo') is-invalid @enderror" required maxlength="100" value="{{ old('tipo') }}" placeholder="Por ejemplo: retraso, faltante o calidad">@error('tipo')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+<div class="form-group"><label for="descripcion">Descripción del problema</label><textarea id="descripcion" name="descripcion" class="form-control @error('descripcion') is-invalid @enderror" rows="5" maxlength="3000" required>{{ old('descripcion') }}</textarea>@error('descripcion')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+<div class="form-group"><label for="responsable_usuarioid">Responsable de atención</label><select id="responsable_usuarioid" name="responsable_usuarioid" class="form-control @error('responsable_usuarioid') is-invalid @enderror" required><option value="">Seleccione un responsable elegible</option>@foreach($responsables as $r)<option value="{{ $r['usuarioid'] }}" @selected((int)old('responsable_usuarioid') === $r['usuarioid'])>{{ $r['nombre'] }}</option>@endforeach</select>@error('responsable_usuarioid')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+@if(!$responsables)<p class="text-muted">No hay responsables con permiso de atención para esta operación. Debe configurarse una persona elegible antes de registrar la incidencia.</p>@endif
+<div class="op-acciones"><button class="btn btn-success" type="submit" @disabled(!$responsables)>Registrar incidencia</button><a class="btn btn-outline-secondary" href="{{ route('logistica.incidentes.index') }}">Cancelar</a></div>
+</form></div></div>@endif
 @endsection
-
-@push('scripts')
-<script>
-document.getElementById('tipo').addEventListener('change', function () {
-    const div = document.getElementById('tipo-otro-div');
-    div.classList.toggle('d-none', this.value !== 'Otro');
-});
-document.querySelector('form').addEventListener('submit', function (e) {
-    const tipo = document.getElementById('tipo');
-    if (tipo.value === 'Otro') {
-        const other = document.getElementById('tipo_otro').value.trim();
-        if (!other) {
-            e.preventDefault();
-            alert('Especifique el tipo de incidente');
-            return;
-        }
-        tipo.value = other;
-    }
-});
-</script>
-@endpush

@@ -181,7 +181,7 @@ final class DashboardCharts
                 PedidoDistribucionCatalogo::etiquetasEstado(),
                 ['#f59e0b', '#22c55e', '#0ea5e9', '#10b981', '#ef4444', '#94a3b8'],
             ),
-            'incidentesAbiertos' => IncidenteEnvio::query()->where('estado', 'abierto')->count(),
+            'incidentesAbiertos' => ViajeAcceso::scopeIncidentes(IncidenteEnvio::query(), auth()->user())->where('estado', 'abierto')->count(),
         ];
     }
 

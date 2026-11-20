@@ -452,6 +452,10 @@ return [
 
         'jefe_agricultor' => [
 
+            'incidentes.view',
+            'incidentes.update',
+            'incidentes.resolve',
+
             'panel_agricultor.view',
 
             'lotes.view',
@@ -549,6 +553,10 @@ return [
         ],
 
         'jefe_planta' => [
+
+            'incidentes.view',
+            'incidentes.update',
+            'incidentes.resolve',
 
             'panel_planta.view',
 
@@ -662,6 +670,10 @@ return [
 
         'jefe_mayorista' => [
 
+            'incidentes.view',
+            'incidentes.update',
+            'incidentes.resolve',
+
             'panel_mayorista.view',
 
             'asignaciones.view',
@@ -701,6 +713,10 @@ return [
         ],
 
         'mayorista' => [
+
+            'incidentes.view',
+            'incidentes.update',
+            'incidentes.resolve',
 
             'panel_mayorista.view',
 

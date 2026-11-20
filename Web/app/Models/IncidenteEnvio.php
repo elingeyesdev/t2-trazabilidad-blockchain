@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class IncidenteEnvio extends Model
 {
     protected $table = 'incidente_envio';
+
     protected $primaryKey = 'incidenteenvioid';
 
     protected $fillable = [
@@ -21,6 +22,11 @@ class IncidenteEnvio extends Model
         'fecha_resolucion',
         'nota_resolucion',
         'almacenid',
+        'afectado_tipo',
+        'envioasignacionmultipleid',
+        'pedidodistribucionid',
+        'rutadistribucionid',
+        'responsable_usuarioid',
     ];
 
     protected $casts = [
@@ -30,6 +36,10 @@ class IncidenteEnvio extends Model
         'resueltopor_usuarioid' => 'integer',
         'almacenid' => 'integer',
         'fecha_resolucion' => 'datetime',
+        'envioasignacionmultipleid' => 'integer',
+        'pedidodistribucionid' => 'integer',
+        'rutadistribucionid' => 'integer',
+        'responsable_usuarioid' => 'integer',
     ];
 
     public function pedido(): BelongsTo
@@ -51,5 +61,24 @@ class IncidenteEnvio extends Model
     {
         return $this->belongsTo(Almacen::class, 'almacenid', 'almacenid');
     }
-}
 
+    public function responsable(): BelongsTo
+    {
+        return $this->belongsTo(Usuario::class, 'responsable_usuarioid', 'usuarioid');
+    }
+
+    public function envioAgricola(): BelongsTo
+    {
+        return $this->belongsTo(EnvioAsignacionMultiple::class, 'envioasignacionmultipleid', 'envioasignacionmultipleid');
+    }
+
+    public function pedidoDistribucion(): BelongsTo
+    {
+        return $this->belongsTo(PedidoDistribucion::class, 'pedidodistribucionid', 'pedidodistribucionid');
+    }
+
+    public function ruta(): BelongsTo
+    {
+        return $this->belongsTo(RutaDistribucion::class, 'rutadistribucionid', 'rutadistribucionid');
+    }
+}
