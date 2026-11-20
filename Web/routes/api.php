@@ -62,6 +62,8 @@ $recursoProtegido = function (string $uri, string $controller, string $modulo, ?
 };
 
 Route::name('api.')->group(function () use ($recursoProtegido) {
+    Route::get('consulta-recorrido', [\App\Http\Controllers\RecorridoConsultaController::class, 'index'])
+        ->middleware('auth:sanctum')->name('consulta-recorrido');
 
     Route::middleware('auth:sanctum')->group(function () {
         $controller = \App\Http\Controllers\Api\EnvioMovilController::class;

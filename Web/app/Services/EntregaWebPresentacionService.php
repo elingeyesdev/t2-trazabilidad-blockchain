@@ -21,7 +21,7 @@ class EntregaWebPresentacionService
             return null;
         }
 
-        return route('envios.seguimiento', ['tipo' => $tipo, 'envio' => $envio->getKey()]);
+        return route('envios.operacion', ['tipo' => $tipo, 'envio' => $envio->getKey()]);
     }
 
     /** Solo consulta recepciones persistidas: nunca emite ni consume códigos. */

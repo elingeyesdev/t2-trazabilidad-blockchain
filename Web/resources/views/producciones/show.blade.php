@@ -765,6 +765,7 @@
 
 
 @section('content')
+<div class="mb-3"><a class="btn btn-outline-secondary btn-sm" href="{{ route('consulta-recorrido', ['tipo' => 'cosecha', 'partida' => $produccion->getKey()]) }}">Consultar recorrido e indicadores</a></div>
 
 <div class="cos-det">
 

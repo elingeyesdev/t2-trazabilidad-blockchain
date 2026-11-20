@@ -28,7 +28,7 @@ class PedidosEntregasWebTest extends TestCase
 
     private function seguimiento(array $f): string
     {
-        return route('envios.seguimiento', ['tipo' => $f['tipo'], 'envio' => $f['envio']->getKey()]);
+        return route('envios.operacion', ['tipo' => $f['tipo'], 'envio' => $f['envio']->getKey()]);
     }
 
     public function test_bandejas_comparten_tabla_y_conservan_precision_filtros_y_acciones(): void
