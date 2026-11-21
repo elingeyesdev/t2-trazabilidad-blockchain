@@ -35,7 +35,15 @@ class PedidosScreen extends StatefulWidget {
 }
 
 class _PedidosScreenState extends State<PedidosScreen> {
+  static const _estadoFilters = <(String?, String)>[
+    (null, 'Todos'),
+    ('pendiente', 'Pendiente'),
+    ('confirmado', 'Confirmado'),
+    ('rechazado', 'Rechazado'),
+  ];
+
   late PedidoTipo _tipo;
+  String? _estadoFilter;
   PedidosPage? _page;
   int _currentPage = 1;
   bool _loading = true;
@@ -94,6 +102,7 @@ class _PedidosScreenState extends State<PedidosScreen> {
       final result = await widget.service.loadPedidosMovil(
         widget.user,
         tipo: _tipo,
+        estado: _estadoFilter,
         page: page,
       );
       if (!mounted) return;
@@ -154,49 +163,87 @@ class _PedidosScreenState extends State<PedidosScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            if (allowed.length > 1 || canCreate)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 640),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (allowed.length > 1)
-                          for (final tipo in allowed)
-                            ChoiceChip(
-                              key: ValueKey('pedidos.tipo.${tipo.value}'),
-                              label: Text(tipo.label),
-                              selected: _tipo == tipo,
-                              selectedColor: AppTheme.maize,
-                              backgroundColor: AppTheme.surface,
-                              side: const BorderSide(
-                                color: AppTheme.ink,
-                                width: 1.5,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (allowed.length > 1 || canCreate) ...[
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (allowed.length > 1)
+                              for (final tipo in allowed)
+                                ChoiceChip(
+                                  key: ValueKey('pedidos.tipo.${tipo.value}'),
+                                  label: Text(tipo.label),
+                                  selected: _tipo == tipo,
+                                  selectedColor: AppTheme.maize,
+                                  backgroundColor: AppTheme.surface,
+                                  side: const BorderSide(
+                                    color: AppTheme.ink,
+                                    width: 1.5,
+                                  ),
+                                  onSelected: (_) {
+                                    if (_tipo == tipo) return;
+                                    setState(() {
+                                      _tipo = tipo;
+                                      _estadoFilter = null;
+                                    });
+                                    unawaited(_load(1));
+                                  },
+                                ),
+                            if (canCreate)
+                              FilledButton.icon(
+                                key: const ValueKey('pedidos.crear_btn'),
+                                onPressed: () => Navigator.of(
+                                  context,
+                                ).pushNamed('${AppModule.pedidos.route}/nuevo'),
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: const Text('Nuevo pedido'),
                               ),
-                              onSelected: (_) {
-                                if (_tipo == tipo) return;
-                                setState(() => _tipo = tipo);
-                                unawaited(_load(1));
-                              },
-                            ),
-                        if (canCreate)
-                          FilledButton.icon(
-                            key: const ValueKey('pedidos.crear_btn'),
-                            onPressed: () => Navigator.of(
-                              context,
-                            ).pushNamed('${AppModule.pedidos.route}/nuevo'),
-                            icon: const Icon(Icons.add_rounded, size: 18),
-                            label: const Text('Nuevo pedido'),
-                          ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
                       ],
-                    ),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final (value, label) in _estadoFilters) ...[
+                              ChoiceChip(
+                                key: ValueKey(
+                                  'pedidos.estado.${value ?? 'todos'}',
+                                ),
+                                label: Text(label),
+                                selected: _estadoFilter == value,
+                                selectedColor: AppTheme.sprout,
+                                backgroundColor: AppTheme.surface,
+                                side: const BorderSide(
+                                  color: AppTheme.ink,
+                                  width: 1.2,
+                                ),
+                                onSelected: (_) {
+                                  if (_estadoFilter == value) return;
+                                  setState(() => _estadoFilter = value);
+                                  unawaited(_load(1));
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
+            ),
             Expanded(
               child: _loading
                   ? const AppLoading(message: 'Cargando pedidos...')
@@ -231,8 +278,38 @@ class _PedidosScreenState extends State<PedidosScreen> {
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-      itemCount: page.items.length,
-      itemBuilder: (context, index) => _card(context, page.items[index]),
+      itemCount: page.items.length + (page.lastPage > 1 ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == page.items.length) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    OutlinedButton(
+                      onPressed: page.currentPage > 1
+                          ? () => _load(page.currentPage - 1)
+                          : null,
+                      child: const Text('Anterior'),
+                    ),
+                    Text('Página ${page.currentPage} de ${page.lastPage}'),
+                    OutlinedButton(
+                      onPressed: page.currentPage < page.lastPage
+                          ? () => _load(page.currentPage + 1)
+                          : null,
+                      child: const Text('Siguiente'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return _card(context, page.items[index]);
+      },
     );
   }
 

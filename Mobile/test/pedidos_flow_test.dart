@@ -276,4 +276,93 @@ void main() {
       expect(find.text('PDV-2026-120'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Permite consultar pedidos agrícolas y de distribución autorizados con filtro de estado',
+    (tester) async {
+      const dualProfile = {
+        'usuarioid': 1,
+        'nombre': 'Carlos',
+        'apellido': 'Supervisor',
+        'email': 'carlos@example.test',
+        'activo': true,
+        'estado_cuenta': 'aprobado',
+        'roles': [
+          {'id': 1, 'name': 'admin'},
+        ],
+        'permissions': ['pedidos.view', 'pedidos_distribucion.view'],
+      };
+
+      const agricolaConfirmed = {
+        'tipo': 'agricola',
+        'id': 7,
+        'numero_solicitud': 'PED-AGR-007',
+        'estado': 'confirmado',
+        'fecha': '2026-11-20T09:00:00Z',
+        'fecha_entrega_deseada': '2026-11-22',
+        'destino': {
+          'latitud': '-17.3895',
+          'longitud': '-66.1568',
+          'direccion': 'Planta Procesadora Sur',
+        },
+        'acciones_disponibles': [],
+        'detalles': [
+          {
+            'id': 301,
+            'producto': 'Papa Huaycha',
+            'cantidad': '150.000000',
+            'unidad': 'kg',
+            'cantidad_kg': '150.000000',
+          },
+        ],
+      };
+
+      String? lastAgricolaEstado;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(dualProfile);
+        }
+        if (request.url.path == '/api/pedidos' && request.method == 'GET') {
+          return jsonResponse([]);
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [createdDistribucion],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/pedidos-agricolas' &&
+            request.method == 'GET') {
+          lastAgricolaEstado = request.url.queryParameters['estado'];
+          return jsonResponse({
+            'data': [agricolaConfirmed],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver pedidos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Solicitudes y pedidos'));
+      await tester.pumpAndSettle();
+
+      // Inicialmente ve Distribución.
+      expect(find.text('PDV-2026-120'), findsOneWidget);
+      expect(find.text('Destino: Tienda Central (PDV #5)'), findsOneWidget);
+
+      // Cambia a Agrícola y filtra por Confirmado.
+      await tester.tap(find.byKey(const ValueKey('pedidos.tipo.agricola')));
+      await tester.pumpAndSettle();
+      expect(find.text('PED-AGR-007'), findsOneWidget);
+      expect(find.text('Destino: Planta Procesadora Sur'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('pedidos.estado.confirmado')));
+      await tester.pumpAndSettle();
+      expect(lastAgricolaEstado, 'confirmado');
+      expect(find.text('PED-AGR-007'), findsOneWidget);
+    },
+  );
 }
