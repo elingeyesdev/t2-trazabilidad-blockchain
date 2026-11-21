@@ -420,4 +420,98 @@ void main() {
       expect(find.text('92'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Muestra errores 422 de cantidades y 403 de permisos sin perder los datos del formulario',
+    (tester) async {
+      var attempts = 0;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(jefePlantaProfile);
+        }
+        if (request.url.path == '/api/planta/recepciones' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [pendingRecepcion],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/recepciones/60' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': pendingRecepcion});
+        }
+        if (request.url.path == '/api/planta/recepciones/60/confirmar' &&
+            request.method == 'POST') {
+          attempts++;
+          if (attempts == 1) {
+            return jsonResponse({
+              'message': 'Revisa las cantidades ingresadas.',
+              'errors': {
+                'cantidades.41': [
+                  'La cantidad recibida excede el pesaje habilitado.',
+                ],
+              },
+            }, 422);
+          }
+          return jsonResponse({
+            'message': 'No tienes permiso para confirmar en este almacén.',
+          }, 403);
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver recepciones en planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('PED-PLANTA-060'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('recepcion.cantidad.41')),
+        '95',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('recepcion.confirmar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('recepcion.confirmar')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('La cantidad recibida excede el pesaje habilitado.'),
+        findsOneWidget,
+      );
+      expect(find.text('95'), findsOneWidget);
+
+      // Corrige cantidad y reenvía -> 403 permiso explicado sin perder valor ingresado.
+      await tester.enterText(
+        find.byKey(const ValueKey('recepcion.cantidad.41')),
+        '90',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('recepcion.confirmar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('recepcion.confirmar')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No tienes permiso para confirmar en este almacén.'),
+        findsOneWidget,
+      );
+      expect(find.text('90'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('recepcion.recargar_tras_rechazo')),
+        findsOneWidget,
+      );
+    },
+  );
 }

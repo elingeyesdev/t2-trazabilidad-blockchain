@@ -420,6 +420,23 @@ class _PlantaRecepcionDetailScreenState
                           tone: AppNoticeTone.error,
                           message: generalError,
                         ),
+                        if (error?.statusCode == 409 ||
+                            error?.statusCode == 403) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              key: const ValueKey(
+                                'recepcion.recargar_tras_rechazo',
+                              ),
+                              onPressed: _submitting ? null : _load,
+                              icon: const Icon(Icons.refresh_rounded, size: 18),
+                              label: const Text(
+                                'Actualizar estado de la recepción',
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                       ],
                       const SizedBox(height: 8),
@@ -444,7 +461,15 @@ class _PlantaRecepcionDetailScreenState
                     ],
                   ),
                 )
-              else
+              else ...[
+                if (!record.isReceived) ...[
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message:
+                        'Tu cuenta puede consultar esta recepción, pero no tiene permiso para confirmar el pesaje.',
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 for (final line in record.lineas) ...[
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -482,6 +507,7 @@ class _PlantaRecepcionDetailScreenState
                   ),
                   const SizedBox(height: 12),
                 ],
+              ],
             ],
           ),
         ),
