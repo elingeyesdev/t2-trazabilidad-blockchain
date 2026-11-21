@@ -5,6 +5,7 @@ import '../../models/actividad_models.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/cosecha_models.dart';
+import '../../models/inventario_models.dart';
 import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
@@ -74,6 +75,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
   bool get _canCreateCosecha =>
       widget.module == AppModule.producciones &&
       CosechaPermissions.canCreate(widget.user);
+
+  bool get _canViewInventarioAlertas =>
+      widget.module == AppModule.almacenes &&
+      InventarioPermissions.canViewExistencias(widget.user);
 
   @override
   void initState() {
@@ -293,7 +298,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
               ],
             ),
             floatingActionButton:
-                (_canCreateLote || _canAssignActividad || _canCreateCosecha) &&
+                (_canCreateLote ||
+                        _canAssignActividad ||
+                        _canCreateCosecha ||
+                        _canViewInventarioAlertas) &&
                     !loading &&
                     !snapshot.hasError
                 ? FloatingActionButton.extended(
@@ -308,20 +316,28 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         ? _createLote
                         : (_canAssignActividad
                               ? _assignActividad
-                              : _createCosecha),
+                              : (_canCreateCosecha
+                                    ? _createCosecha
+                                    : () => Navigator.of(context).pushNamed(
+                                        '${AppModule.almacenes.route}/alertas',
+                                      ))),
                     icon: Icon(
                       _canCreateLote
                           ? Icons.add_rounded
                           : (_canAssignActividad
                                 ? Icons.assignment_add
-                                : Icons.grass_rounded),
+                                : (_canCreateCosecha
+                                      ? Icons.grass_rounded
+                                      : Icons.notifications_active_outlined)),
                     ),
                     label: Text(
                       _canCreateLote
                           ? 'Nuevo lote'
                           : (_canAssignActividad
                                 ? 'Asignar actividad'
-                                : 'Registrar cosecha'),
+                                : (_canCreateCosecha
+                                      ? 'Registrar cosecha'
+                                      : 'Ver alertas')),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,

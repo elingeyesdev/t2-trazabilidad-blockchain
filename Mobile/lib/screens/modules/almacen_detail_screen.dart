@@ -311,6 +311,15 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
                         icon: const Icon(Icons.tune_rounded),
                         label: const Text('Registrar ajuste'),
                       ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('almacen.ver_alertas'),
+                      onPressed: () => Navigator.of(context).pushNamed(
+                        '${AppModule.almacenes.route}/alertas',
+                        arguments: widget.almacenId,
+                      ),
+                      icon: const Icon(Icons.notifications_active_outlined),
+                      label: const Text('Ver alertas'),
+                    ),
                   ],
                 ),
               ],
@@ -414,6 +423,32 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
             DetailField(
               label: 'Mínimo configurado',
               value: '${formatInventarioDecimal(item.minimo!)} ${item.unidad}',
+            ),
+          ],
+          if (item.partidasVencidas.isNotEmpty || item.vencidaValue > 0) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Vencido',
+              value: item.partidasVencidas.isNotEmpty
+                  ? item.partidasVencidas
+                        .map(
+                          (p) =>
+                              '${formatInventarioDecimal(p.cantidadFisica)} ${item.unidad} (venció ${p.fechaVencimiento ?? 'sin fecha'})',
+                        )
+                        .join(' · ')
+                  : item.formattedVencida,
+            ),
+          ],
+          if (item.partidasProximasAVencer.isNotEmpty) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Próximo a vencer',
+              value: item.partidasProximasAVencer
+                  .map(
+                    (p) =>
+                        '${formatInventarioDecimal(p.cantidadFisica)} ${item.unidad} (vence ${p.fechaVencimiento ?? 'sin fecha'})',
+                  )
+                  .join(' · '),
             ),
           ],
         ],

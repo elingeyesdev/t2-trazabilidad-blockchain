@@ -588,6 +588,19 @@ class ModuleService {
     );
   }
 
+  Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(
+    AuthUser user,
+  ) async {
+    if (!InventarioPermissions.canViewExistencias(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los almacenes autorizados.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', AppModule.almacenes.endpoint);
+    return AlmacenFiltroOption.listFromJson(response);
+  }
+
   Future<AlmacenExistenciasPage> loadAlmacenExistencias(
     AuthUser user,
     int almacenId, {
