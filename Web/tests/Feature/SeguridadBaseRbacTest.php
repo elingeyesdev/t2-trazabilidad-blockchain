@@ -134,6 +134,9 @@ class SeguridadBaseRbacTest extends TestCase
     {
         // El tipo de envío es un segmento enumerado, no un identificador numérico.
         $uri = (str_starts_with($ruta->uri(), 'api/envios/') || str_starts_with($ruta->uri(), 'seguimiento-envios/')) ? str_replace('{tipo}', 'agricola', $ruta->uri()) : $ruta->uri();
+        if (str_starts_with($ruta->uri(), 'api/incidentes/afectados/')) {
+            $uri = str_replace('{tipo}', 'envio_agricola', $uri);
+        }
 
         return '/'.ltrim((string) preg_replace('/\{[^}]+\}/', '1', $uri), '/');
     }

@@ -1,86 +1,27 @@
 @extends('layouts.app')
-
-@section('title', 'Detalle incidente | AgroFusion')
-@section('page_title', 'Detalle del incidente')
-
-@push('styles')
-@include('partials.logistica-modulo-styles')
-<style>
-.incidente-det-card{border-radius:14px;overflow:hidden}
-.incidente-det-card .card-body{padding:1.5rem 1.75rem}
-.incidente-det-card .card-footer{padding:1.15rem 1.75rem}
-.inc-desc-box{background:#fff8f8;border-left:4px solid #dc3545;border-radius:0 10px 10px 0;padding:1.15rem 1.35rem}
-.inc-res-box{background:#f0fdf4;border-left:4px solid #28a745;border-radius:0 10px 10px 0;padding:1.15rem 1.35rem}
-</style>
-@endpush
-
+@section('content_class', 'ag-operacion ag-pedidos-entregas')
+@section('title', 'Incidencia #'.$datos['incidenteenvioid'].' | AgroFusion')
+@section('page_title', 'Detalle de incidencia')
 @section('content')
-<section class="content">
-    <div class="container-fluid px-3 px-lg-4">
-        <div class="card card-outline card-success elevation-1 incidente-det-card mb-3">
-            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center py-3 px-4">
-                <h5 class="mb-0 font-weight-bold text-success"><i class="fas fa-shield-alt mr-2"></i>{{ $incidente->tipo }}</h5>
-                <span class="badge badge-{{ $incidente->estado === 'resuelto' ? 'success' : 'warning' }} px-3 py-2">{{ ucfirst($incidente->estado) }}</span>
-            </div>
-            <div class="card-body">
-                <div class="row mb-4">
-                    <div class="col-md-4 mb-3">
-                        <small class="text-muted text-uppercase d-block mb-1">Fecha reporte</small>
-                        <strong>{{ optional($incidente->created_at)->format('d/m/Y H:i') }}</strong>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <small class="text-muted text-uppercase d-block mb-1">Envío / pedido</small>
-                        <strong>{{ $incidente->externo_envio_id ?? ('Pedido #'.$incidente->pedidoid) }}</strong>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <small class="text-muted text-uppercase d-block mb-1">Reportado por</small>
-                        <strong>{{ $incidente->reportadoPor?->nombreusuario ?? 'N/D' }}</strong>
-                    </div>
-                </div>
-
-                <div class="mb-4 inc-desc-box">
-                    <h6 class="font-weight-bold mb-2"><i class="fas fa-align-left mr-1"></i>¿Qué ocurrió?</h6>
-                    <p class="mb-0 text-dark" style="white-space:pre-wrap;line-height:1.65;">{{ $incidente->descripcion }}</p>
-                </div>
-
-                @if($incidente->estado === 'resuelto')
-                <div class="inc-res-box">
-                    <h6 class="font-weight-bold mb-2"><i class="fas fa-check-circle mr-1"></i>Resolución</h6>
-                    <p class="mb-1">{{ $incidente->nota_resolucion ?: 'Sin nota de cierre.' }}</p>
-                    <small class="text-muted">
-                        {{ optional($incidente->fecha_resolucion)->format('d/m/Y H:i') }}
-                        @if($incidente->resueltoPor) · {{ $incidente->resueltoPor->nombreusuario }} @endif
-                    </small>
-                </div>
-                @elseif(auth()->user()?->can('incidentes.resolve'))
-                <form method="POST" action="{{ route('logistica.incidentes.resolve', $incidente) }}" class="p-4 rounded border bg-light">
-                    @csrf
-                    @method('PATCH')
-                    <label class="small font-weight-bold d-block mb-2">Cerrar incidente</label>
-                    <textarea name="nota_resolucion" class="form-control mb-3" rows="3" placeholder="Nota de resolución"></textarea>
-                    <button class="btn btn-success px-4 py-2"><i class="fas fa-check mr-1"></i>Marcar resuelto</button>
-                </form>
-                @endif
-            </div>
-            <div class="card-footer bg-white d-flex flex-wrap crud-actions">
-                <a href="{{ route('logistica.incidentes.index') }}" class="btn btn-outline-secondary px-4 py-2">
-                    <i class="fas fa-arrow-left mr-1"></i>Volver
-                </a>
-                @can('incidentes.update')
-                <a href="{{ route('logistica.incidentes.edit', $incidente) }}" class="btn btn-warning px-4 py-2">
-                    <i class="fas fa-edit mr-1"></i>Editar
-                </a>
-                @endcan
-                @can('incidentes.delete')
-                <form action="{{ route('logistica.incidentes.destroy', $incidente) }}" method="POST"
-                      onsubmit="return confirm('¿Eliminar este incidente?')">
-                    @csrf
-                    @method('DELETE')
-                    <button class="btn btn-outline-danger px-4 py-2"><i class="fas fa-trash mr-1"></i>Eliminar</button>
-                </form>
-                @endcan
-            </div>
-        </div>
-    </div>
-</section>
+<x-operacion.encabezado :titulo="'Incidencia #'.$datos['incidenteenvioid']" :descripcion="$datos['tipo']" />
+<div class="card mb-3"><div class="card-body"><span class="badge badge-light border mb-3">{{ ucfirst($datos['estado']) }}</span><dl class="row mb-0">
+<dt class="col-sm-4 text-muted">Pedido o envío</dt><dd class="col-sm-8">{{ $datos['afectado_referencia'] ?? 'Vínculo no disponible para esta cuenta' }}</dd>
+<dt class="col-sm-4 text-muted">Responsable de atención</dt><dd class="col-sm-8">{{ $datos['responsable_nombre'] ?? 'Sin responsable registrado' }}</dd>
+<dt class="col-sm-4 text-muted">Autor del reporte</dt><dd class="col-sm-8">{{ $datos['reportado_por']['nombre'] ?? 'No disponible' }}</dd>
+<dt class="col-sm-4 text-muted">Fecha de registro</dt><dd class="col-sm-8">{{ $datos['created_at'] ? \Carbon\Carbon::parse($datos['created_at'])->format('d/m/Y H:i') : 'Sin fecha registrada' }}</dd>
+</dl></div></div>
+<section class="card mb-3"><div class="card-header"><h3 class="card-title">Problema reportado</h3></div><div class="card-body" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ $datos['descripcion'] }}</div></section>
+<section class="card mb-3"><div class="card-header"><h3 class="card-title">Seguimiento y solución</h3></div><div class="card-body">
+@if($datos['estado'] === 'resuelto')
+    <p style="white-space:pre-wrap;overflow-wrap:anywhere">{{ $datos['nota_resolucion'] ?? 'Explicación no registrada en este antecedente histórico.' }}</p><p class="small text-muted mb-0">{{ $datos['fecha_resolucion'] ? \Carbon\Carbon::parse($datos['fecha_resolucion'])->format('d/m/Y H:i') : 'Fecha de resolución no registrada' }} · {{ $datos['resuelto_por']['nombre'] ?? 'Usuario de resolución no disponible' }}</p>
+@elseif(in_array($datos['estado'], ['abierto', 'pendiente'], true))
+    <p class="text-muted">Pendiente de resolución</p>
+    @if($datos['puede_resolver'])<form method="post" action="{{ route('logistica.incidentes.resolve', $datos['incidenteenvioid']) }}">@csrf @method('PATCH')
+        <div class="form-group"><label for="nota_resolucion">Explique cómo se solucionó el problema</label><textarea id="nota_resolucion" name="nota_resolucion" class="form-control @error('nota_resolucion') is-invalid @enderror" rows="4" required maxlength="2000">{{ old('nota_resolucion') }}</textarea>@error('nota_resolucion')<div class="invalid-feedback">{{ $message }}</div>@enderror</div><button class="btn btn-success" type="submit">Confirmar resolución</button>
+    </form>@endif
+@else<p class="mb-0">{{ $datos['estado'] }}</p>@endif
+</div></section>
+<div class="op-acciones"><a class="btn btn-outline-secondary" href="{{ route('logistica.incidentes.index') }}">Volver a incidencias</a>
+@if(in_array($datos['estado'], ['abierto', 'pendiente'], true) && \App\Support\UsuarioRol::puedeOperar(auth()->user()))@can('incidentes.update')<a class="btn btn-outline-secondary" href="{{ route('logistica.incidentes.edit', $datos['incidenteenvioid']) }}">Editar reporte o asignar responsable pendiente</a>@endcan @endif
+</div>
 @endsection

@@ -251,6 +251,7 @@
 @endpush
 
 @section('content')
+<div class="mb-3"><a class="btn btn-outline-secondary btn-sm" href="{{ route('consulta-recorrido', ['tipo' => 'planta', 'partida' => $lote->getKey()]) }}">Consultar recorrido e indicadores</a></div>
 <script>
 (function () {
     var key = 'lp_procesamiento_scroll';

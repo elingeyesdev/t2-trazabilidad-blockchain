@@ -527,7 +527,7 @@ final class LocalOrgTrackFallback
             : 0;
 
         $incidentesAbiertos = Schema::hasTable('incidente_envio')
-            ? (int) IncidenteEnvio::query()->where('estado', 'abierto')->count()
+            ? (int) ViajeAcceso::scopeIncidentes(IncidenteEnvio::query(), auth()->user())->where('estado', 'abierto')->count()
             : 0;
 
         return [

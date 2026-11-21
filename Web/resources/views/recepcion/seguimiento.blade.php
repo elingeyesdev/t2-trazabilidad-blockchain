@@ -3,6 +3,7 @@
 @section('title', 'Seguimiento de entrega | AgroFusion')
 @section('page_title', 'Seguimiento de entrega')
 @section('content')
+@include('logistica.incidentes.enlace', ['tipoAfectado' => $envio['tipo'] === 'agricola' ? 'envio_agricola' : $envio['tipo'], 'idAfectado' => $envio['id']])
 <x-operacion.encabezado :titulo="$envio['referencia']" descripcion="Consulte el envío y los comprobantes de recepción disponibles para su cuenta." />
 <div class="card mb-3"><div class="card-body">
     <div class="op-acciones mb-3">

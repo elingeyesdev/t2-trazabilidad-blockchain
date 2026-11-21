@@ -38,6 +38,51 @@ void main() {
     return ModuleService(api);
   }
 
+  test(
+    'Incidencias conserva responsable vinculo y solucion del contrato API',
+    () async {
+      final modules = service((request) async {
+        expect(request.url.path, '/api/incidentes');
+        return http.Response(
+          jsonEncode({
+            'data': [
+              {
+                'incidenteenvioid': 53,
+                'tipo': 'Retraso',
+                'descripcion': 'Demora en la entrega',
+                'estado': 'resuelto',
+                'afectado_referencia': 'Pedido de distribucion #21',
+                'responsable_nombre': 'Responsable registrado',
+                'seguimiento': 'Resuelta',
+                'nota_resolucion': 'Entrega coordinada y problema atendido',
+                'fecha_resolucion': '2026-11-20T17:00:00-04:00',
+                'passwordhash': 'no exponer',
+                'firma_path': 'archivo privado',
+              },
+            ],
+            'current_page': 1,
+            'last_page': 1,
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final page = await modules.load(
+        AppModule.incidentes,
+        allowedUser(AppModule.incidentes),
+      );
+      final details = page.records.single.details;
+      expect(details['Responsable de atención'], 'Responsable registrado');
+      expect(details['Pedido o envío'], 'Pedido de distribucion #21');
+      expect(
+        details['Solución registrada'],
+        'Entrega coordinada y problema atendido',
+      );
+      expect(details.values, isNot(contains('no exponer')));
+      expect(details.values, isNot(contains('archivo privado')));
+    },
+  );
+
   setUp(() async {
     FlutterSecureStorage.setMockInitialValues({});
     await storage.saveToken('1|modulos');
