@@ -93,6 +93,19 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
     }
   }
 
+  void _backToList() {
+    final navigator = Navigator.of(context);
+    final listRoute = AppModule.tareasPlanta.route;
+    var found = false;
+    navigator.popUntil((route) {
+      found = route.settings.name == listRoute;
+      return found || route.isFirst;
+    });
+    if (!found && PlantaPermissions.canViewTareas(widget.user)) {
+      navigator.pushNamed(listRoute);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!PlantaPermissions.canViewProcesamiento(widget.user) ||
@@ -138,11 +151,28 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
             : _content(context, _recorrido!),
       ),
       bottomNavigationBar: BottomActionBar(
-        child: OutlinedButton.icon(
-          key: const ValueKey('procesamiento.volver'),
-          onPressed: _back,
-          icon: const Icon(Icons.arrow_back_rounded),
-          label: const Text('Volver'),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                key: const ValueKey('procesamiento.volver'),
+                onPressed: _back,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Volver'),
+              ),
+            ),
+            if (PlantaPermissions.canViewTareas(widget.user)) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const ValueKey('procesamiento.volver_listado'),
+                  onPressed: _backToList,
+                  icon: const Icon(Icons.list_alt_rounded),
+                  label: const Text('Listado'),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -150,147 +180,150 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
 
   Widget _content(BuildContext context, ProcesamientoRecorrido recorrido) {
     final look = AppModule.tareasPlanta.look;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: look.tone,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: AppTheme.ink, width: 2),
-                  boxShadow: AppTheme.stamp(5),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Lote de producción #${recorrido.loteProduccionId}',
-                      style: TextStyle(
-                        color: look.ink,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        recorrido.title,
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                    ),
-                    if (recorrido.codigo != null &&
-                        recorrido.codigo != recorrido.title) ...[
-                      const SizedBox(height: 6),
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: look.tone,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: AppTheme.ink, width: 2),
+                    boxShadow: AppTheme.stamp(5),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        'Código: ${recorrido.codigo}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                        'Lote de producción #${recorrido.loteProduccionId}',
+                        style: TextStyle(
+                          color: look.ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          recorrido.title,
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                      ),
+                      if (recorrido.codigo != null &&
+                          recorrido.codigo != recorrido.title) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Código: ${recorrido.codigo}',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              SectionTitle('Lotes de origen', color: look.tone),
-              const SizedBox(height: 12),
-              if (recorrido.restricciones.origenes) ...[
-                const AppNotice(
-                  tone: AppNoticeTone.warning,
-                  message:
-                      'Parte de las materias primas de este proceso pertenece a almacenes o registros restringidos para tu cuenta.',
-                ),
+                const SizedBox(height: 24),
+                SectionTitle('Lotes de origen', color: look.tone),
                 const SizedBox(height: 12),
-              ],
-              if (recorrido.origenes.isEmpty &&
-                  !recorrido.restricciones.origenes)
-                const AppNotice(
-                  tone: AppNoticeTone.info,
-                  message:
-                      'No hay lotes de origen visibles registrados para este procesamiento.',
-                )
-              else
-                for (final origen in recorrido.origenes) ...[
-                  _origenCard(context, origen),
-                  const SizedBox(height: 12),
-                ],
-              const SizedBox(height: 16),
-              SectionTitle('Productos obtenidos', color: look.tone),
-              const SizedBox(height: 12),
-              if (recorrido.productosObtenidos.isEmpty)
-                const AppNotice(
-                  tone: AppNoticeTone.info,
-                  message:
-                      'Todavía no hay productos obtenidos visibles para este procesamiento.',
-                )
-              else
-                for (final producto in recorrido.productosObtenidos) ...[
-                  _productoCard(
-                    context,
-                    producto,
-                    recorrido.ingresosProduccion
-                        .where((i) => i.partidaId == producto.partidaId)
-                        .toList(),
+                if (recorrido.restricciones.origenes) ...[
+                  const AppNotice(
+                    tone: AppNoticeTone.warning,
+                    message:
+                        'Parte de las materias primas de este proceso pertenece a almacenes o registros restringidos para tu cuenta.',
                   ),
                   const SizedBox(height: 12),
                 ],
-              const SizedBox(height: 16),
-              SectionTitle(
-                'Almacenamiento e ingreso original',
-                color: look.tone,
-              ),
-              const SizedBox(height: 12),
-              if (recorrido.restricciones.destinos) ...[
-                const AppNotice(
-                  tone: AppNoticeTone.warning,
-                  message:
-                      'Parte de los destinos de ingreso pertenece a almacenes restringidos para tu cuenta.',
+                if (recorrido.origenes.isEmpty &&
+                    !recorrido.restricciones.origenes)
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message:
+                        'No hay lotes de origen visibles registrados para este procesamiento.',
+                  )
+                else
+                  for (final origen in recorrido.origenes) ...[
+                    _origenCard(context, origen),
+                    const SizedBox(height: 12),
+                  ],
+                const SizedBox(height: 16),
+                SectionTitle('Productos obtenidos', color: look.tone),
+                const SizedBox(height: 12),
+                if (recorrido.productosObtenidos.isEmpty)
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message:
+                        'Todavía no hay productos obtenidos visibles para este procesamiento.',
+                  )
+                else
+                  for (final producto in recorrido.productosObtenidos) ...[
+                    _productoCard(
+                      context,
+                      producto,
+                      recorrido.ingresosProduccion
+                          .where((i) => i.partidaId == producto.partidaId)
+                          .toList(),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                const SizedBox(height: 16),
+                SectionTitle(
+                  'Almacenamiento e ingreso original',
+                  color: look.tone,
                 ),
                 const SizedBox(height: 12),
-              ],
-              if (recorrido.ingresosProduccion.isEmpty &&
-                  !recorrido.restricciones.destinos)
-                const AppNotice(
-                  tone: AppNoticeTone.info,
-                  message:
-                      'Todavía no hay ingresos a almacén visibles para este procesamiento.',
-                )
-              else
-                for (final ingreso in recorrido.ingresosProduccion) ...[
-                  _ingresoCard(context, ingreso),
+                if (recorrido.restricciones.destinos) ...[
+                  const AppNotice(
+                    tone: AppNoticeTone.warning,
+                    message:
+                        'Parte de los destinos de ingreso pertenece a almacenes restringidos para tu cuenta.',
+                  ),
                   const SizedBox(height: 12),
                 ],
-              const SizedBox(height: 16),
-              SectionTitle('Ubicación y saldo actual', color: look.tone),
-              const SizedBox(height: 12),
-              if (recorrido.restricciones.ubicacionesActuales) ...[
-                const AppNotice(
-                  tone: AppNoticeTone.warning,
-                  message:
-                      'Parte de las ubicaciones o saldos actuales pertenece a almacenes restringidos para tu cuenta.',
-                ),
+                if (recorrido.ingresosProduccion.isEmpty &&
+                    !recorrido.restricciones.destinos)
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message:
+                        'Todavía no hay ingresos a almacén visibles para este procesamiento.',
+                  )
+                else
+                  for (final ingreso in recorrido.ingresosProduccion) ...[
+                    _ingresoCard(context, ingreso),
+                    const SizedBox(height: 12),
+                  ],
+                const SizedBox(height: 16),
+                SectionTitle('Ubicación y saldo actual', color: look.tone),
                 const SizedBox(height: 12),
-              ],
-              if (recorrido.ubicacionesActuales.isEmpty &&
-                  !recorrido.restricciones.ubicacionesActuales)
-                const AppNotice(
-                  tone: AppNoticeTone.info,
-                  message:
-                      'No hay ubicaciones actuales visibles para las partidas de este procesamiento.',
-                )
-              else
-                for (final ubicacion in recorrido.ubicacionesActuales) ...[
-                  _ubicacionCard(context, ubicacion),
+                if (recorrido.restricciones.ubicacionesActuales) ...[
+                  const AppNotice(
+                    tone: AppNoticeTone.warning,
+                    message:
+                        'Parte de las ubicaciones o saldos actuales pertenece a almacenes restringidos para tu cuenta.',
+                  ),
                   const SizedBox(height: 12),
                 ],
-            ],
+                if (recorrido.ubicacionesActuales.isEmpty &&
+                    !recorrido.restricciones.ubicacionesActuales)
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message:
+                        'No hay ubicaciones actuales visibles para las partidas de este procesamiento.',
+                  )
+                else
+                  for (final ubicacion in recorrido.ubicacionesActuales) ...[
+                    _ubicacionCard(context, ubicacion),
+                    const SizedBox(height: 12),
+                  ],
+              ],
+            ),
           ),
         ),
       ),

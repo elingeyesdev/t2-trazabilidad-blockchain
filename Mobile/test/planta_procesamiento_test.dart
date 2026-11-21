@@ -586,4 +586,86 @@ void main() {
       expect(find.text('Procesamiento no disponible'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Permite actualizar la ficha reflejando cambios del servidor y regresar al listado',
+    (tester) async {
+      var calls = 0;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [tareaRow],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/31' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': tareaRow});
+        }
+        if (request.url.path == '/api/planta/lotes-produccion/88' &&
+            request.method == 'GET') {
+          calls++;
+          if (calls == 1) {
+            return jsonResponse({'data': recorridoPayload});
+          }
+          return jsonResponse({
+            'data': {
+              ...recorridoPayload,
+              'ubicaciones_actuales': [
+                {
+                  'partida_id': 301,
+                  'insumo_id': 90,
+                  'producto': 'Hojuelas de Papa',
+                  'presentacion_id': 15,
+                  'presentacion': 'Bolsa 500 g',
+                  'unidad': 'bolsas',
+                  'cantidad_actual': '120.000000',
+                  'cantidad_actual_kg': '60.000000',
+                  'almacen_id': 11,
+                  'almacen': 'Almacén Producto Terminado Norte',
+                },
+              ],
+            },
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lavado y selección'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('140 bolsas'), findsOneWidget);
+      expect(find.text('70 kg'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('procesamiento.actualizar')));
+      await tester.pumpAndSettle();
+
+      expect(calls, 2);
+      expect(find.text('120 bolsas'), findsOneWidget);
+      expect(find.text('60 kg'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('procesamiento.volver_listado')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tareas de planta'), findsOneWidget);
+      expect(find.text('Lavado y selección'), findsOneWidget);
+    },
+  );
 }
