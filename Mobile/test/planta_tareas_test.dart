@@ -4,6 +4,7 @@ import 'package:agrofusion_mobile/app.dart';
 import 'package:agrofusion_mobile/config/api_config.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -193,6 +194,115 @@ void main() {
       expect(find.text('Lavadora Industrial A1'), findsOneWidget);
       expect(find.text('MAQ-01'), findsOneWidget);
       expect(find.text('Disponible'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Permite introducir y guardar los resultados medidos de una etapa autorizada',
+    (tester) async {
+      var completed = false;
+      Map<String, dynamic>? sentBody;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioPlantaProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [
+              completed
+                  ? {...tareaLavado, 'estado': 'completada'}
+                  : tareaLavado,
+            ],
+            'meta': {'current_page': 1, 'last_page': 1, 'total': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/501' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': completed
+                ? {
+                    ...tareaLavado,
+                    'estado': 'completada',
+                    'completada_en': '2026-11-21T11:30:00Z',
+                    'resultado': {
+                      'registroprocesomaquinaplantaid': 88,
+                      'usuarioid': 15,
+                      'fecha_registro': '2026-11-21T11:30:00Z',
+                      'parametros': [
+                        {
+                          'variableestandarid': 12,
+                          'nombre': 'Temperatura de lavado',
+                          'unidad': '°C',
+                          'valor': 65.5,
+                          'valor_decimal': '65.5',
+                        },
+                      ],
+                    },
+                  }
+                : tareaLavado,
+            'meta': {
+              'puede_completar': !completed,
+              'requisito_pendiente': null,
+              'maquinas_elegibles': completed ? <int>[] : [3],
+              'parametros_requeridos': [
+                {
+                  'variableestandarid': 12,
+                  'nombre': 'Temperatura de lavado',
+                  'unidad': '°C',
+                  'valor_minimo': 20,
+                  'valor_maximo': 80,
+                },
+              ],
+              'permite_parciales': false,
+            },
+          });
+        }
+        if (request.url.path ==
+                '/api/planta/lotes-produccion/90/tareas/501/completar' &&
+            request.method == 'POST') {
+          sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+          completed = true;
+          return jsonResponse({
+            'data': {...tareaLavado, 'estado': 'completada'},
+            'meta': {'puede_completar': false},
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lavado y desinfección'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const ValueKey('planta.param.12')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('planta.param.12')),
+        '65.5',
+      );
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('planta.tarea.completar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('planta.tarea.completar')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Completar etapa de planta?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirmar cierre'));
+      await tester.pumpAndSettle();
+
+      expect(sentBody, {
+        'parametros': [
+          {'variableestandarid': 12, 'valor': '65.5'},
+        ],
+      });
+      expect(find.text('Completada'), findsOneWidget);
+      expect(find.text('Resultados registrados'), findsOneWidget);
+      expect(find.text('65.5 °C'), findsOneWidget);
     },
   );
 }

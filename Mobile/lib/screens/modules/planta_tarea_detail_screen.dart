@@ -9,10 +9,12 @@ import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
+import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
+import '../../widgets/form_validation.dart';
 import '../../widgets/record_status_badge.dart';
 import 'module_access_denied.dart';
 
@@ -38,10 +40,16 @@ class PlantaTareaDetailScreen extends StatefulWidget {
 }
 
 class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final Map<int, TextEditingController> _paramControllers = {};
+
   TareaPlantaDetail? _detail;
   bool _loading = true;
+  bool _submitting = false;
   String? _loadError;
   int? _loadErrorStatus;
+  ApiException? _submitError;
+  String? _notice;
 
   @override
   void initState() {
@@ -53,6 +61,17 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
       _loadErrorStatus = 403;
     }
   }
+
+  @override
+  void dispose() {
+    for (final controller in _paramControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _controllerFor(int variableId) =>
+      _paramControllers.putIfAbsent(variableId, () => TextEditingController());
 
   Future<void> _load() async {
     setState(() {
@@ -66,6 +85,9 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
         widget.asignacionId,
       );
       if (!mounted) return;
+      for (final param in detail.parametrosRequeridos) {
+        _controllerFor(param.variableEstandarId);
+      }
       setState(() {
         _detail = detail;
         _loading = false;
@@ -82,6 +104,104 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
       setState(() {
         _loading = false;
         _loadError = 'No se pudo consultar el detalle de la tarea de planta.';
+      });
+    }
+  }
+
+  String? _fieldError(String field) {
+    final messages = _submitError?.validationErrors[field];
+    return messages == null || messages.isEmpty ? null : messages.join('\n');
+  }
+
+  void _clearError({String? field}) {
+    final error = _submitError;
+    if (error == null) return;
+    if (field != null && error.validationErrors.isNotEmpty) {
+      if (!error.validationErrors.containsKey(field)) return;
+      final remaining = Map.of(error.validationErrors)..remove(field);
+      setState(() {
+        _submitError = remaining.isEmpty
+            ? null
+            : ApiException(
+                error.message,
+                statusCode: error.statusCode,
+                validationErrors: remaining,
+              );
+      });
+    } else {
+      setState(() => _submitError = null);
+    }
+  }
+
+  Future<void> _completeStage(TareaPlantaDetail detail) async {
+    if (_submitting || !detail.puedeCompletar) return;
+    if (!validateForm(_formKey)) return;
+
+    final parametros = <Map<String, Object?>>[];
+    final summaryLines = <String>[
+      'Proceso: ${detail.tarea.procesoNombre} (Etapa ${detail.tarea.orden})',
+      'Máquina: ${detail.tarea.maquinaLabel}',
+    ];
+    for (final param in detail.parametrosRequeridos) {
+      final raw = _controllerFor(
+        param.variableEstandarId,
+      ).text.trim().replaceAll(',', '.');
+      parametros.add({
+        'variableestandarid': param.variableEstandarId,
+        'valor': raw,
+      });
+      final unit = param.unidad == null || param.unidad!.isEmpty
+          ? ''
+          : ' ${param.unidad}';
+      summaryLines.add('${param.nombre}: $raw$unit');
+    }
+
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.task_alt_rounded,
+      title: '¿Completar etapa de planta?',
+      message:
+          'Los resultados quedarán registrados y el proceso avanzará según el orden configurado.',
+      details: summaryLines,
+      confirmLabel: 'Confirmar cierre',
+    );
+    if (!mounted || !confirmed) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+    });
+
+    try {
+      await widget.service.completeTareaPlanta(
+        widget.user,
+        loteProduccionId: detail.tarea.loteProduccionId,
+        asignacionId: detail.tarea.id,
+        parametros: parametros,
+      );
+      if (!mounted) return;
+      widget.onTareaUpdated?.call();
+      setState(() {
+        _submitting = false;
+        _notice =
+            'Etapa ${detail.tarea.orden} (${detail.tarea.procesoNombre}) completada correctamente.';
+      });
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _submitError = error;
+      });
+      revealFormErrors(_formKey);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _submitError = const ApiException(
+          'No se pudieron guardar los resultados. Tus datos se conservaron para reintentar.',
+        );
       });
     }
   }
@@ -211,6 +331,10 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
                   ],
                 ),
               ),
+              if (_notice case final notice?) ...[
+                const SizedBox(height: 18),
+                AppNotice(tone: AppNoticeTone.success, message: notice),
+              ],
               const SizedBox(height: 24),
               SectionTitle('Proceso y etapa', color: look.tone),
               const SizedBox(height: 12),
@@ -287,6 +411,15 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
                   ],
                 ),
               ),
+              if (detail.puedeCompletar) ...[
+                const SizedBox(height: 24),
+                SectionTitle(
+                  'Registrar resultados de la etapa',
+                  color: look.tone,
+                ),
+                const SizedBox(height: 12),
+                _completionForm(context, detail),
+              ],
               if (detail.resultadoParametros.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 SectionTitle('Resultados registrados', color: look.tone),
@@ -323,6 +456,134 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _completionForm(BuildContext context, TareaPlantaDetail detail) {
+    final scrollPadding = formScrollPadding(context);
+    final mappedFields = <String>{
+      'parametros',
+      for (var i = 0; i < detail.parametrosRequeridos.length; i++) ...[
+        'parametros.$i.valor',
+        'parametros.$i.variableestandarid',
+      ],
+    };
+    final error = _submitError;
+    final generalError =
+        error != null &&
+            (error.validationErrors.isEmpty ||
+                error.validationErrors.keys.any(
+                  (field) => !mappedFields.contains(field),
+                ))
+        ? error.message
+        : null;
+    final paramsError = _fieldError('parametros');
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (detail.parametrosRequeridos.isEmpty)
+              const Text(
+                'Esta etapa no requiere mediciones adicionales. Puedes confirmar su cierre directamente.',
+              )
+            else ...[
+              const Text(
+                'Introduce las mediciones reales registradas en esta etapa antes de completar.',
+              ),
+              const SizedBox(height: 16),
+              for (var i = 0; i < detail.parametrosRequeridos.length; i++) ...[
+                if (i > 0) const SizedBox(height: 14),
+                _paramField(
+                  detail.parametrosRequeridos[i],
+                  index: i,
+                  scrollPadding: scrollPadding,
+                ),
+              ],
+            ],
+            if (paramsError != null) ...[
+              const SizedBox(height: 14),
+              AppNotice(tone: AppNoticeTone.error, message: paramsError),
+            ],
+            if (generalError != null) ...[
+              const SizedBox(height: 14),
+              AppNotice(tone: AppNoticeTone.error, message: generalError),
+            ],
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              key: const ValueKey('planta.tarea.completar'),
+              onPressed: _submitting ? null : () => _completeStage(detail),
+              icon: _submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.task_alt_rounded),
+              label: Text(
+                _submitting ? 'Guardando resultados...' : 'Completar etapa',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _paramField(
+    ParametroRequerido param, {
+    required int index,
+    required EdgeInsets scrollPadding,
+  }) {
+    final fieldKey = 'parametros.$index.valor';
+    return TextFormField(
+      key: ValueKey('planta.param.${param.variableEstandarId}'),
+      controller: _controllerFor(param.variableEstandarId),
+      scrollPadding: scrollPadding,
+      enabled: !_submitting,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
+      ),
+      forceErrorText:
+          _fieldError(fieldKey) ??
+          _fieldError('parametros.$index.variableestandarid'),
+      decoration: InputDecoration(
+        labelText: param.nombre,
+        suffixText: param.unidad,
+        helperText: param.rangeHint,
+        prefixIcon: const Icon(Icons.tune_rounded),
+      ),
+      validator: (value) {
+        final normalized = (value ?? '').trim().replaceAll(',', '.');
+        if (normalized.isEmpty) {
+          return 'Registra el valor medido de ${param.nombre}.';
+        }
+        final parsed = double.tryParse(normalized);
+        if (parsed == null || !parsed.isFinite) {
+          return 'Indica un número válido.';
+        }
+        if (param.valorMinimo != null && parsed < param.valorMinimo!) {
+          return 'El valor está por debajo del mínimo (${param.rangeHint ?? param.valorMinimo}).';
+        }
+        if (param.valorMaximo != null && parsed > param.valorMaximo!) {
+          return 'El valor supera el máximo (${param.rangeHint ?? param.valorMaximo}).';
+        }
+        return null;
+      },
+      onChanged: (_) {
+        _clearError(field: fieldKey);
+        _clearError(field: 'parametros');
+      },
     );
   }
 }

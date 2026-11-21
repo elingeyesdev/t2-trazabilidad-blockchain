@@ -633,4 +633,27 @@ class ModuleService {
     );
     return TareaPlantaDetail.fromJson(response);
   }
+
+  Future<TareaPlantaDetail> completeTareaPlanta(
+    AuthUser user, {
+    required int loteProduccionId,
+    required int asignacionId,
+    required List<Map<String, Object?>> parametros,
+  }) async {
+    if (!PlantaPermissions.canViewTareas(user)) {
+      throw const ApiException(
+        'No tienes permiso para completar esta tarea de planta.',
+        statusCode: 403,
+      );
+    }
+    if (loteProduccionId <= 0 || asignacionId <= 0) {
+      throw const ApiException('La tarea solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'POST',
+      'planta/lotes-produccion/$loteProduccionId/tareas/$asignacionId/completar',
+      body: {'parametros': parametros},
+    );
+    return TareaPlantaDetail.fromJson(response);
+  }
 }
