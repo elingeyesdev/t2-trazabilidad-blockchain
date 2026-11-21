@@ -247,6 +247,15 @@ class _PlantaRecepcionesScreenState extends State<PlantaRecepcionesScreen> {
                   '${record.lineas.length} ${record.lineas.length == 1 ? 'línea' : 'líneas'} de materia prima',
                   style: theme.bodyMedium,
                 ),
+                if (record.lineas.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Origen: ${record.lineas.map((l) => l.origenLoteLabel).toSet().join(', ')}',
+                    style: theme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

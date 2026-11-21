@@ -353,6 +353,12 @@ class _PlantaRecepcionDetailScreenState
                               ),
                               const SizedBox(height: 4),
                               Text(
+                                'Lote de origen: ${line.origenLoteLabel}',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
                                 'Enviado: ${line.formattedEnviada}',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
@@ -447,6 +453,11 @@ class _PlantaRecepcionDetailScreenState
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 8),
+                        DetailField(
+                          label: 'Lote de origen',
+                          value: line.origenLoteLabel,
+                        ),
+                        const Divider(height: 1),
                         DetailField(
                           label: 'Cantidad enviada',
                           value: line.formattedEnviada,

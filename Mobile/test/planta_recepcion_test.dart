@@ -150,4 +150,63 @@ void main() {
       expect(find.text('98.5 kg'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Cada recepción identifica el lote de origen correspondiente en listado y detalle',
+    (tester) async {
+      final multiLineRecepcion = {
+        ...pendingRecepcion,
+        'lineas': [
+          ...(pendingRecepcion['lineas'] as List),
+          {
+            'detallepedidoid': 42,
+            'producto': 'Quinua Real',
+            'cantidad_enviada': '50',
+            'unidad': 'kg',
+            'produccionalmacenamientoid': null,
+            'produccionid': null,
+            'loteid': null,
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(jefePlantaProfile);
+        }
+        if (request.url.path == '/api/planta/recepciones' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [multiLineRecepcion],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/recepciones/60' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': multiLineRecepcion});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver recepciones en planta'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Origen: Lote #25 · Cosecha #71'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('PED-PLANTA-060'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Lote de origen: Lote #25 · Cosecha #71'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Lote de origen: Sin lote de origen vinculado'),
+        findsOneWidget,
+      );
+    },
+  );
 }
