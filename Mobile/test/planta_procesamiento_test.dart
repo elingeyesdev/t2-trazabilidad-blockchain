@@ -302,4 +302,66 @@ void main() {
       );
     },
   );
+
+  testWidgets('Identifica los productos obtenidos y sus cantidades', (
+    tester,
+  ) async {
+    final payloadWithLegacy = {
+      ...recorridoPayload,
+      'productos_obtenidos': [
+        ...(recorridoPayload['productos_obtenidos'] as List),
+        {
+          'partida_id': 302,
+          'insumo_id': 91,
+          'producto': 'Harina de Papa',
+          'presentacion_id': 16,
+          'presentacion': 'Saco 25 kg',
+        },
+      ],
+    };
+
+    await startApp(tester, (request) async {
+      if (request.url.path == '/api/me') {
+        return jsonResponse(operarioProfile);
+      }
+      if (request.url.path == '/api/planta/tareas' && request.method == 'GET') {
+        return jsonResponse({
+          'data': [tareaRow],
+          'meta': {'current_page': 1, 'last_page': 1},
+        });
+      }
+      if (request.url.path == '/api/planta/tareas/31' &&
+          request.method == 'GET') {
+        return jsonResponse({'data': tareaRow});
+      }
+      if (request.url.path == '/api/planta/lotes-produccion/88' &&
+          request.method == 'GET') {
+        return jsonResponse({'data': payloadWithLegacy});
+      }
+      return jsonResponse({}, 404);
+    });
+
+    await tester.tap(find.text('Ver tareas de planta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lavado y selección'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tarea.ver_origen_resultado')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Productos obtenidos'), findsOneWidget);
+    expect(find.text('Hojuelas de Papa · Bolsa 500 g'), findsOneWidget);
+    expect(find.text('Partida #301'), findsOneWidget);
+    expect(find.text('180 bolsas'), findsOneWidget);
+    expect(find.text('90 kg'), findsOneWidget);
+    expect(find.text('Harina de Papa · Saco 25 kg'), findsOneWidget);
+    expect(find.text('Partida #302'), findsOneWidget);
+    expect(
+      find.text('Cantidad original no conservada en este registro'),
+      findsOneWidget,
+    );
+  });
 }

@@ -212,9 +212,79 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
                   _origenCard(context, origen),
                   const SizedBox(height: 12),
                 ],
+              const SizedBox(height: 16),
+              SectionTitle('Productos obtenidos', color: look.tone),
+              const SizedBox(height: 12),
+              if (recorrido.productosObtenidos.isEmpty)
+                const AppNotice(
+                  tone: AppNoticeTone.info,
+                  message:
+                      'Todavía no hay productos obtenidos visibles para este procesamiento.',
+                )
+              else
+                for (final producto in recorrido.productosObtenidos) ...[
+                  _productoCard(
+                    context,
+                    producto,
+                    recorrido.ingresosProduccion
+                        .where((i) => i.partidaId == producto.partidaId)
+                        .toList(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _productoCard(
+    BuildContext context,
+    ProductoObtenidoProcesamiento producto,
+    List<IngresoProduccionProcesamiento> ingresos,
+  ) {
+    return Container(
+      key: ValueKey('procesamiento.producto.${producto.partidaId}'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(producto.label, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          DetailField(
+            label: 'Partida obtenida',
+            value: 'Partida #${producto.partidaId}',
+          ),
+          if (ingresos.isEmpty) ...[
+            const Divider(height: 1),
+            const DetailField(
+              label: 'Cantidad producida',
+              value: 'Cantidad original no conservada en este registro',
+            ),
+          ] else
+            for (final ingreso in ingresos) ...[
+              const Divider(height: 1),
+              DetailField(
+                label: 'Cantidad producida',
+                value:
+                    ingreso.formattedCantidad ??
+                    'Cantidad original no conservada',
+              ),
+              if (ingreso.formattedKg != null) ...[
+                const Divider(height: 1),
+                DetailField(
+                  label: 'Equivalente en kg',
+                  value: ingreso.formattedKg!,
+                ),
+              ],
+            ],
+        ],
       ),
     );
   }
