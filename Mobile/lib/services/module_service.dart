@@ -6,6 +6,7 @@ import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
 import '../models/cosecha_models.dart';
+import '../models/inventario_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
 import '../models/planta_models.dart';
@@ -719,5 +720,127 @@ class ModuleService {
       body: {'cantidades': cantidades},
     );
     return RecepcionPlantaRecord.fromJson(response);
+  }
+
+  Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(
+    AuthUser user,
+  ) async {
+    if (!InventarioPermissions.canViewExistencias(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los almacenes autorizados.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', AppModule.almacenes.endpoint);
+    return AlmacenFiltroOption.listFromJson(response);
+  }
+
+  Future<AlmacenExistenciasPage> loadAlmacenExistencias(
+    AuthUser user,
+    int almacenId, {
+    String? query,
+    String? estado,
+    int page = 1,
+  }) async {
+    if (!InventarioPermissions.canViewExistencias(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las existencias de este almacén.',
+        statusCode: 403,
+      );
+    }
+    if (almacenId <= 0 || page < 1) {
+      throw const ApiException('El almacén solicitado no es válido.');
+    }
+    final params = <String, String>{
+      'page': '$page',
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      if (estado != null && estado.trim().isNotEmpty) 'estado': estado.trim(),
+    };
+    final response = await _api.request(
+      'GET',
+      'almacenes/$almacenId/existencias',
+      queryParameters: params,
+    );
+    return AlmacenExistenciasPage.fromJson(response);
+  }
+
+  Future<InventarioMovimientosPage> loadAlmacenMovimientos(
+    AuthUser user,
+    int almacenId, {
+    String? naturaleza,
+    int? insumoId,
+    int page = 1,
+  }) async {
+    if (!InventarioPermissions.canViewMovimientos(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar el historial de movimientos.',
+        statusCode: 403,
+      );
+    }
+    if (almacenId <= 0 || page < 1) {
+      throw const ApiException('El almacén solicitado no es válido.');
+    }
+    final params = <String, String>{
+      'page': '$page',
+      if (naturaleza != null && naturaleza.isNotEmpty) 'naturaleza': naturaleza,
+      if (insumoId != null && insumoId > 0) 'insumoid': '$insumoId',
+    };
+    final response = await _api.request(
+      'GET',
+      'almacenes/$almacenId/movimientos',
+      queryParameters: params,
+    );
+    return InventarioMovimientosPage.fromJson(response);
+  }
+
+  Future<InventarioMovimientoRecord> registerAlmacenMovimiento(
+    AuthUser user, {
+    required String naturaleza,
+    required int almacenId,
+    required int insumoId,
+    required int tipoMovimientoId,
+    required String fecha,
+    required String cantidad,
+    String? destinoMotivo,
+    String? referencia,
+    String? observaciones,
+    String? partida,
+  }) async {
+    final allowed = naturaleza == 'ingreso'
+        ? InventarioPermissions.canRegisterIngreso(user)
+        : InventarioPermissions.canRegisterSalida(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para registrar este movimiento de inventario.',
+        statusCode: 403,
+      );
+    }
+    if (naturaleza != 'ingreso' && naturaleza != 'salida') {
+      throw const ApiException('La naturaleza del movimiento no es válida.');
+    }
+    final cleanCantidad = cantidad.trim().replaceAll(',', '.');
+    final cleanMotivo = destinoMotivo?.trim();
+    final cleanRef = referencia?.trim();
+    final cleanObs = observaciones?.trim();
+    final cleanPartida = partida?.trim();
+    final body = <String, Object?>{
+      'almacenid': almacenId,
+      'insumoid': insumoId,
+      'tipo_movimiento_almacenid': tipoMovimientoId,
+      'fecha': fecha.trim(),
+      'cantidad': cleanCantidad,
+      if (cleanMotivo != null && cleanMotivo.isNotEmpty)
+        'destino_motivo': cleanMotivo,
+      if (cleanRef != null && cleanRef.isNotEmpty) 'referencia': cleanRef,
+      if (cleanObs != null && cleanObs.isNotEmpty) 'observaciones': cleanObs,
+      if (cleanPartida != null && cleanPartida.isNotEmpty)
+        'partida': cleanPartida,
+    };
+    final response = await _api.request(
+      'POST',
+      'almacen-movimientos/$naturaleza',
+      body: body,
+    );
+    return InventarioMovimientoRecord.fromJson(response);
   }
 }

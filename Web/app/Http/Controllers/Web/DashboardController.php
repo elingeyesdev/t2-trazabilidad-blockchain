@@ -748,7 +748,7 @@ class DashboardController extends Controller
         $filtros->aplicarFecha($asignaciones, 'fecha_asignacion');
 
         $rutasActivas = RutaMultiEntrega::query()->whereIn('estado', ['planificada', 'en_ruta']);
-        $incidentes = IncidenteEnvio::query()->where('estado', 'abierto');
+        $incidentes = \App\Support\ViajeAcceso::scopeIncidentes(IncidenteEnvio::query(), auth()->user())->where('estado', 'abierto');
         $documentos = DocumentoEntrega::query();
 
         $data = [
@@ -969,7 +969,7 @@ class DashboardController extends Controller
 
         $asignaciones = EnvioAsignacionMultiple::query();
         $rutasDistribucion = RutaDistribucion::query();
-        $incidentes = IncidenteEnvio::query();
+        $incidentes = \App\Support\ViajeAcceso::scopeIncidentes(IncidenteEnvio::query(), auth()->user());
         $documentos = DocumentoEntrega::query();
 
         if ($uid) {

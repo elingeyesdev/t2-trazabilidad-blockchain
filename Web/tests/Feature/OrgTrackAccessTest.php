@@ -14,6 +14,18 @@ class OrgTrackAccessTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_listado_y_detalle_de_envios_generan_enlaces_independientes(): void
+    {
+        $this->assertSame('/envios/seguimiento', route('envios.seguimiento', [], false));
+        $this->assertSame('/envios/1', route('envios.detalle', ['id' => 1], false));
+        $this->assertSame('/seguimiento-envios/agricola/1', route('envios.operacion', ['tipo' => 'agricola', 'envio' => 1], false));
+
+        $rutas = collect(app('router')->getRoutes()->getRoutes());
+        foreach (['envios.seguimiento', 'envios.detalle', 'envios.operacion'] as $nombre) {
+            $this->assertCount(1, $rutas->filter(fn ($ruta) => $ruta->getName() === $nombre));
+        }
+    }
+
     private function createUserWithRole(string $roleName): Usuario
     {
         $this->seed(RolePermissionSeeder::class);

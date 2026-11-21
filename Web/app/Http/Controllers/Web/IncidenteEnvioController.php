@@ -3,191 +3,122 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IncidenteRegistroRequest;
+use App\Http\Requests\IncidenteResolucionRequest;
+use App\Http\Resources\Api\IncidenteEnvioResource;
 use App\Models\IncidenteEnvio;
-use App\Support\ViajeAcceso;
-use Illuminate\Http\RedirectResponse;
+use App\Services\IncidenteConsultaService;
+use App\Services\IncidenteReferenciaService;
+use App\Services\IncidenteSeguimientoService;
+use App\Support\UsuarioRol;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
 
 class IncidenteEnvioController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, IncidenteConsultaService $consulta)
     {
-        // El conductor ve solo incidentes de sus viajes o reportados por él (TRA-07).
-        $q = ViajeAcceso::scopeIncidentes(IncidenteEnvio::query(), $request->user())
-            ->with(['reportadoPor', 'resueltoPor', 'pedido'])
-            ->orderByDesc('created_at');
-
-        if ($request->filled('q')) {
-            $term = $request->string('q')->trim()->toString();
-            $q->where(function ($w) use ($term) {
-                $w->where('descripcion', 'like', "%{$term}%")
-                    ->orWhere('tipo', 'like', "%{$term}%")
-                    ->orWhere('externo_envio_id', 'like', "%{$term}%")
-                    ->orWhere('nota_resolucion', 'like', "%{$term}%")
-                    ->orWhereHas('reportadoPor', function ($u) use ($term) {
-                        $u->where('nombreusuario', 'like', "%{$term}%")
-                            ->orWhere('nombre', 'like', "%{$term}%")
-                            ->orWhere('apellido', 'like', "%{$term}%");
-                    });
-            });
-        }
-
-        if ($request->filled('estado')) {
-            $q->where('estado', $request->string('estado')->toString());
-        }
-
-        if ($request->filled('tipo')) {
-            $q->where('tipo', 'like', '%'.$request->string('tipo')->trim().'%');
-        }
-
-        if ($request->filled('envio')) {
-            $q->where('externo_envio_id', 'like', '%'.$request->string('envio')->trim().'%');
-        }
-
-        if ($request->filled('desde')) {
-            $q->whereDate('created_at', '>=', $request->string('desde')->toString());
-        }
-
-        if ($request->filled('hasta')) {
-            $q->whereDate('created_at', '<=', $request->string('hasta')->toString());
-        }
-
-        $resumenIncidentes = [
-            'total' => (clone $q)->count(),
-            'activos' => (clone $q)->whereIn('estado', ['abierto', 'pendiente'])->count(),
-            'resueltos' => (clone $q)->where('estado', 'resuelto')->count(),
-        ];
-
-        $incidentes = $q->paginate(15)->withQueryString();
-
-        $tiposDisponibles = ViajeAcceso::scopeIncidentes(IncidenteEnvio::query(), $request->user())
-            ->select('tipo')
-            ->distinct()
-            ->orderBy('tipo')
-            ->pluck('tipo');
-
-        return view('logistica.incidentes.index', compact(
-            'incidentes',
-            'tiposDisponibles',
-            'resumenIncidentes'
-        ));
+        return view('logistica.incidentes.index', ['incidentes' => $consulta->listado($request)]);
     }
 
-    public function create(): View
+    public function create(Request $request, IncidenteReferenciaService $referencias, IncidenteSeguimientoService $service)
     {
-        return view('logistica.incidentes.create');
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'externo_envio_id' => ['nullable', 'string', 'max:64'],
-            'pedidoid' => ['nullable', 'integer', 'exists:pedido,pedidoid'],
-            'tipo' => ['required', 'string', 'max:100'],
-            'descripcion' => ['required', 'string', 'max:3000'],
-        ]);
-
-        if (! ViajeAcceso::conductorPuedeReportarEn(
-            $request->user(),
-            $validated['externo_envio_id'] ?? null,
-            isset($validated['pedidoid']) ? (int) $validated['pedidoid'] : null
-        )) {
-            return back()->withInput()->withErrors([
-                'externo_envio_id' => 'Indique el código de uno de sus viajes asignados.',
-            ]);
+        abort_unless(UsuarioRol::puedeOperar($request->user()), 403);
+        $f = $request->validate(['afectado_ref' => ['nullable', 'regex:/^(pedido_agricola|pedido_distribucion|envio_agricola|traslado|distribucion):[1-9][0-9]*$/D'],
+            'afectado_tipo' => ['nullable', 'in:pedido_agricola,pedido_distribucion,envio_agricola,traslado,distribucion'], 'afectado_id' => ['nullable', 'integer', 'min:1']]);
+        $tipo = old('afectado_tipo', $f['afectado_tipo'] ?? null);
+        $id = old('afectado_id', $f['afectado_id'] ?? null);
+        if (! empty($f['afectado_ref'])) {
+            [$tipo, $id] = explode(':', $f['afectado_ref']);
+        }
+        $opciones = [];
+        foreach (IncidenteReferenciaService::TIPOS as $opcion) {
+            $query = $referencias->consulta($opcion, $request->user());
+            $clave = $query->getModel()->getKeyName();
+            $codigo = in_array($opcion, ['pedido_agricola', 'pedido_distribucion'], true) ? 'numero_solicitud' : ($opcion === 'envio_agricola' ? 'externo_envio_id' : 'codigo');
+            foreach ($query->orderByDesc($clave)->limit(100)->get([$clave, $codigo]) as $fila) {
+                $opciones[] = ['valor' => $opcion.':'.$fila->getKey(), 'nombre' => str_replace('_', ' ', $opcion).' · '.($fila->{$codigo} ?: '#'.$fila->getKey())];
+            }
+        }
+        $responsables = [];
+        if ($tipo && $id) {
+            $modelo = $referencias->buscar($tipo, (int) $id, $request->user());
+            $responsables = $service->responsables($tipo, $modelo);
         }
 
-        $validated['reportadopor_usuarioid'] = auth()->id();
-        $validated['estado'] = 'abierto';
-
-        $incidente = IncidenteEnvio::create($validated);
-
-        return redirect()->route('logistica.incidentes.show', $incidente)
-            ->with('success', 'Incidente registrado correctamente.');
+        return view('logistica.incidentes.create', compact('opciones', 'tipo', 'id', 'responsables'));
     }
 
-    public function show(IncidenteEnvio $incidente): View
+    public function store(IncidenteRegistroRequest $request, IncidenteSeguimientoService $service)
     {
-        abort_unless(ViajeAcceso::puedeVerIncidente(auth()->user(), $incidente), 403);
-        $incidente->load(['reportadoPor', 'resueltoPor', 'pedido']);
+        $incidente = $service->registrar($request->user(), $request->validated());
 
-        return view('logistica.incidentes.show', compact('incidente'));
+        return redirect()->route('logistica.incidentes.show', $incidente)->with('success', 'Incidencia registrada correctamente.');
     }
 
-    public function edit(IncidenteEnvio $incidente): View
+    private function visible(Request $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service): IncidenteEnvio
     {
-        abort_unless(ViajeAcceso::puedeModificarIncidente(auth()->user(), $incidente), 403);
+        // Preserve the existing web 403 ownership treatment; API detail uses scoped 404.
+        abort_unless(app(IncidenteReferenciaService::class)->scope(IncidenteEnvio::whereKey($incidente->getKey()), $request->user())->exists(), 403);
 
-        return view('logistica.incidentes.edit', compact('incidente'));
+        return $service->obtener((int) $incidente->getKey(), $request->user());
     }
 
-    public function update(Request $request, IncidenteEnvio $incidente): RedirectResponse
+    public function show(Request $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service)
     {
-        abort_unless(ViajeAcceso::puedeModificarIncidente($request->user(), $incidente), 403);
+        $incidente = $this->visible($request, $incidente, $service);
+        $datos = (new IncidenteEnvioResource($incidente))->resolve($request);
 
-        $validated = $request->validate([
-            'externo_envio_id' => ['nullable', 'string', 'max:64'],
-            'pedidoid' => ['nullable', 'integer', 'exists:pedido,pedidoid'],
-            'tipo' => ['required', 'string', 'max:100'],
-            'descripcion' => ['required', 'string', 'max:3000'],
-            'estado' => ['nullable', 'string', 'in:abierto,pendiente,resuelto'],
-            'nota_resolucion' => ['nullable', 'string', 'max:2000'],
-        ]);
+        return view('logistica.incidentes.show', compact('incidente', 'datos'));
+    }
 
-        if (! auth()->user()?->can('incidentes.resolve')) {
-            unset($validated['estado'], $validated['nota_resolucion']);
+    public function edit(Request $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service)
+    {
+        $incidente = $this->visible($request, $incidente, $service);
+        abort_unless(UsuarioRol::puedeOperar($request->user()), 403);
+        abort_unless(in_array($incidente->estado, ['abierto', 'pendiente'], true), 409, 'La incidencia ya está resuelta.');
+        $responsables = [];
+        $puedeAsignar = app(IncidenteReferenciaService::class)->puedeAtenderTipo((string) $incidente->afectado_tipo, $request->user());
+        if ($puedeAsignar && ! $incidente->responsable_usuarioid && $incidente->afectado_tipo) {
+            $referencias = app(IncidenteReferenciaService::class);
+            $modelo = $referencias->buscar($incidente->afectado_tipo, (int) $incidente->{$referencias->columna($incidente->afectado_tipo)}, $request->user());
+            $responsables = $service->responsables($incidente->afectado_tipo, $modelo);
         }
 
-        // El conductor no reasigna el incidente a un viaje ajeno.
-        if (! ViajeAcceso::conductorPuedeReportarEn(
-            $request->user(),
-            $validated['externo_envio_id'] ?? null,
-            isset($validated['pedidoid']) ? (int) $validated['pedidoid'] : null
-        )) {
-            return back()->withInput()->withErrors([
-                'externo_envio_id' => 'Indique el código de uno de sus viajes asignados.',
-            ]);
-        }
-
-        if (($validated['estado'] ?? null) === 'resuelto' && $incidente->estado !== 'resuelto') {
-            $validated['resueltopor_usuarioid'] = auth()->id();
-            $validated['fecha_resolucion'] = now();
-        }
-
-        $incidente->update($validated);
-
-        return redirect()->route('logistica.incidentes.show', $incidente)
-            ->with('success', 'Incidente actualizado.');
+        return view('logistica.incidentes.edit', compact('incidente', 'responsables', 'puedeAsignar'));
     }
 
-    public function destroy(IncidenteEnvio $incidente): RedirectResponse
+    public function update(Request $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service)
     {
-        // El conductor no elimina incidentes (ni propios ni ajenos): quedan como traza del viaje.
-        abort_if(ViajeAcceso::esConductor(auth()->user()), 403);
-        abort_unless(ViajeAcceso::puedeModificarIncidente(auth()->user(), $incidente), 403);
+        $this->visible($request, $incidente, $service);
+        foreach (['tipo', 'descripcion'] as $campo) {
+            if (is_string($request->input($campo))) {
+                $request->merge([$campo => trim($request->input($campo))]);
+            }
+        }
+        $datos = $request->validate(['tipo' => 'required|string|max:100', 'descripcion' => 'required|string|max:3000',
+            'responsable_usuarioid' => 'nullable|integer|min:1', 'estado' => 'missing', 'nota_resolucion' => 'missing',
+            'externo_envio_id' => 'missing', 'pedidoid' => 'missing', 'afectado_tipo' => 'missing', 'afectado_id' => 'missing',
+            'resueltopor_usuarioid' => 'missing', 'reportadopor_usuarioid' => 'missing', 'fecha_resolucion' => 'missing']);
+        $service->actualizar($request->user(), (int) $incidente->getKey(), $datos);
 
+        return redirect()->route('logistica.incidentes.show', $incidente)->with('success', 'Incidencia actualizada.');
+    }
+
+    public function destroy(Request $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service)
+    {
+        $incidente = $this->visible($request, $incidente, $service);
+        abort_unless(UsuarioRol::puedeOperar($request->user()) && ! UsuarioRol::esTransportista($request->user()), 403);
+        abort_if($incidente->estado === 'resuelto', 409, 'Se conserva la incidencia resuelta.');
         $incidente->delete();
 
-        return redirect()->route('logistica.incidentes.index')
-            ->with('success', 'Incidente eliminado.');
+        return redirect()->route('logistica.incidentes.index')->with('success', 'Incidencia eliminada.');
     }
 
-    public function resolve(Request $request, IncidenteEnvio $incidente): RedirectResponse
+    public function resolve(IncidenteResolucionRequest $request, IncidenteEnvio $incidente, IncidenteSeguimientoService $service)
     {
-        abort_unless(ViajeAcceso::puedeVerIncidente($request->user(), $incidente), 403);
+        $this->visible($request, $incidente, $service);
+        $service->resolver($request->user(), (int) $incidente->getKey(), $request->validated('nota_resolucion'));
 
-        $validated = $request->validate([
-            'nota_resolucion' => ['nullable', 'string', 'max:2000'],
-        ]);
-
-        $incidente->update([
-            'estado' => 'resuelto',
-            'nota_resolucion' => $validated['nota_resolucion'] ?? null,
-            'resueltopor_usuarioid' => auth()->id(),
-            'fecha_resolucion' => now(),
-        ]);
-
-        return back()->with('success', 'Incidente resuelto correctamente.');
+        return redirect()->route('logistica.incidentes.show', $incidente)->with('success', 'Incidencia resuelta correctamente.');
     }
 }

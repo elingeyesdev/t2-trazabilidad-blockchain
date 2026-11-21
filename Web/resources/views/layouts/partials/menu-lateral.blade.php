@@ -35,6 +35,15 @@
                     </a>
                 </li>
 
+                @can('incidentes.view')
+                <li class="ag-nav-li">
+                    <a href="{{ route('logistica.incidentes.index') }}" class="ag-nav-a {{ request()->routeIs('logistica.incidentes.*') ? 'active' : '' }}">
+                        <i class="ag-nav-icon fas fa-clipboard-list"></i>
+                        <span class="ag-nav-text">Incidencias</span>
+                    </a>
+                </li>
+                @endcan
+
                 @php
                     $puedeAlmacenAgricola = $isAdmin || ($authUser && $authUser->hasRole('agricultor')) || $esJefeAgr;
                     $puedeAlmacenMayorista = $isAdmin || \App\Support\UsuarioRol::esMayorista($authUser);

@@ -100,7 +100,15 @@ enum AppModule {
     Icons.report_problem_rounded,
     'incidenteenvioid',
     'tipo',
-    {'descripcion': 'Descripción', 'estado': 'Estado'},
+    {
+      'descripcion': 'Descripción',
+      'estado': 'Estado',
+      'afectado_referencia': 'Pedido o envío',
+      'responsable_nombre': 'Responsable de atención',
+      'seguimiento': 'Seguimiento',
+      'nota_resolucion': 'Solución registrada',
+      'fecha_resolucion': 'Fecha de resolución',
+    },
   ),
   rutas(
     'Rutas',
