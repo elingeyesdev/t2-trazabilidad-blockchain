@@ -45,6 +45,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   MobileScannerController? _scannerController;
 
   bool _manualMode = false;
+  QrCameraIssue? _cameraIssue;
   bool _processing = false;
   String? _lastCode;
   QrResolucionResult? _result;
@@ -145,17 +146,52 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         }
       },
       errorBuilder: (context, error) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              error.errorDetails?.message ??
-                  'No se pudo inicializar la cámara para leer códigos QR.',
+        final issue = error.errorCode == MobileScannerErrorCode.permissionDenied
+            ? QrCameraIssue.permissionDenied
+            : QrCameraIssue.unavailable;
+        return _cameraIssueCard(context, issue);
+      },
+    );
+  }
+
+  Widget _cameraIssueCard(BuildContext context, QrCameraIssue issue) {
+    final isDenied = issue == QrCameraIssue.permissionDenied;
+    return Center(
+      child: SingleChildScrollView(
+        key: const ValueKey('qr.camera_issue_card'),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.no_photography_outlined,
+              size: 36,
+              color: AppTheme.ink,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isDenied ? 'Permiso de cámara denegado' : 'Cámara no disponible',
+              style: Theme.of(context).textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 6),
+            Text(
+              isDenied
+                  ? 'Habilita el permiso de cámara en los ajustes del dispositivo para escanear, o ingresa el código QR manualmente.'
+                  : 'No se pudo iniciar la cámara en este dispositivo. Puedes ingresar el código QR manualmente para continuar.',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const ValueKey('qr.usar_manual_btn'),
+              onPressed: () => setState(() => _manualMode = true),
+              icon: const Icon(Icons.keyboard_alt_outlined),
+              label: const Text('Ingresar código manualmente'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -216,11 +252,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         borderRadius: BorderRadius.circular(AppTheme.radius),
                         border: Border.all(color: AppTheme.ink, width: 2),
                       ),
-                      child: widget.cameraBuilder != null
+                      child: _cameraIssue != null
+                          ? _cameraIssueCard(context, _cameraIssue!)
+                          : widget.cameraBuilder != null
                           ? widget.cameraBuilder!(
                               context,
                               (code) => unawaited(_handleCode(code)),
-                              (_) {},
+                              (issue) => setState(() => _cameraIssue = issue),
                             )
                           : _defaultCamera(context),
                     ),

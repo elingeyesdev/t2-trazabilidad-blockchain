@@ -261,4 +261,67 @@ void main() {
       expect(find.text('RUTA-045'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'La denegación del permiso de cámara muestra una explicación y la alternativa manual',
+    (tester) async {
+      await storage.saveToken('1|qr-test');
+      String? sentCode;
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/qr/resolver' &&
+              request.method == 'POST') {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            sentCode = body['codigo'] as String?;
+            return jsonResponse(validQrResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: QrScannerScreen(
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            cameraBuilder: (context, onCodeDetected, onCameraIssue) => Center(
+              child: FilledButton(
+                key: const ValueKey('test.denegar_camara'),
+                onPressed: () => onCameraIssue(QrCameraIssue.permissionDenied),
+                child: const Text('Denegar cámara'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('test.denegar_camara')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Permiso de cámara denegado'), findsOneWidget);
+      expect(
+        find.textContaining('ingresa el código QR manualmente'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('qr.usar_manual_btn')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('qr.manual_input')),
+        'QR-FALLBACK-01',
+      );
+      await tester.tap(find.byKey(const ValueKey('qr.manual_submit')));
+      await tester.pumpAndSettle();
+
+      expect(sentCode, 'QR-FALLBACK-01');
+      expect(find.text('RUTA-045'), findsOneWidget);
+    },
+  );
 }
