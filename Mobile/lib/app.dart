@@ -21,6 +21,7 @@ import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
 import 'screens/modules/module_screen.dart';
+import 'screens/modules/planta_tareas_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
 import 'services/api_health_service.dart';
@@ -66,6 +67,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _loteUpdates = ValueNotifier(0);
   final ValueNotifier<int> _actividadUpdates = ValueNotifier(0);
   final ValueNotifier<int> _cosechaUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _plantaUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -87,6 +89,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _loteUpdates.dispose();
     _actividadUpdates.dispose();
     _cosechaUpdates.dispose();
+    _plantaUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -189,20 +192,30 @@ class _AgroFusionAppState extends State<AgroFusionApp>
         ),
         for (final module in AppModule.values)
           module.route: (_) => _sessionGate(
-            () => ModuleScreen(
-              key: ValueKey(_auth.user),
-              module: module,
-              user: _auth.user!,
-              service: ModuleService(_api),
-              onRefreshPermissions: _auth.restoreSession,
-              loteUpdates: module == AppModule.lotes ? _loteUpdates : null,
-              actividadUpdates: module == AppModule.actividades
-                  ? _actividadUpdates
-                  : null,
-              cosechaUpdates: module == AppModule.producciones
-                  ? _cosechaUpdates
-                  : null,
-            ),
+            () => module == AppModule.tareasPlanta
+                ? PlantaTareasScreen(
+                    key: ValueKey(_auth.user),
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                    updates: _plantaUpdates,
+                  )
+                : ModuleScreen(
+                    key: ValueKey(_auth.user),
+                    module: module,
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                    loteUpdates: module == AppModule.lotes
+                        ? _loteUpdates
+                        : null,
+                    actividadUpdates: module == AppModule.actividades
+                        ? _actividadUpdates
+                        : null,
+                    cosechaUpdates: module == AppModule.producciones
+                        ? _cosechaUpdates
+                        : null,
+                  ),
             requiresAuthentication: true,
             module: module,
           ),

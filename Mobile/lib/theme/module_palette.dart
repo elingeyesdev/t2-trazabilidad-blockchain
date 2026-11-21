@@ -30,6 +30,11 @@ extension ModulePalette on AppModule {
       Color(0xFF853914),
       'Cantidades y fechas',
     ),
+    AppModule.tareasPlanta => const ModuleLook(
+      Color(0xFFDCEBD3),
+      Color(0xFF23552F),
+      'Etapas y máquinas',
+    ),
     AppModule.almacenes => const ModuleLook(
       Color(0xFFE9DDCC),
       Color(0xFF5A452D),

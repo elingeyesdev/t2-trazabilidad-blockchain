@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
       AppModule.lotes,
       AppModule.producciones,
     ],
+    'Trabajo en planta': [AppModule.tareasPlanta],
     'Almacenes e insumos': [
       AppModule.almacenes,
       AppModule.insumos,
@@ -288,6 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _featured(AppModule module) {
     final title = switch (module) {
       AppModule.actividades => 'Actividades del campo',
+      AppModule.tareasPlanta => 'Tus tareas de planta',
       AppModule.asignaciones => 'Tus envíos asignados',
       AppModule.almacenes => 'Tus almacenes',
       _ => module.label,

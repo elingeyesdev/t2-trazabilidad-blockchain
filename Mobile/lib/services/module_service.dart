@@ -8,6 +8,7 @@ import '../models/auth_user.dart';
 import '../models/cosecha_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
+import '../models/planta_models.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
 
@@ -585,5 +586,31 @@ class ModuleService {
       fallbackTitle: 'Cosecha',
       fields: AppModule.producciones.fields,
     );
+  }
+
+  Future<TareasPlantaPage> loadTareasPlanta(
+    AuthUser user, {
+    String? estado,
+    int page = 1,
+  }) async {
+    if (!PlantaPermissions.canViewTareas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las tareas de planta.',
+        statusCode: 403,
+      );
+    }
+    if (page < 1) {
+      throw const ApiException('La página solicitada no es válida.');
+    }
+    final params = <String, String>{
+      'page': '$page',
+      if (estado != null && estado.isNotEmpty) 'estado': estado,
+    };
+    final response = await _api.request(
+      'GET',
+      AppModule.tareasPlanta.endpoint,
+      queryParameters: params,
+    );
+    return TareasPlantaPage.fromJson(response);
   }
 }
