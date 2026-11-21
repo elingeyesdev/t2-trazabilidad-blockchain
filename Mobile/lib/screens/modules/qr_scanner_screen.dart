@@ -47,6 +47,30 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   QrResolucionResult? _result;
   String? _errorMessage;
 
+  void _resetScan() {
+    setState(() {
+      _lastCode = null;
+      _result = null;
+      _errorMessage = null;
+    });
+  }
+
+  String _rejectionReason(ApiException error) {
+    final codeErrors = error.validationErrors['codigo'];
+    if (codeErrors != null && codeErrors.isNotEmpty) {
+      return codeErrors.join('\n');
+    }
+    if (error.message.trim().isNotEmpty) {
+      return error.message;
+    }
+    return switch (error.statusCode) {
+      403 => 'Tu cuenta no tiene permiso para utilizar este código QR.',
+      404 => 'El código QR no existe o no pertenece a un envío autorizado.',
+      409 => 'Este código QR ya fue utilizado anteriormente.',
+      _ => 'El código QR fue rechazado por el servidor.',
+    };
+  }
+
   @override
   void initState() {
     super.initState();
@@ -85,7 +109,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       if (!mounted) return;
       setState(() {
         _processing = false;
-        _errorMessage = error.message;
+        _errorMessage = _rejectionReason(error);
       });
     } catch (_) {
       if (!mounted) return;
@@ -189,17 +213,24 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   if (_errorMessage != null) ...[
                     const SizedBox(height: 16),
                     AppNotice(
+                      key: const ValueKey('qr.rechazo_notice'),
                       tone: AppNoticeTone.error,
                       message: _errorMessage!,
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('qr.reintentar'),
+                        onPressed: _processing ? null : _resetScan,
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: const Text('Leer otro código'),
+                      ),
                     ),
                   ],
                   if (_result case final result?) ...[
                     const SizedBox(height: 16),
-                    AppNotice(
-                      tone: AppNoticeTone.success,
-                      message:
-                          'Código leído correctamente: ${result.envio.referencia} (${result.envio.tipo.label}).',
-                    ),
+                    _resultCard(context, result),
                   ],
                 ],
               ),
@@ -207,6 +238,67 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _resultCard(BuildContext context, QrResolucionResult result) {
+    final (AppNoticeTone tone, String statusMessage) = result.utilizado
+        ? (
+            AppNoticeTone.warning,
+            'Este código QR ya fue utilizado. Puedes consultar la recepción registrada, pero no volver a confirmarla.',
+          )
+        : result.puedeConfirmar
+        ? (
+            AppNoticeTone.success,
+            'Código válido y listo para registrar recepción.',
+          )
+        : (
+            AppNoticeTone.info,
+            'Código válido solo para consulta. Tu cuenta no está autorizada para confirmar esta recepción.',
+          );
+
+    return Column(
+      key: const ValueKey('qr.resultado_card'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppNotice(tone: tone, message: statusMessage),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(AppTheme.radius),
+            border: Border.all(color: AppTheme.ink, width: 2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DetailField(label: 'Envío', value: result.envio.referencia),
+              const Divider(height: 1),
+              DetailField(label: 'Trayecto', value: result.envio.tipo.label),
+              const Divider(height: 1),
+              DetailField(label: 'Estado', value: result.envio.estadoLabel),
+              if (result.envio.destinos.isNotEmpty) ...[
+                const Divider(height: 1),
+                DetailField(
+                  label: 'Destino',
+                  value: result.envio.destinos.map((d) => d.label).join(', '),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('qr.reintentar'),
+            onPressed: _processing ? null : _resetScan,
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            label: const Text('Leer otro código'),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -117,4 +117,95 @@ void main() {
     );
     expect(find.textContaining('RUTA-045'), findsOneWidget);
   });
+
+  testWidgets(
+    'Muestra claramente si el código se puede utilizar, si ya fue usado o por qué se rechaza',
+    (tester) async {
+      await storage.saveToken('1|qr-test');
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/qr/resolver' &&
+              request.method == 'POST') {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            final code = body['codigo'] as String?;
+            if (code == 'QR-VALIDO') {
+              return jsonResponse(validQrResponse);
+            }
+            if (code == 'QR-USADO') {
+              return jsonResponse({
+                'data': {
+                  ...(validQrResponse['data'] as Map<String, dynamic>),
+                  'utilizado': true,
+                  'puede_confirmar': false,
+                },
+              });
+            }
+            return jsonResponse({
+              'message': 'El código QR no corresponde a un envío autorizado.',
+            }, 404);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: QrScannerScreen(
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            cameraBuilder: (context, onCodeDetected, onCameraIssue) => Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(
+                  key: const ValueKey('test.qr_valido'),
+                  onPressed: () => onCodeDetected('QR-VALIDO'),
+                  child: const Text('Válido'),
+                ),
+                FilledButton(
+                  key: const ValueKey('test.qr_usado'),
+                  onPressed: () => onCodeDetected('QR-USADO'),
+                  child: const Text('Usado'),
+                ),
+                FilledButton(
+                  key: const ValueKey('test.qr_invalido'),
+                  onPressed: () => onCodeDetected('QR-MALO'),
+                  child: const Text('Inválido'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1) Código utilizable.
+      await tester.tap(find.byKey(const ValueKey('test.qr_valido')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Código válido y listo para registrar recepción.'),
+        findsOneWidget,
+      );
+
+      // 2) Código ya utilizado.
+      await tester.tap(find.byKey(const ValueKey('test.qr_usado')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Este código QR ya fue utilizado.'),
+        findsOneWidget,
+      );
+
+      // 3) Código rechazado por el servidor.
+      await tester.tap(find.byKey(const ValueKey('test.qr_invalido')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('El código QR no corresponde a un envío autorizado.'),
+        findsOneWidget,
+      );
+    },
+  );
 }
