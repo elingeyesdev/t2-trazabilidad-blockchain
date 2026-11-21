@@ -10,6 +10,13 @@ abstract final class PlantaPermissions {
   static bool canViewTareas(AuthUser user) =>
       user.permissions.contains('lote_produccion.view') &&
       isOperarioPlanta(user);
+
+  static bool canViewRecepciones(AuthUser user) =>
+      user.permissions.contains('recepcion_planta.view');
+
+  static bool canConfirmRecepcion(AuthUser user) =>
+      !user.roles.contains('admin') &&
+      user.permissions.contains('recepcion_planta.confirm');
 }
 
 class TareaPlantaSummary {
@@ -271,6 +278,194 @@ class TareaPlantaDetail {
   final List<ParametroRequerido> parametrosRequeridos;
   final List<ResultadoParametro> resultadoParametros;
   final String? fechaRegistro;
+}
+
+class RecepcionLinea {
+  const RecepcionLinea({
+    required this.detallePedidoId,
+    required this.producto,
+    required this.cantidadEnviada,
+    required this.unidad,
+    this.produccionAlmacenamientoId,
+    this.produccionId,
+    this.loteId,
+    this.cantidadRecibida,
+  });
+
+  factory RecepcionLinea.fromJson(
+    Map<String, dynamic> row, {
+    String? receivedOverride,
+  }) => RecepcionLinea(
+    detallePedidoId: _asInt(row['detallepedidoid']) ?? 0,
+    producto: _asText(row['producto']) ?? 'Materia prima',
+    cantidadEnviada: _asText(row['cantidad_enviada']) ?? '0',
+    unidad: _asText(row['unidad']) ?? 'kg',
+    produccionAlmacenamientoId: _asInt(row['produccionalmacenamientoid']),
+    produccionId: _asInt(row['produccionid']),
+    loteId: _asInt(row['loteid']),
+    cantidadRecibida: receivedOverride ?? _asText(row['cantidad_recibida']),
+  );
+
+  final int detallePedidoId;
+  final String producto;
+  final String cantidadEnviada;
+  final String unidad;
+  final int? produccionAlmacenamientoId;
+  final int? produccionId;
+  final int? loteId;
+  final String? cantidadRecibida;
+
+  double get enviadaValue =>
+      double.tryParse(cantidadEnviada.replaceAll(',', '.')) ?? 0;
+
+  String get formattedEnviada =>
+      '${_formatDecimalText(cantidadEnviada)} $unidad';
+
+  String? get formattedRecibida => cantidadRecibida == null
+      ? null
+      : '${_formatDecimalText(cantidadRecibida!)} $unidad';
+
+  String get origenLoteLabel {
+    if (loteId != null && loteId! > 0) {
+      return produccionId != null && produccionId! > 0
+          ? 'Lote #$loteId · Cosecha #$produccionId'
+          : 'Lote #$loteId';
+    }
+    return 'Sin lote de origen vinculado';
+  }
+}
+
+class RecepcionPlantaRecord {
+  const RecepcionPlantaRecord({
+    required this.pedidoId,
+    required this.numeroSolicitud,
+    required this.estado,
+    this.envioId,
+    this.almacenId,
+    this.fechaRecepcion,
+    this.lineas = const [],
+  });
+
+  factory RecepcionPlantaRecord.fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      throw const ApiException(
+        'No pudimos interpretar la recepción de planta.',
+      );
+    }
+    final row = json['data'] is Map<String, dynamic>
+        ? json['data'] as Map<String, dynamic>
+        : json;
+    final pedidoId = _asInt(row['pedidoid']) ?? 0;
+    final receivedByLine = <int, String>{};
+    if (row['recepcion'] is List) {
+      for (final item in row['recepcion'] as List) {
+        if (item is! Map<String, dynamic>) continue;
+        final id = _asInt(item['detallepedidoid']);
+        final qty =
+            _asText(item['cantidad_recibida']) ?? _asText(item['cantidad']);
+        if (id != null && qty != null) {
+          receivedByLine[id] = qty;
+        }
+      }
+    }
+    final lineas = <RecepcionLinea>[];
+    if (row['lineas'] is List) {
+      for (final item in row['lineas'] as List) {
+        if (item is! Map<String, dynamic>) continue;
+        final id = _asInt(item['detallepedidoid']) ?? 0;
+        final line = RecepcionLinea.fromJson(
+          item,
+          receivedOverride: receivedByLine[id],
+        );
+        if (line.detallePedidoId > 0) lineas.add(line);
+      }
+    }
+    return RecepcionPlantaRecord(
+      pedidoId: pedidoId,
+      numeroSolicitud: _asText(row['numero_solicitud']) ?? 'Pedido #$pedidoId',
+      estado: (_asText(row['estado']) ?? 'pendiente').toLowerCase(),
+      envioId: _asInt(row['envioasignacionmultipleid']),
+      almacenId: _asInt(row['almacenid']),
+      fechaRecepcion: _asText(row['fecha_recepcion_planta']),
+      lineas: lineas,
+    );
+  }
+
+  final int pedidoId;
+  final String numeroSolicitud;
+  final String estado;
+  final int? envioId;
+  final int? almacenId;
+  final String? fechaRecepcion;
+  final List<RecepcionLinea> lineas;
+
+  bool get isReceived => fechaRecepcion != null;
+
+  String get estadoLabel => isReceived ? 'Recibida' : 'Pendiente de recepción';
+}
+
+class RecepcionesPlantaPage {
+  const RecepcionesPlantaPage({
+    required this.items,
+    required this.currentPage,
+    required this.lastPage,
+  });
+
+  factory RecepcionesPlantaPage.fromJson(Object? json) {
+    final rows = json is Map<String, dynamic> ? json['data'] : json;
+    if (rows is! List) {
+      throw const ApiException(
+        'No pudimos interpretar las recepciones de planta.',
+      );
+    }
+    final items = <RecepcionPlantaRecord>[];
+    for (final row in rows) {
+      if (row is! Map<String, dynamic>) continue;
+      final item = RecepcionPlantaRecord.fromJson(row);
+      if (item.pedidoId > 0) items.add(item);
+    }
+    final map = json is Map<String, dynamic> ? json : const <String, dynamic>{};
+    final meta = map['meta'] is Map<String, dynamic>
+        ? map['meta'] as Map<String, dynamic>
+        : map;
+    return RecepcionesPlantaPage(
+      items: items,
+      currentPage: _asInt(meta['current_page']) ?? 1,
+      lastPage: _asInt(meta['last_page']) ?? 1,
+    );
+  }
+
+  final List<RecepcionPlantaRecord> items;
+  final int currentPage;
+  final int lastPage;
+}
+
+String _formatDecimalText(String raw) {
+  final trimmed = raw.trim().replaceAll(',', '.');
+  if (!RegExp(r'^-?[0-9]+(?:\.[0-9]+)?$').hasMatch(trimmed)) return trimmed;
+  if (!trimmed.contains('.')) return trimmed;
+  return trimmed.replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
+String? validateRecepcionQuantity(String? raw, {required double maxEnviada}) {
+  final normalized = (raw ?? '').trim().replaceAll(',', '.');
+  if (normalized.isEmpty) {
+    return 'Indica la cantidad recibida en kg.';
+  }
+  if (!RegExp(
+    r'^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?$',
+  ).hasMatch(normalized)) {
+    return 'Indica una cantidad positiva con hasta seis decimales.';
+  }
+  final parsed = double.tryParse(normalized);
+  if (parsed == null || parsed <= 0) {
+    return 'La cantidad recibida debe ser mayor que cero.';
+  }
+  if (parsed > maxEnviada + 1e-9) {
+    final maxText = _formatDecimalText(maxEnviada.toStringAsFixed(6));
+    return 'No puede superar la cantidad enviada ($maxText kg).';
+  }
+  return null;
 }
 
 String _formatNumber(double value) {

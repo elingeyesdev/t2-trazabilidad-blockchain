@@ -35,6 +35,11 @@ extension ModulePalette on AppModule {
       Color(0xFF23552F),
       'Etapas y máquinas',
     ),
+    AppModule.recepcionesPlanta => const ModuleLook(
+      Color(0xFFDCEBD3),
+      Color(0xFF23552F),
+      'Pesaje y recepción',
+    ),
     AppModule.almacenes => const ModuleLook(
       Color(0xFFE9DDCC),
       Color(0xFF5A452D),

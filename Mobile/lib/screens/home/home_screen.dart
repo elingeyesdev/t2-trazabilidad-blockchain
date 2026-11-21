@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
       AppModule.lotes,
       AppModule.producciones,
     ],
-    'Trabajo en planta': [AppModule.tareasPlanta],
+    'Trabajo en planta': [AppModule.tareasPlanta, AppModule.recepcionesPlanta],
     'Almacenes e insumos': [
       AppModule.almacenes,
       AppModule.insumos,

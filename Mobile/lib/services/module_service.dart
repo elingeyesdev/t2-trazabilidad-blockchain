@@ -656,4 +656,68 @@ class ModuleService {
     );
     return TareaPlantaDetail.fromJson(response);
   }
+
+  Future<RecepcionesPlantaPage> loadRecepcionesPlanta(
+    AuthUser user, {
+    bool recibido = false,
+    int page = 1,
+  }) async {
+    if (!PlantaPermissions.canViewRecepciones(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las recepciones de planta.',
+        statusCode: 403,
+      );
+    }
+    if (page < 1) {
+      throw const ApiException('La página solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      AppModule.recepcionesPlanta.endpoint,
+      queryParameters: {'recibido': recibido ? '1' : '0', 'page': '$page'},
+    );
+    return RecepcionesPlantaPage.fromJson(response);
+  }
+
+  Future<RecepcionPlantaRecord> loadRecepcionPlantaDetail(
+    AuthUser user,
+    int pedidoId,
+  ) async {
+    if (!PlantaPermissions.canViewRecepciones(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta recepción.',
+        statusCode: 403,
+      );
+    }
+    if (pedidoId <= 0) {
+      throw const ApiException('La recepción solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      '${AppModule.recepcionesPlanta.endpoint}/$pedidoId',
+    );
+    return RecepcionPlantaRecord.fromJson(response);
+  }
+
+  Future<RecepcionPlantaRecord> confirmRecepcionPlanta(
+    AuthUser user, {
+    required int pedidoId,
+    required Map<String, String> cantidades,
+  }) async {
+    if (!PlantaPermissions.canConfirmRecepcion(user)) {
+      throw const ApiException(
+        'No tienes permiso para confirmar recepciones en planta.',
+        statusCode: 403,
+      );
+    }
+    if (pedidoId <= 0) {
+      throw const ApiException('La recepción solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'POST',
+      '${AppModule.recepcionesPlanta.endpoint}/$pedidoId/confirmar',
+      body: {'cantidades': cantidades},
+    );
+    return RecepcionPlantaRecord.fromJson(response);
+  }
 }
