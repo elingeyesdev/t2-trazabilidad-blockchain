@@ -232,9 +232,134 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
+              const SizedBox(height: 16),
+              SectionTitle(
+                'Almacenamiento e ingreso original',
+                color: look.tone,
+              ),
+              const SizedBox(height: 12),
+              if (recorrido.ingresosProduccion.isEmpty)
+                const AppNotice(
+                  tone: AppNoticeTone.info,
+                  message:
+                      'Todavía no hay ingresos a almacén visibles para este procesamiento.',
+                )
+              else
+                for (final ingreso in recorrido.ingresosProduccion) ...[
+                  _ingresoCard(context, ingreso),
+                  const SizedBox(height: 12),
+                ],
+              const SizedBox(height: 16),
+              SectionTitle('Ubicación y saldo actual', color: look.tone),
+              const SizedBox(height: 12),
+              if (recorrido.ubicacionesActuales.isEmpty)
+                const AppNotice(
+                  tone: AppNoticeTone.info,
+                  message:
+                      'No hay ubicaciones actuales visibles para las partidas de este procesamiento.',
+                )
+              else
+                for (final ubicacion in recorrido.ubicacionesActuales) ...[
+                  _ubicacionCard(context, ubicacion),
+                  const SizedBox(height: 12),
+                ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _ingresoCard(
+    BuildContext context,
+    IngresoProduccionProcesamiento ingreso,
+  ) {
+    final productLabel = ingreso.producto == null
+        ? 'Ingreso #${ingreso.almacenajeId}'
+        : ingreso.presentacion != null
+        ? '${ingreso.producto} · ${ingreso.presentacion}'
+        : ingreso.producto!;
+    return Container(
+      key: ValueKey('procesamiento.ingreso.${ingreso.almacenajeId}'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            ingreso.almacenLabel,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          DetailField(label: 'Producto ingresado', value: productLabel),
+          if (ingreso.formattedCantidad != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Cantidad ingresada',
+              value: ingreso.formattedCantidad!,
+            ),
+          ],
+          if (ingreso.fecha != null) ...[
+            const Divider(height: 1),
+            DetailField(label: 'Fecha de ingreso', value: ingreso.fecha!),
+          ],
+          if (ingreso.estado != null) ...[
+            const Divider(height: 1),
+            DetailField(label: 'Estado del registro', value: ingreso.estado!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _ubicacionCard(
+    BuildContext context,
+    UbicacionActualProcesamiento ubicacion,
+  ) {
+    final productLabel = ubicacion.producto == null
+        ? 'Partida #${ubicacion.partidaId}'
+        : ubicacion.presentacion != null
+        ? '${ubicacion.producto} · ${ubicacion.presentacion}'
+        : ubicacion.producto!;
+    return Container(
+      key: ValueKey('procesamiento.ubicacion.${ubicacion.partidaId}'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            ubicacion.almacenLabel,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          DetailField(
+            label: 'Partida',
+            value: 'Partida #${ubicacion.partidaId} · $productLabel',
+          ),
+          if (ubicacion.formattedCantidadActual != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Saldo actual',
+              value: ubicacion.formattedCantidadActual!,
+            ),
+          ],
+          if (ubicacion.formattedKgActual != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Saldo actual en kg',
+              value: ubicacion.formattedKgActual!,
+            ),
+          ],
+        ],
       ),
     );
   }

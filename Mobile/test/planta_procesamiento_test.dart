@@ -352,11 +352,29 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('tarea.ver_origen_resultado')));
     await tester.pumpAndSettle();
 
+    final producto301 = find.byKey(
+      const ValueKey('procesamiento.producto.301'),
+    );
     expect(find.text('Productos obtenidos'), findsOneWidget);
-    expect(find.text('Hojuelas de Papa · Bolsa 500 g'), findsOneWidget);
-    expect(find.text('Partida #301'), findsOneWidget);
-    expect(find.text('180 bolsas'), findsOneWidget);
-    expect(find.text('90 kg'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: producto301,
+        matching: find.text('Hojuelas de Papa · Bolsa 500 g'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: producto301, matching: find.text('Partida #301')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: producto301, matching: find.text('180 bolsas')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: producto301, matching: find.text('90 kg')),
+      findsOneWidget,
+    );
     expect(find.text('Harina de Papa · Saco 25 kg'), findsOneWidget);
     expect(find.text('Partida #302'), findsOneWidget);
     expect(
@@ -364,4 +382,72 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'Muestra el almacén de ingreso original y la ubicación con saldo actual',
+    (tester) async {
+      final transferredPayload = {
+        ...recorridoPayload,
+        'ubicaciones_actuales': [
+          {
+            'partida_id': 301,
+            'insumo_id': 90,
+            'producto': 'Hojuelas de Papa',
+            'presentacion_id': 15,
+            'presentacion': 'Bolsa 500 g',
+            'unidad': 'bolsas',
+            'cantidad_actual': '140.000000',
+            'cantidad_actual_kg': '70.000000',
+            'almacen_id': 14,
+            'almacen': 'Almacén Despacho Central',
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [tareaRow],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/31' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': tareaRow});
+        }
+        if (request.url.path == '/api/planta/lotes-produccion/88' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': transferredPayload});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lavado y selección'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Almacenamiento e ingreso original'), findsOneWidget);
+      expect(find.text('Almacén Producto Terminado Norte'), findsOneWidget);
+      expect(find.text('2026-11-21T16:30:00Z'), findsOneWidget);
+      expect(find.text('Ingreso registrado'), findsOneWidget);
+
+      expect(find.text('Ubicación y saldo actual'), findsOneWidget);
+      expect(find.text('Almacén Despacho Central'), findsOneWidget);
+      expect(find.text('140 bolsas'), findsOneWidget);
+      expect(find.text('70 kg'), findsOneWidget);
+    },
+  );
 }
