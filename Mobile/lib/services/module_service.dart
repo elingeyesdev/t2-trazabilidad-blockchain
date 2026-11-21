@@ -11,6 +11,7 @@ import '../models/lote_models.dart';
 import '../models/module_page.dart';
 import '../models/pedido_models.dart';
 import '../models/planta_models.dart';
+import '../models/qr_envio_models.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
 
@@ -801,6 +802,25 @@ class ModuleService {
     }
     final response = await _api.request('POST', tipo.endpoint, body: body);
     return PedidoRecord.fromJson(response);
+  }
+
+  Future<QrResolucionResult> resolveEnvioQr(
+    AuthUser user,
+    String codigo,
+  ) async {
+    if (!QrPermissions.canUseQr(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar o validar códigos QR de envío.',
+        statusCode: 403,
+      );
+    }
+    final normalized = codigo.trim();
+    final response = await _api.request(
+      'POST',
+      'envios/qr/resolver',
+      body: {'codigo': normalized},
+    );
+    return QrResolucionResult.fromJson(response, codigo: normalized);
   }
 
   Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(

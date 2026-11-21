@@ -32,6 +32,7 @@ import 'screens/modules/planta_recepcion_detail_screen.dart';
 import 'screens/modules/planta_recepciones_screen.dart';
 import 'screens/modules/planta_tarea_detail_screen.dart';
 import 'screens/modules/planta_tareas_screen.dart';
+import 'screens/modules/qr_scanner_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
 import 'services/api_health_service.dart';
@@ -260,6 +261,20 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'qr']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => QrScannerScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'pedidos', 'gestion']) {
           return MaterialPageRoute<void>(

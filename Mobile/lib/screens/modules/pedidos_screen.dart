@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/pedido_models.dart';
+import '../../models/qr_envio_models.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
@@ -143,6 +144,13 @@ class _PedidosScreenState extends State<PedidosScreen> {
       appBar: AppBar(
         title: const Text('Pedidos'),
         actions: [
+          if (QrPermissions.canUseQr(widget.user))
+            IconButton(
+              key: const ValueKey('pedidos.escanear_qr'),
+              tooltip: 'Leer código QR',
+              onPressed: () => Navigator.of(context).pushNamed('/modules/qr'),
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+            ),
           if (canCreate)
             IconButton(
               key: const ValueKey('pedidos.nuevo'),
