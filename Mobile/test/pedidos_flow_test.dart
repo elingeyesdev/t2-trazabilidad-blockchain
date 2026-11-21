@@ -365,4 +365,92 @@ void main() {
       expect(find.text('PED-AGR-007'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'El detalle muestra el estado y el historial completo del pedido',
+    (tester) async {
+      final detailedPedido = {
+        ...createdDistribucion,
+        'estado': 'rechazado',
+        'fecha_aceptacion': '2026-11-21T14:00:00Z',
+        'envio_iniciado_mayorista': true,
+        'fecha_confirmacion_minorista': '2026-11-21T14:30:00Z',
+        'fecha_envio': '2026-11-21T15:00:00Z',
+        'fecha_recepcion': '2026-11-21T17:00:00Z',
+        'decision': {
+          'accion': 'rechazar',
+          'estado_resultante': 'rechazado',
+          'motivo': 'Sin disponibilidad en cámara fría',
+          'usuarioid': 9,
+          'fecha': '2026-11-21T14:15:00Z',
+        },
+        'motivo_rechazo': 'Sin disponibilidad en cámara fría',
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(minoristaProfile);
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [detailedPedido],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/pedidos-distribucion/120' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': detailedPedido});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver pedidos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('PDV-2026-120'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Estado e historial del pedido'), findsOneWidget);
+      final historial = find.byKey(const ValueKey('pedido.historial'));
+      expect(
+        find.descendant(of: historial, matching: find.text('Rechazado')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historial,
+          matching: find.text('2026-11-21T13:00:00Z'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historial,
+          matching: find.text('2026-11-21T14:00:00Z'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historial,
+          matching: find.text('Envío iniciado por mayorista'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historial,
+          matching: find.text('Rechazar pedido (2026-11-21T14:15:00Z)'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historial,
+          matching: find.text('Sin disponibilidad en cámara fría'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

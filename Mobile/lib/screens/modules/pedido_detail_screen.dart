@@ -237,6 +237,10 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                SectionTitle('Estado e historial del pedido', color: look.tone),
+                const SizedBox(height: 12),
+                _historialCard(context, record),
+                const SizedBox(height: 24),
                 SectionTitle('Productos solicitados', color: look.tone),
                 const SizedBox(height: 12),
                 for (final line in record.detalles) ...[
@@ -277,6 +281,55 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _historialCard(BuildContext context, PedidoRecord record) {
+    final entries = <(String, String)>[
+      ('Estado actual', record.estadoLabel),
+      if (record.fecha != null) ('Fecha de solicitud', record.fecha!),
+      if (record.fechaAceptacion != null)
+        ('Fecha de aceptación', record.fechaAceptacion!),
+      if (record.envioIniciadoMayorista == true)
+        ('Modalidad', 'Envío iniciado por mayorista'),
+      if (record.fechaConfirmacionMinorista != null)
+        ('Confirmación del minorista', record.fechaConfirmacionMinorista!),
+      if (record.fechaEnvio != null) ('Fecha de envío', record.fechaEnvio!),
+      if (record.fechaRecepcion != null)
+        ('Fecha de recepción', record.fechaRecepcion!),
+      if (record.envio != null)
+        (
+          'Estado del envío agrícola',
+          'Envío #${record.envio!.id}${record.envio!.estado != null ? ' · ${record.envio!.estado}' : ''}',
+        ),
+      if (record.envio?.fechaRecepcionPlanta != null)
+        ('Recepción en planta', record.envio!.fechaRecepcionPlanta!),
+      if (record.decision?.accion != null)
+        (
+          'Última decisión',
+          '${pedidoAccionLabel(record.decision!.accion!)}${record.decision!.fecha != null ? ' (${record.decision!.fecha})' : ''}',
+        ),
+      if ((record.motivoRechazo ?? record.decision?.motivo) case final motivo?)
+        ('Motivo registrado', motivo),
+    ];
+
+    return Container(
+      key: const ValueKey('pedido.historial'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < entries.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            DetailField(label: entries[i].$1, value: entries[i].$2),
+          ],
+        ],
       ),
     );
   }
