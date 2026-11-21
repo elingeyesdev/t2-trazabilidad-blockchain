@@ -309,17 +309,12 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             SizedBox(
               height: _largeText ? 72 : 112,
-              child: Stack(
+              child: const Stack(
                 fit: StackFit.expand,
                 children: [
-                  const ColoredBox(color: Color(0xFF2C5E39)),
-                  const ExcludeSemantics(
+                  ColoredBox(color: Color(0xFF2C5E39)),
+                  ExcludeSemantics(
                     child: CustomPaint(painter: FurrowPainter()),
-                  ),
-                  Positioned(
-                    left: 18,
-                    top: 16,
-                    child: ModuleMark(module, size: _largeText ? 40 : 52),
                   ),
                 ],
               ),
@@ -511,7 +506,7 @@ class _HomeScreenState extends State<HomeScreen> {
         )
       else
         for (final group in visible.entries) ...[
-          SectionTitle(group.key, color: group.value.first.look.tone),
+          SectionTitle(group.key, color: AppTheme.field),
           const SizedBox(height: 14),
           for (final module in group.value) ...[
             _workRow(module),
@@ -522,36 +517,58 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-  Widget _workRow(AppModule module) => PressableCard(
-    onTap: () => _open(module),
-    padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-    child: Row(
-      children: [
-        ModuleMark(module, size: _largeText ? 44 : 56),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                module.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+  Widget _workRow(AppModule module) {
+    final badgeSize = _largeText ? 44.0 : 56.0;
+    return PressableCard(
+      onTap: () => _open(module),
+      padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+      child: Row(
+        children: [
+          ExcludeSemantics(
+            child: Container(
+              width: badgeSize,
+              height: badgeSize,
+              decoration: BoxDecoration(
+                color: AppTheme.field,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: AppTheme.fieldDeep, width: 1),
               ),
-              const SizedBox(height: 2),
-              Text(
-                module.description,
-                style: Theme.of(context).textTheme.bodyMedium,
+              child: Icon(
+                module.icon,
+                color: Colors.white,
+                size: badgeSize * 0.54,
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        const Icon(Icons.chevron_right_rounded, size: 32, color: AppTheme.ink),
-      ],
-    ),
-  );
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  module.label,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  module.description,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 32,
+            color: AppTheme.ink,
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _account() => Align(
     alignment: Alignment.centerLeft,
