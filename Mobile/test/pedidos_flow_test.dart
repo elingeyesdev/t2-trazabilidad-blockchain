@@ -453,4 +453,88 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Identifica las acciones disponibles según permisos y estado del pedido',
+    (tester) async {
+      const mayoristaProfile = {
+        'usuarioid': 30,
+        'nombre': 'Diego',
+        'apellido': 'Rojas',
+        'email': 'diego@example.test',
+        'activo': true,
+        'estado_cuenta': 'aprobado',
+        'roles': [
+          {'id': 7, 'name': 'mayorista'},
+        ],
+        'permissions': [
+          'pedidos_distribucion.view',
+          'pedidos_distribucion.update',
+        ],
+      };
+
+      final pendingWithActions = {
+        ...createdDistribucion,
+        'acciones_disponibles': ['aceptar', 'rechazar'],
+      };
+
+      final closedWithoutActions = {
+        ...createdDistribucion,
+        'id': 121,
+        'numero_solicitud': 'PDV-2026-121',
+        'estado': 'entregado',
+        'acciones_disponibles': const <String>[],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(mayoristaProfile);
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [pendingWithActions, closedWithoutActions],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/pedidos-distribucion/120' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': pendingWithActions});
+        }
+        if (request.url.path == '/api/pedidos-distribucion/121' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': closedWithoutActions});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver pedidos'));
+      await tester.pumpAndSettle();
+
+      // Pedido pendiente con acciones autorizadas.
+      await tester.tap(find.text('PDV-2026-120'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Acciones disponibles'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('pedido.accion.aceptar')),
+        findsOneWidget,
+      );
+      expect(find.text('Aceptar pedido'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('pedido.accion.rechazar')),
+        findsOneWidget,
+      );
+      expect(find.text('Rechazar pedido'), findsOneWidget);
+
+      // Pedido entregado sin acciones disponibles.
+      await tester.tap(find.byKey(const ValueKey('pedido.volver')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('PDV-2026-121'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('pedido.sin_acciones')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pedido.accion.aceptar')), findsNothing);
+    },
+  );
 }

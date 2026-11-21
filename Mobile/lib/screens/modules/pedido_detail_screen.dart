@@ -9,6 +9,7 @@ import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
+import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
@@ -241,6 +242,10 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                 const SizedBox(height: 12),
                 _historialCard(context, record),
                 const SizedBox(height: 24),
+                SectionTitle('Acciones disponibles', color: look.tone),
+                const SizedBox(height: 12),
+                _accionesCard(context, record),
+                const SizedBox(height: 24),
                 SectionTitle('Productos solicitados', color: look.tone),
                 const SizedBox(height: 12),
                 for (final line in record.detalles) ...[
@@ -329,6 +334,53 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
             if (i > 0) const Divider(height: 1),
             DetailField(label: entries[i].$1, value: entries[i].$2),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _accionesCard(BuildContext context, PedidoRecord record) {
+    final canUpdate =
+        !widget.user.roles.contains('admin') &&
+        (record.tipo == PedidoTipo.agricola
+            ? widget.user.permissions.contains('pedidos.update')
+            : widget.user.permissions.contains('pedidos_distribucion.update'));
+    final acciones = canUpdate ? record.accionesDisponibles : const <String>[];
+
+    if (acciones.isEmpty) {
+      return const AppNotice(
+        key: ValueKey('pedido.sin_acciones'),
+        tone: AppNoticeTone.info,
+        message:
+            'No hay acciones disponibles para este pedido en su estado actual o con los permisos de tu cuenta.',
+      );
+    }
+
+    return Container(
+      key: const ValueKey('pedido.acciones'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final accion in acciones)
+            Chip(
+              key: ValueKey('pedido.accion.$accion'),
+              backgroundColor: AppTheme.maize,
+              side: const BorderSide(color: AppTheme.ink, width: 1.5),
+              label: Text(
+                pedidoAccionLabel(accion),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.ink,
+                ),
+              ),
+            ),
         ],
       ),
     );
