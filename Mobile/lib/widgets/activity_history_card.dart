@@ -20,7 +20,7 @@ class ActivityHistoryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radius),
-        border: Border.all(color: AppTheme.ink, width: 2),
+        border: Border.all(color: AppTheme.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -90,9 +90,7 @@ class ActivityHistoryCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
               decoration: const BoxDecoration(
                 color: Color(0xFFF8F1DD),
-                border: Border(
-                  top: BorderSide(color: AppTheme.line, width: 1.5),
-                ),
+                border: Border(top: BorderSide(color: AppTheme.line, width: 1)),
                 borderRadius: BorderRadius.vertical(
                   bottom: Radius.circular(AppTheme.radius - 2),
                 ),

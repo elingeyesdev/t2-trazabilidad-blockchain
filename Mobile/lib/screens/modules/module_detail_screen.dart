@@ -450,7 +450,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 decoration: BoxDecoration(
                   color: look.tone,
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: AppTheme.ink, width: 2),
+                  border: Border.all(color: AppTheme.border, width: 1),
                   boxShadow: AppTheme.stamp(5),
                 ),
                 child: Column(
@@ -582,7 +582,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.surface,
                   borderRadius: BorderRadius.circular(AppTheme.radius),
-                  border: Border.all(color: AppTheme.ink, width: 2),
+                  border: Border.all(color: AppTheme.border, width: 1),
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -608,7 +608,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(AppTheme.radius),
-                      border: Border.all(color: AppTheme.ink, width: 2),
+                      border: Border.all(color: AppTheme.border, width: 1),
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -684,7 +684,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(AppTheme.radius),
-                      border: Border.all(color: AppTheme.ink, width: 2),
+                      border: Border.all(color: AppTheme.border, width: 1),
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -768,7 +768,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(AppTheme.radius),
-                      border: Border.all(color: AppTheme.ink, width: 2),
+                      border: Border.all(color: AppTheme.border, width: 1),
                     ),
                     child: Form(
                       key: _obsFormKey,
@@ -892,7 +892,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             decoration: BoxDecoration(
               color: AppTheme.surface,
               borderRadius: BorderRadius.circular(AppTheme.radius),
-              border: Border.all(color: AppTheme.ink, width: 2),
+              border: Border.all(color: AppTheme.border, width: 1),
             ),
             child: const Row(
               children: [
@@ -935,7 +935,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
           decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.circular(AppTheme.radius),
-            border: Border.all(color: AppTheme.ink, width: 2),
+            border: Border.all(color: AppTheme.border, width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

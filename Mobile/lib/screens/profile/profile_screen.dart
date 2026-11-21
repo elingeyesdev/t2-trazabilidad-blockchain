@@ -193,7 +193,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : _confirmLogout,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.clay,
-                    side: const BorderSide(color: AppTheme.clay, width: 2),
+                    side: const BorderSide(color: AppTheme.clay, width: 1),
                   ),
                   icon: const Icon(Icons.logout_rounded),
                   label: const Text('Cerrar sesión'),
@@ -211,7 +211,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     decoration: BoxDecoration(
       color: AppTheme.sprout,
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: AppTheme.ink, width: 2),
+      border: Border.all(color: AppTheme.border, width: 1),
       boxShadow: AppTheme.stamp(5),
     ),
     child: Column(
@@ -232,7 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppTheme.ink, width: 1.5),
+            border: Border.all(color: AppTheme.border, width: 1),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -267,7 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radius),
-        border: Border.all(color: AppTheme.ink, width: 2),
+        border: Border.all(color: AppTheme.border, width: 1),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Column(
@@ -286,7 +286,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.paper,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.line, width: 1.5),
+                      border: Border.all(color: AppTheme.line, width: 1),
                     ),
                     child: Icon(
                       fields[i].icon,
@@ -402,7 +402,7 @@ class _ProfileAvatar extends StatelessWidget {
         height: 108,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: AppTheme.ink, width: 3),
+          border: Border.all(color: AppTheme.border, width: 1),
           boxShadow: AppTheme.stamp(4),
         ),
         clipBehavior: Clip.antiAlias,

@@ -12,6 +12,8 @@ abstract final class AppTheme {
   static const ink = Color(0xFF1B2620);
   static const inkSoft = Color(0xFF465149);
   static const line = Color(0xFFD8CFBB);
+  static const border = Color(0xFFC5BBA5);
+  static const sproutBorder = Color(0xFFA8C59D);
   static const lineStrong = Color(0xFF6E776F);
 
   // Marca
@@ -32,9 +34,13 @@ abstract final class AppTheme {
   static const sage = sprout;
   static const ochre = maize;
 
-  /// Sombra "de sello": sin desenfoque, desplazada hacia abajo.
+  /// Sombra sutil para dar profundidad sin bordes gruesos ni efecto cómic.
   static List<BoxShadow> stamp([double depth = 4, Color color = ink]) => [
-    BoxShadow(color: color, offset: Offset(0, depth)),
+    BoxShadow(
+      color: ink.withValues(alpha: .07),
+      blurRadius: depth * 2.5,
+      offset: Offset(0, (depth * .5).clamp(1.0, 3.0)),
+    ),
   ];
 
   static const radius = 18.0;
@@ -127,7 +133,7 @@ abstract final class AppTheme {
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.padded,
       splashFactory: InkSparkle.splashFactory,
-      dividerTheme: const DividerThemeData(color: line, thickness: 1.5),
+      dividerTheme: const DividerThemeData(color: line, thickness: 1),
       iconTheme: const IconThemeData(color: ink, size: 26),
       appBarTheme: const AppBarTheme(
         backgroundColor: paper,
@@ -171,7 +177,7 @@ abstract final class AppTheme {
           backgroundColor: surface,
           minimumSize: const Size(64, 54),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          side: const BorderSide(color: ink, width: 2),
+          side: const BorderSide(color: border, width: 1.2),
           textStyle: const TextStyle(
             fontFamily: font,
             fontSize: 16,
@@ -236,27 +242,27 @@ abstract final class AppTheme {
         suffixIconColor: inkSoft,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: lineStrong, width: 2),
+          borderSide: const BorderSide(color: border, width: 1.2),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: lineStrong, width: 2),
+          borderSide: const BorderSide(color: border, width: 1.2),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: field, width: 3),
+          borderSide: const BorderSide(color: field, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: clay, width: 2),
+          borderSide: const BorderSide(color: clay, width: 1.2),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: clay, width: 3),
+          borderSide: const BorderSide(color: clay, width: 1.8),
         ),
         disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: line, width: 2),
+          borderSide: const BorderSide(color: line, width: 1),
         ),
         errorMaxLines: 3,
         helperMaxLines: 3,
@@ -264,23 +270,23 @@ abstract final class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: maize,
+        indicatorColor: sprout,
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: ink, width: 2),
+          side: const BorderSide(color: sproutBorder, width: 1),
         ),
         height: 84,
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             size: 28,
-            color: states.contains(WidgetState.selected) ? ink : inkSoft,
+            color: states.contains(WidgetState.selected) ? fieldDeep : inkSoft,
           ),
         ),
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontFamily: font,
             fontSize: 15,
-            color: states.contains(WidgetState.selected) ? ink : inkSoft,
+            color: states.contains(WidgetState.selected) ? fieldDeep : inkSoft,
             fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w800
                 : FontWeight.w600,

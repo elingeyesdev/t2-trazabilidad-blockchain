@@ -146,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         bottomNavigationBar: DecoratedBox(
           decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppTheme.ink, width: 2)),
+            border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
           ),
           child: NavigationBar(
             selectedIndex: _tab,
@@ -296,104 +296,112 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: AppTheme.fieldDeep,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.ink, width: 2),
-        boxShadow: AppTheme.stamp(6),
+        boxShadow: AppTheme.stamp(5),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: _largeText ? 72 : 112,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                const ColoredBox(color: Color(0xFF2C5E39)),
-                const ExcludeSemantics(
-                  child: CustomPaint(painter: FurrowPainter()),
-                ),
-                Positioned(
-                  left: 18,
-                  top: 16,
-                  child: ModuleMark(module, size: _largeText ? 40 : 52),
-                ),
-              ],
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF13331C), width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: _largeText ? 72 : 112,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: Color(0xFF2C5E39)),
+                  const ExcludeSemantics(
+                    child: CustomPaint(painter: FurrowPainter()),
+                  ),
+                  Positioned(
+                    left: 18,
+                    top: 16,
+                    child: ModuleMark(module, size: _largeText ? 40 : 52),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.maize,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'Lo principal',
-                    style: TextStyle(
-                      color: AppTheme.ink,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.maize,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Lo principal',
+                      style: TextStyle(
+                        color: AppTheme.ink,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Semantics(
-                  header: true,
-                  child: Text(
-                    title,
+                  const SizedBox(height: 12),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        height: 1.15,
+                        letterSpacing: -.6,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    module.description,
                     style: const TextStyle(
-                      fontSize: 28,
-                      height: 1.15,
-                      letterSpacing: -.6,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      fontSize: 17,
+                      height: 1.4,
+                      color: Color(0xFFE6EFE2),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  module.description,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    height: 1.4,
-                    color: Color(0xFFE6EFE2),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => _open(module),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.maize,
-                      foregroundColor: AppTheme.ink,
-                      side: const BorderSide(color: AppTheme.ink, width: 2),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => _open(module),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.maize,
+                        foregroundColor: AppTheme.ink,
+                        side: const BorderSide(
+                          color: Color(0xFFC58C1F),
+                          width: 1,
+                        ),
+                      ),
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                      label: Text('Ver ${module.label.toLowerCase()}'),
                     ),
-                    icon: const Icon(Icons.arrow_forward_rounded),
-                    label: Text('Ver ${module.label.toLowerCase()}'),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _shortcut(AppModule module) {
     final look = module.look;
-    const accentInk = Color(0xFF5F4100);
     return PressableCard(
       onTap: () => _open(module),
-      color: AppTheme.maizeSoft,
+      color: AppTheme.sprout,
+      borderColor: AppTheme.sproutBorder,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -406,18 +414,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: AppTheme.maize,
+                    color: AppTheme.field,
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: AppTheme.ink, width: 1),
+                    border: Border.all(color: AppTheme.fieldDeep, width: 1),
                   ),
-                  child: Icon(module.icon, color: AppTheme.ink, size: 28),
+                  child: Icon(module.icon, color: Colors.white, size: 28),
                 ),
               ),
               const Spacer(),
               const Icon(
                 Icons.arrow_forward_rounded,
                 size: 24,
-                color: AppTheme.ink,
+                color: AppTheme.fieldDeep,
               ),
             ],
           ),
@@ -434,7 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(
               fontSize: 15,
               height: 1.35,
-              color: accentInk,
+              color: AppTheme.fieldDeep,
             ),
           ),
         ],

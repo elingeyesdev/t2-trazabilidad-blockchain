@@ -311,49 +311,54 @@ class _LoginScreenState extends State<LoginScreen> {
     decoration: BoxDecoration(
       color: const Color(0xFFCFE5EC),
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: AppTheme.ink, width: 2),
-      boxShadow: AppTheme.stamp(5),
+      boxShadow: AppTheme.stamp(4),
     ),
-    clipBehavior: Clip.antiAlias,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        const ExcludeSemantics(child: CustomPaint(painter: FurrowPainter())),
-        Positioned(
-          left: 16,
-          top: 16,
-          right: 16,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
-              decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppTheme.ink, width: 2),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  BrandMark(size: 36),
-                  SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      'AgroFusion',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -.3,
-                        color: AppTheme.ink,
+    foregroundDecoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: AppTheme.border, width: 1),
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const ExcludeSemantics(child: CustomPaint(painter: FurrowPainter())),
+          Positioned(
+            left: 16,
+            top: 16,
+            right: 16,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(6, 6, 16, 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppTheme.border, width: 1),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    BrandMark(size: 36),
+                    SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        'AgroFusion',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -.3,
+                          color: AppTheme.ink,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 
@@ -369,7 +374,7 @@ class _LoginScreenState extends State<LoginScreen> {
       decoration: BoxDecoration(
         color: tone,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ink, width: 1.5),
+        border: Border.all(color: ink, width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

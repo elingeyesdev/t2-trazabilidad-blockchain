@@ -284,7 +284,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppTheme.line, width: 2),
+                      border: Border.all(color: AppTheme.line, width: 1),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,7 +312,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
                     decoration: BoxDecoration(
                       color: AppTheme.surface,
                       borderRadius: BorderRadius.circular(AppTheme.radius),
-                      border: Border.all(color: AppTheme.ink, width: 2),
+                      border: Border.all(color: AppTheme.border, width: 1),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

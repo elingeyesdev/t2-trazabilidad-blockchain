@@ -298,7 +298,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                     foregroundColor: AppTheme.ink,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: AppTheme.ink, width: 2),
+                      side: const BorderSide(color: AppTheme.border, width: 1),
                     ),
                     onPressed: _canCreateLote
                         ? _createLote
@@ -432,7 +432,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         selected: _activityFilter == entry.key,
                         selectedColor: AppTheme.maize,
                         backgroundColor: AppTheme.surface,
-                        side: const BorderSide(color: AppTheme.ink, width: 1.5),
+                        side: const BorderSide(
+                          color: AppTheme.border,
+                          width: 1,
+                        ),
                         onSelected: (_) =>
                             setState(() => _activityFilter = entry.key),
                       ),
@@ -533,7 +536,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   Widget _pager(ModulePage page) => DecoratedBox(
     decoration: const BoxDecoration(
       color: AppTheme.surface,
-      border: Border(top: BorderSide(color: AppTheme.ink, width: 2)),
+      border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
     ),
     child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -592,7 +595,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       child: PressableCard(
         onTap: _supportsSearch ? () => _openRecord(record) : null,
         padding: EdgeInsets.zero,
-        borderColor: AppTheme.ink,
+        borderColor: AppTheme.border,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -629,7 +632,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 decoration: BoxDecoration(
                   color: look.tone,
                   border: const Border(
-                    top: BorderSide(color: AppTheme.ink, width: 2),
+                    top: BorderSide(color: AppTheme.border, width: 1),
                   ),
                 ),
                 child: Row(

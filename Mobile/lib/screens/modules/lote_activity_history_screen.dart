@@ -175,7 +175,7 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
               decoration: BoxDecoration(
                 color: look.tone,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.ink, width: 2),
+                border: Border.all(color: AppTheme.border, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
