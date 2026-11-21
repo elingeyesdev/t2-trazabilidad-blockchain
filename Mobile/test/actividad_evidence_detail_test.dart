@@ -281,6 +281,8 @@ void main() {
           matching: find.byType(Scrollable),
         ),
       );
+      await tester.ensureVisible(find.text('Control manual de malezas'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Control manual de malezas'));
       await tester.pumpAndSettle();
 

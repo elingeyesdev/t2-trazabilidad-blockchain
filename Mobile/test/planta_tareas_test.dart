@@ -497,4 +497,101 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Al completar una etapa se actualiza su estado en detalle y listado conservando el orden del proceso',
+    (tester) async {
+      var etapa1Completed = false;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioPlantaProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [
+              etapa1Completed
+                  ? {
+                      ...tareaLavado,
+                      'estado': 'completada',
+                      'completada_en': '2026-11-21T12:00:00Z',
+                    }
+                  : tareaLavado,
+              etapa1Completed
+                  ? {...tareaSecado, 'estado': 'pendiente'}
+                  : tareaSecado,
+            ],
+            'meta': {'current_page': 1, 'last_page': 1, 'total': 2},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/501' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': etapa1Completed
+                ? {
+                    ...tareaLavado,
+                    'estado': 'completada',
+                    'completada_en': '2026-11-21T12:00:00Z',
+                  }
+                : tareaLavado,
+            'meta': {
+              'puede_completar': !etapa1Completed,
+              'requisito_pendiente': null,
+              'maquinas_elegibles': etapa1Completed ? <int>[] : [3],
+              'parametros_requeridos': <Map<String, Object?>>[],
+              'permite_parciales': false,
+            },
+          });
+        }
+        if (request.url.path ==
+                '/api/planta/lotes-produccion/90/tareas/501/completar' &&
+            request.method == 'POST') {
+          etapa1Completed = true;
+          return jsonResponse({
+            'data': {
+              ...tareaLavado,
+              'estado': 'completada',
+              'completada_en': '2026-11-21T12:00:00Z',
+            },
+            'meta': {'puede_completar': false},
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Lavado y desinfección'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('planta.tarea.completar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('planta.tarea.completar')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirmar cierre'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completada'), findsOneWidget);
+      expect(find.text('Completada el'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('planta.tarea.completar')),
+        findsNothing,
+      );
+
+      // Al volver al listado, etapa 1 figura completada, etapa 2 pasa a pendiente y se conserva el orden.
+      await tester.tap(find.byTooltip('Volver a tareas de planta'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completada'), findsOneWidget);
+      expect(find.text('Pendiente'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Lavado y desinfección')).dy,
+        lessThan(tester.getTopLeft(find.text('Secado controlado')).dy),
+      );
+    },
+  );
 }

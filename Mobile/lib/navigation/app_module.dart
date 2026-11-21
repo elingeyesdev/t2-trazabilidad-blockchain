@@ -175,7 +175,7 @@ enum AppModule {
   bool canOpen(AuthUser user) {
     if (!user.permissions.contains(permission)) return false;
     if (this == AppModule.tareasPlanta) {
-      return !user.roles.any(const {'admin', 'jefe_planta'}.contains);
+      return !user.roles.contains('jefe_planta');
     }
     if (this != AppModule.asignaciones ||
         user.roles.any(const {'admin', 'transportista'}.contains)) {

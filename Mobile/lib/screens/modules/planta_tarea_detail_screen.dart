@@ -369,6 +369,13 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
                         value: tarea.loteProducto!,
                       ),
                     ],
+                    if (tarea.completadaEn != null) ...[
+                      const Divider(height: 1),
+                      DetailField(
+                        label: 'Completada el',
+                        value: tarea.completadaEn!,
+                      ),
+                    ],
                     if (tarea.observaciones != null) ...[
                       const Divider(height: 1),
                       DetailField(
