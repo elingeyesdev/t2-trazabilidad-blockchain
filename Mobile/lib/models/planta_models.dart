@@ -141,6 +141,152 @@ class TareasPlantaPage {
   final int total;
 }
 
+class ParametroRequerido {
+  const ParametroRequerido({
+    required this.variableEstandarId,
+    required this.nombre,
+    this.unidad,
+    this.valorMinimo,
+    this.valorMaximo,
+  });
+
+  factory ParametroRequerido.fromJson(Map<String, dynamic> row) =>
+      ParametroRequerido(
+        variableEstandarId: _asInt(row['variableestandarid']) ?? 0,
+        nombre: _asText(row['nombre']) ?? 'Parámetro',
+        unidad: _asText(row['unidad']),
+        valorMinimo: _asDouble(row['valor_minimo']),
+        valorMaximo: _asDouble(row['valor_maximo']),
+      );
+
+  final int variableEstandarId;
+  final String nombre;
+  final String? unidad;
+  final double? valorMinimo;
+  final double? valorMaximo;
+
+  String? get rangeHint {
+    if (valorMinimo == null || valorMaximo == null) return null;
+    final min = _formatNumber(valorMinimo!);
+    final max = _formatNumber(valorMaximo!);
+    final unit = unidad == null || unidad!.isEmpty ? '' : ' $unidad';
+    return 'Rango permitido: $min a $max$unit';
+  }
+}
+
+class ResultadoParametro {
+  const ResultadoParametro({
+    required this.variableEstandarId,
+    required this.nombre,
+    required this.valor,
+    this.unidad,
+  });
+
+  factory ResultadoParametro.fromJson(Map<String, dynamic> row) =>
+      ResultadoParametro(
+        variableEstandarId: _asInt(row['variableestandarid']) ?? 0,
+        nombre: _asText(row['nombre']) ?? 'Parámetro',
+        valor: _asText(row['valor_decimal']) ?? _asText(row['valor']) ?? '-',
+        unidad: _asText(row['unidad']),
+      );
+
+  final int variableEstandarId;
+  final String nombre;
+  final String valor;
+  final String? unidad;
+
+  String get formattedValue =>
+      unidad == null || unidad!.isEmpty ? valor : '$valor $unidad';
+}
+
+class TareaPlantaDetail {
+  const TareaPlantaDetail({
+    required this.tarea,
+    required this.puedeCompletar,
+    this.requisitoPendiente,
+    this.maquinasElegibles = const [],
+    this.parametrosRequeridos = const [],
+    this.resultadoParametros = const [],
+    this.fechaRegistro,
+  });
+
+  factory TareaPlantaDetail.fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      throw const ApiException(
+        'No pudimos interpretar el detalle de la tarea.',
+      );
+    }
+    final data = json['data'] is Map<String, dynamic>
+        ? json['data'] as Map<String, dynamic>
+        : json;
+    final tarea = TareaPlantaSummary.fromJson(data);
+    if (tarea.id <= 0) {
+      throw const ApiException('La tarea de planta recibida no es válida.');
+    }
+    final meta = json['meta'] is Map<String, dynamic>
+        ? json['meta'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final elegibles = <int>[];
+    if (meta['maquinas_elegibles'] is List) {
+      for (final id in meta['maquinas_elegibles'] as List) {
+        final parsed = _asInt(id);
+        if (parsed != null && parsed > 0) elegibles.add(parsed);
+      }
+    }
+    final requeridos = <ParametroRequerido>[];
+    if (meta['parametros_requeridos'] is List) {
+      for (final row in meta['parametros_requeridos'] as List) {
+        if (row is Map<String, dynamic>) {
+          final param = ParametroRequerido.fromJson(row);
+          if (param.variableEstandarId > 0) requeridos.add(param);
+        }
+      }
+    }
+    final resultadoMap = data['resultado'] is Map<String, dynamic>
+        ? data['resultado'] as Map<String, dynamic>
+        : null;
+    final resultadoParams = <ResultadoParametro>[];
+    if (resultadoMap?['parametros'] is List) {
+      for (final row in resultadoMap!['parametros'] as List) {
+        if (row is Map<String, dynamic>) {
+          resultadoParams.add(ResultadoParametro.fromJson(row));
+        }
+      }
+    }
+    return TareaPlantaDetail(
+      tarea: tarea,
+      puedeCompletar: meta['puede_completar'] == true,
+      requisitoPendiente: _asText(meta['requisito_pendiente']),
+      maquinasElegibles: elegibles,
+      parametrosRequeridos: requeridos,
+      resultadoParametros: resultadoParams,
+      fechaRegistro: _asText(resultadoMap?['fecha_registro']),
+    );
+  }
+
+  final TareaPlantaSummary tarea;
+  final bool puedeCompletar;
+  final String? requisitoPendiente;
+  final List<int> maquinasElegibles;
+  final List<ParametroRequerido> parametrosRequeridos;
+  final List<ResultadoParametro> resultadoParametros;
+  final String? fechaRegistro;
+}
+
+String _formatNumber(double value) {
+  final fixed = value.toStringAsFixed(6);
+  return fixed.replaceFirst(RegExp(r'\.?0+$'), '');
+}
+
+double? _asDouble(Object? value) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    return double.tryParse(value.trim().replaceAll(',', '.'));
+  }
+  return null;
+}
+
 int? _asInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();

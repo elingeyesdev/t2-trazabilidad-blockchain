@@ -147,4 +147,52 @@ void main() {
       expect(requestedEstados, [null, 'pendiente']);
     },
   );
+
+  testWidgets(
+    'El detalle de la tarea identifica el proceso, la etapa, el lote y la máquina asignada',
+    (tester) async {
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioPlantaProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [tareaLavado],
+            'meta': {'current_page': 1, 'last_page': 1, 'total': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/501' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': tareaLavado,
+            'meta': {
+              'puede_completar': true,
+              'requisito_pendiente': null,
+              'maquinas_elegibles': [3],
+              'parametros_requeridos': <Map<String, Object?>>[],
+              'permite_parciales': false,
+            },
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lavado y desinfección'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detalle de tarea'), findsOneWidget);
+      expect(find.text('Proceso y etapa'), findsOneWidget);
+      expect(find.text('Lavado y desinfección'), findsAtLeastNWidgets(1));
+      expect(find.text('Etapa 1'), findsOneWidget);
+      expect(find.text('LP-2026-090 · Lote Papa Andina'), findsOneWidget);
+      expect(find.text('Papa prelavada'), findsOneWidget);
+      expect(find.text('Máquina asignada'), findsOneWidget);
+      expect(find.text('Lavadora Industrial A1'), findsOneWidget);
+      expect(find.text('MAQ-01'), findsOneWidget);
+      expect(find.text('Disponible'), findsOneWidget);
+    },
+  );
 }

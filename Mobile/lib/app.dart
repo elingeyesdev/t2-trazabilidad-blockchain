@@ -21,6 +21,7 @@ import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
 import 'screens/modules/module_screen.dart';
+import 'screens/modules/planta_tarea_detail_screen.dart';
 import 'screens/modules/planta_tareas_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
@@ -228,6 +229,30 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'planta',
+          'tareas',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PlantaTareaDetailScreen(
+                key: ValueKey(_auth.user),
+                asignacionId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onTareaUpdated: () => _plantaUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.tareasPlanta,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'actividades', 'nueva']) {
           final loteArg = settings.arguments is LoteOption

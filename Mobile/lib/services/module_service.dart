@@ -613,4 +613,24 @@ class ModuleService {
     );
     return TareasPlantaPage.fromJson(response);
   }
+
+  Future<TareaPlantaDetail> loadTareaPlantaDetail(
+    AuthUser user,
+    int asignacionId,
+  ) async {
+    if (!PlantaPermissions.canViewTareas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta tarea de planta.',
+        statusCode: 403,
+      );
+    }
+    if (asignacionId <= 0) {
+      throw const ApiException('La tarea solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      '${AppModule.tareasPlanta.endpoint}/$asignacionId',
+    );
+    return TareaPlantaDetail.fromJson(response);
+  }
 }
