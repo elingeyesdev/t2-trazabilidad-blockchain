@@ -823,6 +823,28 @@ class ModuleService {
     return QrResolucionResult.fromJson(response, codigo: normalized);
   }
 
+  Future<EnvioResumen> loadEnvioMovilDetail(
+    AuthUser user, {
+    required EnvioTipo tipo,
+    required int id,
+  }) async {
+    if (!QrPermissions.canUseQr(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar este envío.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'envios/${tipo.value}/$id');
+    final root =
+        response is Map<String, dynamic> &&
+            response['data'] is Map<String, dynamic>
+        ? response['data'] as Map<String, dynamic>
+        : response is Map<String, dynamic>
+        ? response
+        : const <String, dynamic>{};
+    return EnvioResumen.fromJson(root);
+  }
+
   Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(
     AuthUser user,
   ) async {

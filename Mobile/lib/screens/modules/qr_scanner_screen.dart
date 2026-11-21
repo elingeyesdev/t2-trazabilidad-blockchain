@@ -405,6 +405,26 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        FilledButton.icon(
+          key: const ValueKey('qr.abrir_destino'),
+          onPressed: _processing
+              ? null
+              : () => Navigator.of(context).pushNamed(
+                  '/modules/envios/${result.envio.tipo.value}/${result.envio.id}',
+                  arguments: result,
+                ),
+          icon: Icon(
+            result.puedeConfirmar && !result.utilizado
+                ? Icons.fact_check_outlined
+                : Icons.visibility_outlined,
+          ),
+          label: Text(
+            result.puedeConfirmar && !result.utilizado
+                ? 'Abrir recepción del envío'
+                : 'Abrir consulta del envío',
+          ),
+        ),
+        const SizedBox(height: 10),
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(

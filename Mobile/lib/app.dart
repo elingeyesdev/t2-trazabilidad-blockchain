@@ -8,6 +8,7 @@ import 'controllers/auth_controller.dart';
 import 'models/actividad_models.dart';
 import 'models/lote_models.dart';
 import 'models/pedido_models.dart';
+import 'models/qr_envio_models.dart';
 import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
@@ -18,6 +19,7 @@ import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
 import 'screens/modules/almacen_detail_screen.dart';
 import 'screens/modules/cosecha_form_screen.dart';
+import 'screens/modules/envio_qr_detail_screen.dart';
 import 'screens/modules/inventario_alertas_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/lote_form_screen.dart';
@@ -261,6 +263,34 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'envios',
+          final rawTipo,
+          final rawId,
+        ]) {
+          final tipo = EnvioTipo.fromValue(rawTipo);
+          final id = int.tryParse(rawId);
+          if (tipo == null || id == null || id <= 0) return null;
+          final initialResolution = settings.arguments is QrResolucionResult
+              ? settings.arguments as QrResolucionResult
+              : null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => EnvioQrDetailScreen(
+                key: ValueKey(_auth.user),
+                tipo: tipo,
+                envioId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                initialResolution: initialResolution,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'qr']) {
           return MaterialPageRoute<void>(

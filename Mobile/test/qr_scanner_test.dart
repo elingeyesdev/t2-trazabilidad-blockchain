@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:agrofusion_mobile/config/api_config.dart';
 import 'package:agrofusion_mobile/models/auth_user.dart';
+import 'package:agrofusion_mobile/models/qr_envio_models.dart';
+import 'package:agrofusion_mobile/screens/modules/envio_qr_detail_screen.dart';
 import 'package:agrofusion_mobile/screens/modules/qr_scanner_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/module_service.dart';
@@ -401,6 +403,76 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('test.qr_repetido')));
       await tester.pumpAndSettle();
       expect(resolveCalls, 2);
+    },
+  );
+
+  testWidgets(
+    'Después de validar el código QR abre la consulta o recepción correspondiente',
+    (tester) async {
+      await storage.saveToken('1|qr-test');
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/qr/resolver' &&
+              request.method == 'POST') {
+            return jsonResponse(validQrResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          onGenerateRoute: (settings) {
+            if (settings.name == '/modules/envios/distribucion/45') {
+              return MaterialPageRoute<void>(
+                settings: settings,
+                builder: (_) => EnvioQrDetailScreen(
+                  tipo: EnvioTipo.distribucion,
+                  envioId: 45,
+                  user: minoristaUser,
+                  service: ModuleService(api),
+                  onRefreshPermissions: () {},
+                  initialResolution: settings.arguments as QrResolucionResult?,
+                ),
+              );
+            }
+            return null;
+          },
+          home: QrScannerScreen(
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            cameraBuilder: (context, onCodeDetected, onCameraIssue) => Center(
+              child: FilledButton(
+                key: const ValueKey('test.qr_abrir'),
+                onPressed: () => onCodeDetected('QR-OPEN-45'),
+                child: const Text('Escanear'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('test.qr_abrir')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('qr.abrir_destino')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('qr.abrir_destino')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recepción de envío'), findsOneWidget);
+      expect(find.text('RUTA-045'), findsOneWidget);
+      expect(find.text('Tienda Central · Av. América 123'), findsOneWidget);
+      expect(find.text('Hojuelas de Papa · Bolsa 500 g'), findsOneWidget);
+      expect(find.text('24 bolsas'), findsOneWidget);
     },
   );
 }
