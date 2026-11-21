@@ -377,11 +377,21 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                       scrollPadding: scrollPadding,
                       enabled: !_submitting,
                       keyboardType: TextInputType.number,
+                      forceErrorText: _fieldError(
+                        isDist
+                            ? 'almacen_mayorista_origenid'
+                            : 'origen_almacenid',
+                      ),
                       decoration: InputDecoration(
                         labelText: isDist
                             ? 'Almacén mayorista origen (ID opcional)'
                             : 'Almacén origen (ID opcional)',
                         prefixIcon: const Icon(Icons.warehouse_outlined),
+                      ),
+                      onChanged: (_) => _clearError(
+                        field: isDist
+                            ? 'almacen_mayorista_origenid'
+                            : 'origen_almacenid',
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -580,8 +590,18 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
             scrollPadding: scrollPadding,
             enabled: !_submitting,
             keyboardType: TextInputType.number,
+            forceErrorText: _fieldError(
+              isDist
+                  ? 'detalles.$index.inventario_presentacion_loteid'
+                  : 'detalles.$index.materiaprimaloteid',
+            ),
             decoration: const InputDecoration(
               labelText: 'Partida (ID opcional)',
+            ),
+            onChanged: (_) => _clearError(
+              field: isDist
+                  ? 'detalles.$index.inventario_presentacion_loteid'
+                  : 'detalles.$index.materiaprimaloteid',
             ),
           ),
         ],

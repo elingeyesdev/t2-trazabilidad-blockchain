@@ -170,4 +170,110 @@ void main() {
       expect(find.text('12 kg'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Muestra errores de disponibilidad y validación sin perder los datos del formulario',
+    (tester) async {
+      var attempts = 0;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(minoristaProfile);
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': const <Map<String, Object?>>[],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'POST') {
+          attempts++;
+          if (attempts == 1) {
+            return jsonResponse({
+              'message': 'No se pudo registrar el pedido.',
+              'errors': {
+                'detalles': [
+                  'Stock insuficiente para Hojuelas de Papa en Almacén #11.',
+                ],
+                'detalles.0.cantidad': [
+                  'La cantidad supera el saldo disponible (10 envases).',
+                ],
+              },
+            }, 422);
+          }
+          return jsonResponse({'data': createdDistribucion}, 201);
+        }
+        if (request.url.path == '/api/pedidos-distribucion/120' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': createdDistribucion});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver pedidos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pedidos.crear_btn')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const ValueKey('pedido.destino')), '5');
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.fecha_entrega')),
+        '2026-11-25',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.linea.0.producto')),
+        '90',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.linea.0.presentacion')),
+        '15',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.linea.0.cantidad')),
+        '50',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.observaciones')),
+        'Pedido urgente',
+      );
+
+      await tester.ensureVisible(find.byKey(const ValueKey('pedido.guardar')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pedido.guardar')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Stock insuficiente para Hojuelas de Papa en Almacén #11.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('La cantidad supera el saldo disponible (10 envases).'),
+        findsOneWidget,
+      );
+      // Todos los datos ingresados se conservan.
+      expect(find.text('5'), findsOneWidget);
+      expect(find.text('2026-11-25'), findsOneWidget);
+      expect(find.text('50'), findsOneWidget);
+      expect(find.text('Pedido urgente'), findsOneWidget);
+
+      // Corrige cantidad y reenvía correctamente.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pedido.linea.0.cantidad')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.linea.0.cantidad')),
+        '10',
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('pedido.guardar')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pedido.guardar')));
+      await tester.pumpAndSettle();
+
+      expect(attempts, 2);
+      expect(find.text('PDV-2026-120'), findsOneWidget);
+    },
+  );
 }
