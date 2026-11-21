@@ -201,7 +201,16 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
               const SizedBox(height: 24),
               SectionTitle('Lotes de origen', color: look.tone),
               const SizedBox(height: 12),
-              if (recorrido.origenes.isEmpty)
+              if (recorrido.restricciones.origenes) ...[
+                const AppNotice(
+                  tone: AppNoticeTone.warning,
+                  message:
+                      'Parte de las materias primas de este proceso pertenece a almacenes o registros restringidos para tu cuenta.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (recorrido.origenes.isEmpty &&
+                  !recorrido.restricciones.origenes)
                 const AppNotice(
                   tone: AppNoticeTone.info,
                   message:
@@ -238,7 +247,16 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
                 color: look.tone,
               ),
               const SizedBox(height: 12),
-              if (recorrido.ingresosProduccion.isEmpty)
+              if (recorrido.restricciones.destinos) ...[
+                const AppNotice(
+                  tone: AppNoticeTone.warning,
+                  message:
+                      'Parte de los destinos de ingreso pertenece a almacenes restringidos para tu cuenta.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (recorrido.ingresosProduccion.isEmpty &&
+                  !recorrido.restricciones.destinos)
                 const AppNotice(
                   tone: AppNoticeTone.info,
                   message:
@@ -252,7 +270,16 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
               const SizedBox(height: 16),
               SectionTitle('Ubicación y saldo actual', color: look.tone),
               const SizedBox(height: 12),
-              if (recorrido.ubicacionesActuales.isEmpty)
+              if (recorrido.restricciones.ubicacionesActuales) ...[
+                const AppNotice(
+                  tone: AppNoticeTone.warning,
+                  message:
+                      'Parte de las ubicaciones o saldos actuales pertenece a almacenes restringidos para tu cuenta.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (recorrido.ubicacionesActuales.isEmpty &&
+                  !recorrido.restricciones.ubicacionesActuales)
                 const AppNotice(
                   tone: AppNoticeTone.info,
                   message:

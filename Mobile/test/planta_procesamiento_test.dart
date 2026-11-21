@@ -450,4 +450,140 @@ void main() {
       expect(find.text('70 kg'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Respeta los permisos del usuario mostrando avisos de restricción y 404 en procesos ajenos',
+    (tester) async {
+      final restrictedPayload = {
+        'nivel': 'lote_produccion',
+        'lote_produccion': {
+          'id': 88,
+          'codigo': 'LP-2026-088',
+          'nombre': 'Hojuelas de Papa Premium',
+        },
+        'origenes': [
+          {
+            'consumo_id': 510,
+            'insumo_id': 12,
+            'insumo': 'Papa Huaycha',
+            'almacen_id': 8,
+            'referencia_partida': 'MP-RES-01',
+            'materiaprimaloteid': 40,
+            'inventario_presentacion_loteid': null,
+            'cantidad_consumida': '50.000000',
+            'cantidad_unidades_consumidas': null,
+            'presentacion': null,
+            'unidad_presentacion': null,
+            'unidad_registrada': 'kg',
+            'unidad_catalogo_actual': 'kg',
+            'movimiento_consumo_id': null,
+            'cantidad_recibida': null,
+            'unidad_recepcion': null,
+            'recepcion': null,
+            'origen_agricola': null,
+            'origen_industrial_id': null,
+            'antecedente_restringido': true,
+          },
+        ],
+        'productos_obtenidos': const <Map<String, Object?>>[],
+        'ingresos_produccion': const <Map<String, Object?>>[],
+        'ubicaciones_actuales': const <Map<String, Object?>>[],
+        'restricciones': {
+          'origenes': true,
+          'destinos': true,
+          'ubicaciones_actuales': true,
+        },
+      };
+
+      final foreignTarea = {
+        ...tareaRow,
+        'asignacionetapaplantaid': 32,
+        'proceso': {'procesoplantaid': 5, 'nombre': 'Empaque final'},
+        'lote_produccion': {
+          'loteproduccionpedidoid': 99,
+          'codigo_lote': 'LP-2026-099',
+          'nombre': 'Proceso ajeno',
+          'producto': 'Papa',
+          'fecha_creacion': '2026-11-21',
+        },
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [tareaRow, foreignTarea],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/31' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': tareaRow});
+        }
+        if (request.url.path == '/api/planta/tareas/32' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': foreignTarea});
+        }
+        if (request.url.path == '/api/planta/lotes-produccion/88' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': restrictedPayload});
+        }
+        if (request.url.path == '/api/planta/lotes-produccion/99' &&
+            request.method == 'GET') {
+          return jsonResponse({'message': 'No encontrado.'}, 404);
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+
+      // Proceso 88 con relaciones restringidas.
+      await tester.tap(find.text('Lavado y selección'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Antecedente restringido por permisos'), findsOneWidget);
+      expect(
+        find.textContaining('materias primas de este proceso pertenece'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('destinos de ingreso pertenece'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('ubicaciones o saldos actuales pertenece'),
+        findsOneWidget,
+      );
+
+      // Vuelve al listado y abre un proceso ajeno (404).
+      await tester.tap(find.byKey(const ValueKey('procesamiento.volver')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Volver a tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Empaque final'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Procesamiento no disponible'), findsOneWidget);
+    },
+  );
 }
