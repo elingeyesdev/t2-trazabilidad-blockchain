@@ -7,6 +7,7 @@ import 'config/api_config.dart';
 import 'controllers/auth_controller.dart';
 import 'models/actividad_models.dart';
 import 'models/lote_models.dart';
+import 'models/pedido_models.dart';
 import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
@@ -23,6 +24,9 @@ import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
 import 'screens/modules/module_screen.dart';
+import 'screens/modules/pedido_detail_screen.dart';
+import 'screens/modules/pedido_form_screen.dart';
+import 'screens/modules/pedidos_screen.dart';
 import 'screens/modules/planta_procesamiento_screen.dart';
 import 'screens/modules/planta_recepcion_detail_screen.dart';
 import 'screens/modules/planta_recepciones_screen.dart';
@@ -75,6 +79,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _cosechaUpdates = ValueNotifier(0);
   final ValueNotifier<int> _plantaUpdates = ValueNotifier(0);
   final ValueNotifier<int> _recepcionUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _pedidosUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -98,6 +103,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _cosechaUpdates.dispose();
     _plantaUpdates.dispose();
     _recepcionUpdates.dispose();
+    _pedidosUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -216,6 +222,16 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     onRefreshPermissions: _auth.restoreSession,
                     updates: _recepcionUpdates,
                   )
+                : module == AppModule.pedidos &&
+                      !PedidoPermissions.canViewAgricola(_auth.user!) &&
+                      PedidoPermissions.canViewDistribucion(_auth.user!)
+                ? PedidosScreen(
+                    key: ValueKey(_auth.user),
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                    updates: _pedidosUpdates,
+                  )
                 : ModuleScreen(
                     key: ValueKey(_auth.user),
                     module: module,
@@ -244,6 +260,63 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'pedidos', 'gestion']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PedidosScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                updates: _pedidosUpdates,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.pedidos,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'pedidos', 'nuevo']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PedidoFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onPedidoCreated: () => _pedidosUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.pedidos,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'pedidos',
+          final rawTipo,
+          final rawId,
+        ]) {
+          final tipo = PedidoTipo.fromValue(rawTipo);
+          final id = int.tryParse(rawId);
+          if (tipo == null || id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PedidoDetailScreen(
+                key: ValueKey(_auth.user),
+                tipo: tipo,
+                pedidoId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.pedidos,
+            ),
+          );
         }
         if (uri.pathSegments case [
           'modules',

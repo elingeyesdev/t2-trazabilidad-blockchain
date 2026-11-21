@@ -9,6 +9,7 @@ import '../models/cosecha_models.dart';
 import '../models/inventario_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
+import '../models/pedido_models.dart';
 import '../models/planta_models.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
@@ -737,6 +738,69 @@ class ModuleService {
       'planta/lotes-produccion/$loteProduccionId',
     );
     return ProcesamientoRecorrido.fromJson(response);
+  }
+
+  Future<PedidosPage> loadPedidosMovil(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    String? estado,
+    int page = 1,
+  }) async {
+    final allowed = tipo == PedidoTipo.agricola
+        ? PedidoPermissions.canViewAgricola(user)
+        : PedidoPermissions.canViewDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para consultar este tipo de pedidos.',
+        statusCode: 403,
+      );
+    }
+    final query = <String, String>{
+      'page': '$page',
+      if (estado != null && estado.trim().isNotEmpty) 'estado': estado.trim(),
+    };
+    final response = await _api.request(
+      'GET',
+      tipo.endpoint,
+      queryParameters: query,
+    );
+    return PedidosPage.fromJson(response);
+  }
+
+  Future<PedidoRecord> loadPedidoMovilDetail(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    required int id,
+  }) async {
+    final allowed = tipo == PedidoTipo.agricola
+        ? PedidoPermissions.canViewAgricola(user)
+        : PedidoPermissions.canViewDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para consultar el detalle de este pedido.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', '${tipo.endpoint}/$id');
+    return PedidoRecord.fromJson(response);
+  }
+
+  Future<PedidoRecord> createPedidoMovil(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    required Map<String, dynamic> body,
+  }) async {
+    final allowed = tipo == PedidoTipo.agricola
+        ? PedidoPermissions.canCreateAgricola(user)
+        : PedidoPermissions.canCreateDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para crear este tipo de pedido.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('POST', tipo.endpoint, body: body);
+    return PedidoRecord.fromJson(response);
   }
 
   Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(

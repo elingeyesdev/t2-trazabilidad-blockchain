@@ -1,0 +1,173 @@
+import 'dart:convert';
+
+import 'package:agrofusion_mobile/app.dart';
+import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/services/api_client.dart';
+import 'package:agrofusion_mobile/services/session_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+void main() {
+  const storage = SessionStorage();
+
+  const minoristaProfile = {
+    'usuarioid': 40,
+    'nombre': 'Lucía',
+    'apellido': 'Mendoza',
+    'email': 'lucia@example.test',
+    'activo': true,
+    'estado_cuenta': 'aprobado',
+    'roles': [
+      {'id': 8, 'name': 'minorista'},
+    ],
+    'permissions': [
+      'pedidos_distribucion.view',
+      'pedidos_distribucion.create',
+      'pedidos_distribucion.update',
+    ],
+  };
+
+  const createdDistribucion = {
+    'tipo': 'distribucion',
+    'id': 120,
+    'numero_solicitud': 'PDV-2026-120',
+    'estado': 'pendiente',
+    'fecha': '2026-11-21T13:00:00Z',
+    'fecha_entrega_deseada': '2026-11-25',
+    'creado_por_usuarioid': 40,
+    'aceptado_por_usuarioid': null,
+    'fecha_aceptacion': null,
+    'envio_iniciado_mayorista': false,
+    'fecha_confirmacion_minorista': null,
+    'fecha_envio': null,
+    'fecha_recepcion': null,
+    'envio': null,
+    'destino': {'puntoventaid': 5, 'nombre': 'Tienda Central'},
+    'observaciones': 'Entregar por la mañana',
+    'decision': null,
+    'motivo_rechazo': null,
+    'acciones_disponibles': [],
+    'detalles': [
+      {
+        'id': 801,
+        'producto_ref': null,
+        'insumoid': 90,
+        'materiaprimaloteid': null,
+        'producto': 'Hojuelas de Papa',
+        'produccionalmacenamientoid': null,
+        'presentacionid': 15,
+        'catalogotamanoconteoid': null,
+        'presentacion': 'Bolsa 500 g',
+        'cantidad': '24.000000',
+        'unidad': 'bolsas',
+        'cantidad_kg': '12.000000',
+        'almacen_origenid': 11,
+        'inventario_presentacion_loteid': null,
+      },
+    ],
+  };
+
+  http.Response jsonResponse(Object? value, [int status = 200]) =>
+      http.Response(
+        jsonEncode(value),
+        status,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+
+  Future<void> startApp(
+    WidgetTester tester,
+    Future<http.Response> Function(http.Request) handler,
+  ) async {
+    await storage.saveToken('1|pedidos-test');
+    final api = ApiClient(
+      config: ApiConfig(baseUrl: 'https://example.test/api'),
+      sessionStorage: storage,
+      client: MockClient(handler),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(AgroFusionApp(apiClient: api));
+    await tester.pumpAndSettle();
+  }
+
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  testWidgets(
+    'Permite crear un pedido seleccionando productos, presentaciones, cantidades y destino',
+    (tester) async {
+      Map<String, dynamic>? sentBody;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(minoristaProfile);
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': sentBody == null ? [] : [createdDistribucion],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'POST') {
+          sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+          return jsonResponse({'data': createdDistribucion}, 201);
+        }
+        if (request.url.path == '/api/pedidos-distribucion/120' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': createdDistribucion});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver pedidos'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('pedidos.crear_btn')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const ValueKey('pedido.destino')), '5');
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.fecha_entrega')),
+        '2026-11-25',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.linea.0.producto')),
+        '90',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.linea.0.presentacion')),
+        '15',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.linea.0.cantidad')),
+        '24',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.observaciones')),
+        'Entregar por la mañana',
+      );
+
+      await tester.ensureVisible(find.byKey(const ValueKey('pedido.guardar')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pedido.guardar')));
+      await tester.pumpAndSettle();
+
+      expect(sentBody, {
+        'puntoventaid': 5,
+        'fecha_entrega_deseada': '2026-11-25',
+        'observaciones': 'Entregar por la mañana',
+        'detalles': [
+          {'insumoid': 90, 'insumo_presentacionid': 15, 'cantidad': '24'},
+        ],
+      });
+      expect(find.text('PDV-2026-120'), findsOneWidget);
+      expect(find.text('Tienda Central (PDV #5)'), findsOneWidget);
+      expect(find.text('Hojuelas de Papa · Bolsa 500 g'), findsOneWidget);
+      expect(find.text('24 bolsas'), findsOneWidget);
+      expect(find.text('12 kg'), findsOneWidget);
+    },
+  );
+}
