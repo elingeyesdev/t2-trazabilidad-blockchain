@@ -387,6 +387,18 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
                   ],
                 ),
               ),
+              if (tarea.loteProduccionId > 0 &&
+                  PlantaPermissions.canViewProcesamiento(widget.user)) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const ValueKey('tarea.ver_origen_resultado'),
+                  onPressed: () => Navigator.of(context).pushNamed(
+                    '/modules/planta/lotes-produccion/${tarea.loteProduccionId}',
+                  ),
+                  icon: const Icon(Icons.account_tree_outlined),
+                  label: const Text('Ver origen y resultado del proceso'),
+                ),
+              ],
               const SizedBox(height: 24),
               SectionTitle('Máquina asignada', color: look.tone),
               const SizedBox(height: 12),

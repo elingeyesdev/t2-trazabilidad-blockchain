@@ -11,6 +11,9 @@ abstract final class PlantaPermissions {
       user.permissions.contains('lote_produccion.view') &&
       isOperarioPlanta(user);
 
+  static bool canViewProcesamiento(AuthUser user) =>
+      user.permissions.contains('lote_produccion.view');
+
   static bool canViewRecepciones(AuthUser user) =>
       user.permissions.contains('recepcion_planta.view');
 
@@ -438,6 +441,374 @@ class RecepcionesPlantaPage {
   final List<RecepcionPlantaRecord> items;
   final int currentPage;
   final int lastPage;
+}
+
+class OrigenProcesamiento {
+  const OrigenProcesamiento({
+    required this.consumoId,
+    required this.insumoId,
+    required this.insumo,
+    required this.almacenId,
+    this.referenciaPartida,
+    this.materiaPrimaLoteId,
+    this.inventarioPresentacionLoteId,
+    this.cantidadConsumida,
+    this.cantidadUnidadesConsumidas,
+    this.presentacion,
+    this.unidadPresentacion,
+    this.unidadRegistrada,
+    this.unidadCatalogoActual,
+    this.movimientoConsumoId,
+    this.cantidadRecibida,
+    this.unidadRecepcion,
+    this.recepcionPedidoId,
+    this.recepcionFecha,
+    this.origenAgricolaLoteId,
+    this.origenAgricolaProduccionId,
+    this.origenIndustrialId,
+    this.antecedenteRestringido = false,
+  });
+
+  factory OrigenProcesamiento.fromJson(Map<String, dynamic> row) {
+    final recepcion = row['recepcion'] is Map<String, dynamic>
+        ? row['recepcion'] as Map<String, dynamic>
+        : null;
+    final agricola = row['origen_agricola'] is Map<String, dynamic>
+        ? row['origen_agricola'] as Map<String, dynamic>
+        : null;
+    return OrigenProcesamiento(
+      consumoId: _asInt(row['consumo_id']) ?? 0,
+      insumoId: _asInt(row['insumo_id']) ?? 0,
+      insumo: _asText(row['insumo']) ?? 'Materia prima',
+      almacenId: _asInt(row['almacen_id']) ?? 0,
+      referenciaPartida: _asText(row['referencia_partida']),
+      materiaPrimaLoteId: _asInt(row['materiaprimaloteid']),
+      inventarioPresentacionLoteId: _asInt(
+        row['inventario_presentacion_loteid'],
+      ),
+      cantidadConsumida: _asText(row['cantidad_consumida']),
+      cantidadUnidadesConsumidas: _asText(row['cantidad_unidades_consumidas']),
+      presentacion: _asText(row['presentacion']),
+      unidadPresentacion: _asText(row['unidad_presentacion']),
+      unidadRegistrada: _asText(row['unidad_registrada']),
+      unidadCatalogoActual: _asText(row['unidad_catalogo_actual']),
+      movimientoConsumoId: _asInt(row['movimiento_consumo_id']),
+      cantidadRecibida: _asText(row['cantidad_recibida']),
+      unidadRecepcion: _asText(row['unidad_recepcion']),
+      recepcionPedidoId: _asInt(recepcion?['pedidoid']),
+      recepcionFecha: _asText(recepcion?['fecha']),
+      origenAgricolaLoteId: _asInt(agricola?['loteid']),
+      origenAgricolaProduccionId: _asInt(agricola?['produccionid']),
+      origenIndustrialId: _asInt(row['origen_industrial_id']),
+      antecedenteRestringido: row['antecedente_restringido'] == true,
+    );
+  }
+
+  final int consumoId;
+  final int insumoId;
+  final String insumo;
+  final int almacenId;
+  final String? referenciaPartida;
+  final int? materiaPrimaLoteId;
+  final int? inventarioPresentacionLoteId;
+  final String? cantidadConsumida;
+  final String? cantidadUnidadesConsumidas;
+  final String? presentacion;
+  final String? unidadPresentacion;
+  final String? unidadRegistrada;
+  final String? unidadCatalogoActual;
+  final int? movimientoConsumoId;
+  final String? cantidadRecibida;
+  final String? unidadRecepcion;
+  final int? recepcionPedidoId;
+  final String? recepcionFecha;
+  final int? origenAgricolaLoteId;
+  final int? origenAgricolaProduccionId;
+  final int? origenIndustrialId;
+  final bool antecedenteRestringido;
+
+  String get loteOrigenLabel {
+    if (origenAgricolaLoteId != null) {
+      if (origenAgricolaProduccionId != null) {
+        return 'Lote agrícola #$origenAgricolaLoteId · Cosecha #$origenAgricolaProduccionId';
+      }
+      return 'Lote agrícola #$origenAgricolaLoteId';
+    }
+    if (origenIndustrialId != null) {
+      return 'Lote de producción #$origenIndustrialId';
+    }
+    if (antecedenteRestringido) {
+      return 'Antecedente restringido por permisos';
+    }
+    if (referenciaPartida != null) {
+      return 'Partida $referenciaPartida';
+    }
+    if (materiaPrimaLoteId != null) {
+      return 'Partida de materia prima #$materiaPrimaLoteId';
+    }
+    if (inventarioPresentacionLoteId != null) {
+      return 'Partida de presentación #$inventarioPresentacionLoteId';
+    }
+    return 'Sin lote de origen vinculado';
+  }
+
+  String get formattedConsumida {
+    if (cantidadConsumida == null) return 'Cantidad no registrada';
+    final amount = _formatDecimalText(cantidadConsumida!);
+    if (unidadRegistrada != null) {
+      return '$amount $unidadRegistrada';
+    }
+    if (unidadCatalogoActual != null) {
+      return '$amount (unidad histórica desconocida; catálogo actual: $unidadCatalogoActual)';
+    }
+    return '$amount (unidad histórica desconocida)';
+  }
+
+  String? get formattedUnidadesConsumidas {
+    if (cantidadUnidadesConsumidas == null) return null;
+    final amount = _formatDecimalText(cantidadUnidadesConsumidas!);
+    final unit = unidadPresentacion;
+    return unit != null ? '$amount $unit' : amount;
+  }
+
+  String? get formattedRecibida {
+    if (cantidadRecibida == null) return null;
+    final amount = _formatDecimalText(cantidadRecibida!);
+    final unit = unidadRecepcion;
+    return unit != null ? '$amount $unit' : amount;
+  }
+}
+
+class ProductoObtenidoProcesamiento {
+  const ProductoObtenidoProcesamiento({
+    required this.partidaId,
+    required this.insumoId,
+    required this.producto,
+    this.presentacionId,
+    this.presentacion,
+  });
+
+  factory ProductoObtenidoProcesamiento.fromJson(Map<String, dynamic> row) =>
+      ProductoObtenidoProcesamiento(
+        partidaId: _asInt(row['partida_id']) ?? 0,
+        insumoId: _asInt(row['insumo_id']) ?? 0,
+        producto: _asText(row['producto']) ?? 'Producto sin nombre',
+        presentacionId: _asInt(row['presentacion_id']),
+        presentacion: _asText(row['presentacion']),
+      );
+
+  final int partidaId;
+  final int insumoId;
+  final String producto;
+  final int? presentacionId;
+  final String? presentacion;
+
+  String get label =>
+      presentacion != null ? '$producto · $presentacion' : producto;
+}
+
+class IngresoProduccionProcesamiento {
+  const IngresoProduccionProcesamiento({
+    required this.almacenajeId,
+    required this.almacenId,
+    this.insumoId,
+    this.producto,
+    this.presentacionId,
+    this.presentacion,
+    this.partidaId,
+    this.cantidadIngresada,
+    this.unidad,
+    this.cantidadKg,
+    this.almacen,
+    this.fecha,
+    this.estado,
+  });
+
+  factory IngresoProduccionProcesamiento.fromJson(Map<String, dynamic> row) =>
+      IngresoProduccionProcesamiento(
+        almacenajeId: _asInt(row['almacenaje_id']) ?? 0,
+        almacenId: _asInt(row['almacen_id']) ?? 0,
+        insumoId: _asInt(row['insumo_id']),
+        producto: _asText(row['producto']),
+        presentacionId: _asInt(row['presentacion_id']),
+        presentacion: _asText(row['presentacion']),
+        partidaId: _asInt(row['partida_id']),
+        cantidadIngresada: _asText(row['cantidad_ingresada']),
+        unidad: _asText(row['unidad']),
+        cantidadKg: _asText(row['cantidad_kg']),
+        almacen: _asText(row['almacen']),
+        fecha: _asText(row['fecha']),
+        estado: _asText(row['estado']),
+      );
+
+  final int almacenajeId;
+  final int almacenId;
+  final int? insumoId;
+  final String? producto;
+  final int? presentacionId;
+  final String? presentacion;
+  final int? partidaId;
+  final String? cantidadIngresada;
+  final String? unidad;
+  final String? cantidadKg;
+  final String? almacen;
+  final String? fecha;
+  final String? estado;
+
+  String get almacenLabel => almacen ?? 'Almacén #$almacenId';
+
+  String? get formattedCantidad {
+    if (cantidadIngresada == null) return null;
+    final amount = _formatDecimalText(cantidadIngresada!);
+    return unidad != null ? '$amount $unidad' : amount;
+  }
+
+  String? get formattedKg =>
+      cantidadKg == null ? null : '${_formatDecimalText(cantidadKg!)} kg';
+}
+
+class UbicacionActualProcesamiento {
+  const UbicacionActualProcesamiento({
+    required this.partidaId,
+    required this.insumoId,
+    required this.almacenId,
+    this.producto,
+    this.presentacionId,
+    this.presentacion,
+    this.unidad,
+    this.cantidadActual,
+    this.cantidadActualKg,
+    this.almacen,
+  });
+
+  factory UbicacionActualProcesamiento.fromJson(Map<String, dynamic> row) =>
+      UbicacionActualProcesamiento(
+        partidaId: _asInt(row['partida_id']) ?? 0,
+        insumoId: _asInt(row['insumo_id']) ?? 0,
+        almacenId: _asInt(row['almacen_id']) ?? 0,
+        producto: _asText(row['producto']),
+        presentacionId: _asInt(row['presentacion_id']),
+        presentacion: _asText(row['presentacion']),
+        unidad: _asText(row['unidad']),
+        cantidadActual: _asText(row['cantidad_actual']),
+        cantidadActualKg: _asText(row['cantidad_actual_kg']),
+        almacen: _asText(row['almacen']),
+      );
+
+  final int partidaId;
+  final int insumoId;
+  final int almacenId;
+  final String? producto;
+  final int? presentacionId;
+  final String? presentacion;
+  final String? unidad;
+  final String? cantidadActual;
+  final String? cantidadActualKg;
+  final String? almacen;
+
+  String get almacenLabel => almacen ?? 'Almacén #$almacenId';
+
+  String? get formattedCantidadActual {
+    if (cantidadActual == null) return null;
+    final amount = _formatDecimalText(cantidadActual!);
+    return unidad != null ? '$amount $unidad' : amount;
+  }
+
+  String? get formattedKgActual => cantidadActualKg == null
+      ? null
+      : '${_formatDecimalText(cantidadActualKg!)} kg';
+}
+
+class RestriccionesProcesamiento {
+  const RestriccionesProcesamiento({
+    this.origenes = false,
+    this.destinos = false,
+    this.ubicacionesActuales = false,
+  });
+
+  factory RestriccionesProcesamiento.fromJson(Object? json) {
+    final map = json is Map<String, dynamic> ? json : const <String, dynamic>{};
+    return RestriccionesProcesamiento(
+      origenes: map['origenes'] == true,
+      destinos: map['destinos'] == true,
+      ubicacionesActuales: map['ubicaciones_actuales'] == true,
+    );
+  }
+
+  final bool origenes;
+  final bool destinos;
+  final bool ubicacionesActuales;
+
+  bool get hasAny => origenes || destinos || ubicacionesActuales;
+}
+
+class ProcesamientoRecorrido {
+  const ProcesamientoRecorrido({
+    required this.loteProduccionId,
+    this.codigo,
+    this.nombre,
+    this.origenes = const [],
+    this.productosObtenidos = const [],
+    this.ingresosProduccion = const [],
+    this.ubicacionesActuales = const [],
+    this.restricciones = const RestriccionesProcesamiento(),
+  });
+
+  factory ProcesamientoRecorrido.fromJson(Object? json) {
+    final root =
+        json is Map<String, dynamic> && json['data'] is Map<String, dynamic>
+        ? json['data'] as Map<String, dynamic>
+        : json is Map<String, dynamic>
+        ? json
+        : const <String, dynamic>{};
+    final lote = root['lote_produccion'] is Map<String, dynamic>
+        ? root['lote_produccion'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    return ProcesamientoRecorrido(
+      loteProduccionId: _asInt(lote['id']) ?? 0,
+      codigo: _asText(lote['codigo']),
+      nombre: _asText(lote['nombre']),
+      origenes: _parseList(root['origenes'], OrigenProcesamiento.fromJson),
+      productosObtenidos: _parseList(
+        root['productos_obtenidos'],
+        ProductoObtenidoProcesamiento.fromJson,
+      ),
+      ingresosProduccion: _parseList(
+        root['ingresos_produccion'],
+        IngresoProduccionProcesamiento.fromJson,
+      ),
+      ubicacionesActuales: _parseList(
+        root['ubicaciones_actuales'],
+        UbicacionActualProcesamiento.fromJson,
+      ),
+      restricciones: RestriccionesProcesamiento.fromJson(root['restricciones']),
+    );
+  }
+
+  final int loteProduccionId;
+  final String? codigo;
+  final String? nombre;
+  final List<OrigenProcesamiento> origenes;
+  final List<ProductoObtenidoProcesamiento> productosObtenidos;
+  final List<IngresoProduccionProcesamiento> ingresosProduccion;
+  final List<UbicacionActualProcesamiento> ubicacionesActuales;
+  final RestriccionesProcesamiento restricciones;
+
+  String get title => nombre ?? codigo ?? 'Proceso #$loteProduccionId';
+
+  static List<T> _parseList<T>(
+    Object? raw,
+    T Function(Map<String, dynamic>) builder,
+  ) {
+    if (raw is! List) return const [];
+    final items = <T>[];
+    for (final entry in raw) {
+      if (entry is Map<String, dynamic>) {
+        items.add(builder(entry));
+      }
+    }
+    return items;
+  }
 }
 
 String _formatDecimalText(String raw) {

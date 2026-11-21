@@ -722,6 +722,23 @@ class ModuleService {
     return RecepcionPlantaRecord.fromJson(response);
   }
 
+  Future<ProcesamientoRecorrido> loadProcesamientoRecorrido(
+    AuthUser user,
+    int loteProduccionId,
+  ) async {
+    if (!PlantaPermissions.canViewProcesamiento(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar el procesamiento de planta.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'planta/lotes-produccion/$loteProduccionId',
+    );
+    return ProcesamientoRecorrido.fromJson(response);
+  }
+
   Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(
     AuthUser user,
   ) async {

@@ -23,6 +23,7 @@ import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
 import 'screens/modules/module_screen.dart';
+import 'screens/modules/planta_procesamiento_screen.dart';
 import 'screens/modules/planta_recepcion_detail_screen.dart';
 import 'screens/modules/planta_recepciones_screen.dart';
 import 'screens/modules/planta_tarea_detail_screen.dart';
@@ -243,6 +244,28 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'planta',
+          'lotes-produccion',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PlantaProcesamientoScreen(
+                key: ValueKey(_auth.user),
+                loteProduccionId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
         }
         if (uri.pathSegments case [
           'modules',
