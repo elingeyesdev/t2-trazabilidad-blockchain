@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:agrofusion_mobile/config/api_config.dart';
@@ -322,6 +323,84 @@ void main() {
 
       expect(sentCode, 'QR-FALLBACK-01');
       expect(find.text('RUTA-045'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Evita procesar varias lecturas simultáneas o repetidas del mismo código QR',
+    (tester) async {
+      await storage.saveToken('1|qr-test');
+      var resolveCalls = 0;
+      Completer<http.Response>? firstCall;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/qr/resolver' &&
+              request.method == 'POST') {
+            resolveCalls++;
+            if (resolveCalls == 1) {
+              firstCall = Completer<http.Response>();
+              return firstCall!.future;
+            }
+            return jsonResponse(validQrResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: QrScannerScreen(
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            cameraBuilder: (context, onCodeDetected, onCameraIssue) => Center(
+              child: FilledButton(
+                key: const ValueKey('test.qr_repetido'),
+                onPressed: () => onCodeDetected('QR-DUP-01'),
+                child: const Text('Detectar mismo QR'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tres lecturas seguidas mientras la primera sigue en curso.
+      await tester.tap(find.byKey(const ValueKey('test.qr_repetido')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('test.qr_repetido')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('test.qr_repetido')));
+      await tester.pump();
+
+      expect(resolveCalls, 1);
+
+      // Finaliza la primera petición y vuelve a detectarse el mismo frame.
+      firstCall!.complete(jsonResponse(validQrResponse));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('test.qr_repetido')));
+      await tester.pumpAndSettle();
+      expect(resolveCalls, 1);
+
+      // Tras pulsar "Leer otro código", sí permite volver a escanearlo.
+      await tester.ensureVisible(find.byKey(const ValueKey('qr.reintentar')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('qr.reintentar')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('test.qr_repetido')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('test.qr_repetido')));
+      await tester.pumpAndSettle();
+      expect(resolveCalls, 2);
     },
   );
 }

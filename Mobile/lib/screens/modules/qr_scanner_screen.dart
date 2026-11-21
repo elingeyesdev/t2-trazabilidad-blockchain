@@ -95,12 +95,17 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Future<void> _submitManual() async {
     if (!(_manualFormKey.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
-    await _handleCode(_manualCtrl.text);
+    await _handleCode(_manualCtrl.text, fromCamera: false);
   }
 
-  Future<void> _handleCode(String rawCode) async {
+  Future<void> _handleCode(String rawCode, {bool fromCamera = true}) async {
     final code = rawCode.trim();
     if (code.isEmpty || _processing) return;
+    if (fromCamera &&
+        _lastCode == code &&
+        (_result != null || _errorMessage != null)) {
+      return;
+    }
 
     setState(() {
       _processing = true;
