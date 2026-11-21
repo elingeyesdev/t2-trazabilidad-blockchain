@@ -23,6 +23,10 @@ import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
 import 'screens/modules/module_screen.dart';
+import 'screens/modules/planta_recepcion_detail_screen.dart';
+import 'screens/modules/planta_recepciones_screen.dart';
+import 'screens/modules/planta_tarea_detail_screen.dart';
+import 'screens/modules/planta_tareas_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
 import 'services/api_health_service.dart';
@@ -68,6 +72,8 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _loteUpdates = ValueNotifier(0);
   final ValueNotifier<int> _actividadUpdates = ValueNotifier(0);
   final ValueNotifier<int> _cosechaUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _plantaUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _recepcionUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -89,6 +95,8 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _loteUpdates.dispose();
     _actividadUpdates.dispose();
     _cosechaUpdates.dispose();
+    _plantaUpdates.dispose();
+    _recepcionUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -191,20 +199,38 @@ class _AgroFusionAppState extends State<AgroFusionApp>
         ),
         for (final module in AppModule.values)
           module.route: (_) => _sessionGate(
-            () => ModuleScreen(
-              key: ValueKey(_auth.user),
-              module: module,
-              user: _auth.user!,
-              service: ModuleService(_api),
-              onRefreshPermissions: _auth.restoreSession,
-              loteUpdates: module == AppModule.lotes ? _loteUpdates : null,
-              actividadUpdates: module == AppModule.actividades
-                  ? _actividadUpdates
-                  : null,
-              cosechaUpdates: module == AppModule.producciones
-                  ? _cosechaUpdates
-                  : null,
-            ),
+            () => module == AppModule.tareasPlanta
+                ? PlantaTareasScreen(
+                    key: ValueKey(_auth.user),
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                    updates: _plantaUpdates,
+                  )
+                : module == AppModule.recepcionesPlanta
+                ? PlantaRecepcionesScreen(
+                    key: ValueKey(_auth.user),
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                    updates: _recepcionUpdates,
+                  )
+                : ModuleScreen(
+                    key: ValueKey(_auth.user),
+                    module: module,
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                    loteUpdates: module == AppModule.lotes
+                        ? _loteUpdates
+                        : null,
+                    actividadUpdates: module == AppModule.actividades
+                        ? _actividadUpdates
+                        : null,
+                    cosechaUpdates: module == AppModule.producciones
+                        ? _cosechaUpdates
+                        : null,
+                  ),
             requiresAuthentication: true,
             module: module,
           ),
@@ -217,6 +243,54 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'planta',
+          'recepciones',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PlantaRecepcionDetailScreen(
+                key: ValueKey(_auth.user),
+                pedidoId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onRecepcionUpdated: () => _recepcionUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.recepcionesPlanta,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'planta',
+          'tareas',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PlantaTareaDetailScreen(
+                key: ValueKey(_auth.user),
+                asignacionId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onTareaUpdated: () => _plantaUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.tareasPlanta,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'actividades', 'nueva']) {
           final loteArg = settings.arguments is LoteOption

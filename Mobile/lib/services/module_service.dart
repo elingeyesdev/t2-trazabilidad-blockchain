@@ -9,6 +9,7 @@ import '../models/cosecha_models.dart';
 import '../models/inventario_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
+import '../models/planta_models.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
 
@@ -586,6 +587,139 @@ class ModuleService {
       fallbackTitle: 'Cosecha',
       fields: AppModule.producciones.fields,
     );
+  }
+
+  Future<TareasPlantaPage> loadTareasPlanta(
+    AuthUser user, {
+    String? estado,
+    int page = 1,
+  }) async {
+    if (!PlantaPermissions.canViewTareas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las tareas de planta.',
+        statusCode: 403,
+      );
+    }
+    if (page < 1) {
+      throw const ApiException('La página solicitada no es válida.');
+    }
+    final params = <String, String>{
+      'page': '$page',
+      if (estado != null && estado.isNotEmpty) 'estado': estado,
+    };
+    final response = await _api.request(
+      'GET',
+      AppModule.tareasPlanta.endpoint,
+      queryParameters: params,
+    );
+    return TareasPlantaPage.fromJson(response);
+  }
+
+  Future<TareaPlantaDetail> loadTareaPlantaDetail(
+    AuthUser user,
+    int asignacionId,
+  ) async {
+    if (!PlantaPermissions.canViewTareas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta tarea de planta.',
+        statusCode: 403,
+      );
+    }
+    if (asignacionId <= 0) {
+      throw const ApiException('La tarea solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      '${AppModule.tareasPlanta.endpoint}/$asignacionId',
+    );
+    return TareaPlantaDetail.fromJson(response);
+  }
+
+  Future<TareaPlantaDetail> completeTareaPlanta(
+    AuthUser user, {
+    required int loteProduccionId,
+    required int asignacionId,
+    required List<Map<String, Object?>> parametros,
+  }) async {
+    if (!PlantaPermissions.canViewTareas(user)) {
+      throw const ApiException(
+        'No tienes permiso para completar esta tarea de planta.',
+        statusCode: 403,
+      );
+    }
+    if (loteProduccionId <= 0 || asignacionId <= 0) {
+      throw const ApiException('La tarea solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'POST',
+      'planta/lotes-produccion/$loteProduccionId/tareas/$asignacionId/completar',
+      body: {'parametros': parametros},
+    );
+    return TareaPlantaDetail.fromJson(response);
+  }
+
+  Future<RecepcionesPlantaPage> loadRecepcionesPlanta(
+    AuthUser user, {
+    bool recibido = false,
+    int page = 1,
+  }) async {
+    if (!PlantaPermissions.canViewRecepciones(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las recepciones de planta.',
+        statusCode: 403,
+      );
+    }
+    if (page < 1) {
+      throw const ApiException('La página solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      AppModule.recepcionesPlanta.endpoint,
+      queryParameters: {'recibido': recibido ? '1' : '0', 'page': '$page'},
+    );
+    return RecepcionesPlantaPage.fromJson(response);
+  }
+
+  Future<RecepcionPlantaRecord> loadRecepcionPlantaDetail(
+    AuthUser user,
+    int pedidoId,
+  ) async {
+    if (!PlantaPermissions.canViewRecepciones(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta recepción.',
+        statusCode: 403,
+      );
+    }
+    if (pedidoId <= 0) {
+      throw const ApiException('La recepción solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      '${AppModule.recepcionesPlanta.endpoint}/$pedidoId',
+    );
+    return RecepcionPlantaRecord.fromJson(response);
+  }
+
+  Future<RecepcionPlantaRecord> confirmRecepcionPlanta(
+    AuthUser user, {
+    required int pedidoId,
+    required Map<String, String> cantidades,
+  }) async {
+    if (!PlantaPermissions.canConfirmRecepcion(user)) {
+      throw const ApiException(
+        'No tienes permiso para confirmar recepciones en planta.',
+        statusCode: 403,
+      );
+    }
+    if (pedidoId <= 0) {
+      throw const ApiException('La recepción solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'POST',
+      '${AppModule.recepcionesPlanta.endpoint}/$pedidoId/confirmar',
+      body: {'cantidades': cantidades},
+    );
+    return RecepcionPlantaRecord.fromJson(response);
   }
 
   Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(

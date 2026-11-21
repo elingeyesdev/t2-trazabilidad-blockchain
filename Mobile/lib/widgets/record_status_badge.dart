@@ -68,7 +68,7 @@ class RecordStatusBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: style.ink == Colors.white ? AppTheme.fieldDeep : style.ink,
-            width: 1.5,
+            width: 1,
           ),
         ),
         child: Row(

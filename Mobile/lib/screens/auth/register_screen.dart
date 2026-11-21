@@ -176,7 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             decoration: BoxDecoration(
               color: AppTheme.maize,
               shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.ink, width: 2),
+              border: Border.all(color: AppTheme.border, width: 1),
             ),
             child: Text(
               '$number',
@@ -240,7 +240,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 decoration: BoxDecoration(
                   color: AppTheme.surface,
                   borderRadius: BorderRadius.circular(AppTheme.radius),
-                  border: Border.all(color: AppTheme.ink, width: 2),
+                  border: Border.all(color: AppTheme.border, width: 1),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +340,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
                                         color: AppTheme.sky,
-                                        width: 1.5,
+                                        width: 1,
                                       ),
                                     ),
                                     child: Row(
@@ -461,7 +461,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           ),
                                           border: Border.all(
                                             color: AppTheme.clay,
-                                            width: 1.5,
+                                            width: 1,
                                           ),
                                         ),
                                         child: Row(

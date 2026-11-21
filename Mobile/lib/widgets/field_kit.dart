@@ -12,7 +12,7 @@ class PressableCard extends StatefulWidget {
     required this.child,
     this.onTap,
     this.color = AppTheme.surface,
-    this.borderColor = AppTheme.ink,
+    this.borderColor = AppTheme.border,
     this.padding = const EdgeInsets.all(18),
     this.radius = AppTheme.radius,
     this.depth = 4,
@@ -38,36 +38,32 @@ class _PressableCardState extends State<PressableCard> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onTap != null;
-    final depth = enabled ? widget.depth : 0.0;
-    final offset = _down ? depth : 0.0;
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(widget.radius),
-      side: BorderSide(
-        color: enabled ? widget.borderColor : AppTheme.line,
-        width: 2,
-      ),
-    );
+    final radius = BorderRadius.circular(widget.radius);
+    final borderColor = enabled ? widget.borderColor : AppTheme.line;
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 90),
       curve: Curves.easeOut,
-      margin: EdgeInsets.only(top: offset, bottom: depth - offset),
-      decoration: ShapeDecoration(
-        shape: shape,
-        shadows: depth - offset > 0
-            ? AppTheme.stamp(depth - offset, widget.borderColor)
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: enabled && !_down && widget.depth > 0
+            ? AppTheme.stamp(widget.depth)
             : null,
+      ),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: borderColor, width: 1),
       ),
       child: Material(
         color: widget.color,
-        shape: shape,
+        borderRadius: radius,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: widget.onTap,
           onHighlightChanged: enabled
               ? (value) => setState(() => _down = value)
               : null,
-          splashColor: widget.borderColor.withValues(alpha: .08),
-          highlightColor: widget.borderColor.withValues(alpha: .05),
+          splashColor: AppTheme.field.withValues(alpha: .08),
+          highlightColor: AppTheme.field.withValues(alpha: .05),
           child: Padding(padding: widget.padding, child: widget.child),
         ),
       ),
@@ -110,7 +106,10 @@ class ModuleMark extends StatelessWidget {
         decoration: BoxDecoration(
           color: solid ? look.ink : look.tone,
           borderRadius: BorderRadius.circular(size * .3),
-          border: Border.all(color: solid ? AppTheme.ink : look.ink, width: 2),
+          border: Border.all(
+            color: look.ink.withValues(alpha: solid ? .45 : .25),
+            width: 1,
+          ),
         ),
         child: Icon(
           module.icon,
@@ -145,7 +144,7 @@ class IconMedallion extends StatelessWidget {
       decoration: BoxDecoration(
         color: tone,
         shape: BoxShape.circle,
-        border: Border.all(color: ink, width: 2.5),
+        border: Border.all(color: ink.withValues(alpha: .35), width: 1),
         boxShadow: AppTheme.stamp(4, ink),
       ),
       child: Icon(icon, size: size * .46, color: ink),
@@ -287,7 +286,7 @@ class DetailField extends StatelessWidget {
 
 /// Título de sección con una marca de color a la izquierda.
 class SectionTitle extends StatelessWidget {
-  const SectionTitle(this.text, {super.key, this.color = AppTheme.maize});
+  const SectionTitle(this.text, {super.key, this.color = AppTheme.field});
 
   final String text;
   final Color color;
@@ -298,12 +297,11 @@ class SectionTitle extends StatelessWidget {
     child: Row(
       children: [
         Container(
-          width: 6,
-          height: 24,
+          width: 5,
+          height: 22,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(3),
-            border: Border.all(color: AppTheme.ink, width: 1.5),
           ),
         ),
         const SizedBox(width: 10),
@@ -329,7 +327,7 @@ class BottomActionBar extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: AppTheme.surface,
-        border: Border(top: BorderSide(color: AppTheme.ink, width: 2)),
+        border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
       ),
       child: SafeArea(
         top: false,
@@ -437,7 +435,7 @@ class BrandMark extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.maize,
         borderRadius: BorderRadius.circular(size * .32),
-        border: Border.all(color: AppTheme.ink, width: 2),
+        border: Border.all(color: const Color(0xFFC58C1F), width: 1),
       ),
       child: Icon(Icons.eco_rounded, color: AppTheme.ink, size: size * .6),
     ),

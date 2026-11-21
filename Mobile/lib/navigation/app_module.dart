@@ -30,6 +30,24 @@ enum AppModule {
     null,
     {'cantidad': 'Cantidad', 'fechacosecha': 'Fecha de cosecha'},
   ),
+  tareasPlanta(
+    'Tareas de planta',
+    'planta/tareas',
+    'lote_produccion.view',
+    Icons.precision_manufacturing_rounded,
+    'asignacionetapaplantaid',
+    null,
+    {'estado': 'Estado', 'orden': 'Etapa'},
+  ),
+  recepcionesPlanta(
+    'Recepciones en planta',
+    'planta/recepciones',
+    'recepcion_planta.view',
+    Icons.move_to_inbox_rounded,
+    'pedidoid',
+    'numero_solicitud',
+    {'estado': 'Estado'},
+  ),
   almacenes(
     'Almacenes',
     'almacenes',
@@ -157,6 +175,10 @@ enum AppModule {
     AppModule.lotes => 'Consulta tus lotes y su ubicación.',
     AppModule.actividades => 'Revisa las tareas de campo y sus fechas.',
     AppModule.producciones => 'Consulta las cantidades y fechas de cosecha.',
+    AppModule.tareasPlanta =>
+      'Revisa y completa tus etapas asignadas en planta.',
+    AppModule.recepcionesPlanta =>
+      'Registra el pesaje y recepción de materia prima en planta.',
     AppModule.almacenes => 'Encuentra los almacenes y su información.',
     AppModule.insumos => 'Consulta semillas, materiales y existencias.',
     AppModule.movimientos => 'Revisa las entradas y salidas del almacén.',
@@ -171,6 +193,9 @@ enum AppModule {
 
   bool canOpen(AuthUser user) {
     if (!user.permissions.contains(permission)) return false;
+    if (this == AppModule.tareasPlanta) {
+      return !user.roles.contains('jefe_planta');
+    }
     if (this != AppModule.asignaciones ||
         user.roles.any(const {'admin', 'transportista'}.contains)) {
       return true;

@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
       AppModule.lotes,
       AppModule.producciones,
     ],
+    'Trabajo en planta': [AppModule.tareasPlanta, AppModule.recepcionesPlanta],
     'Almacenes e insumos': [
       AppModule.almacenes,
       AppModule.insumos,
@@ -146,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         bottomNavigationBar: DecoratedBox(
           decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: AppTheme.ink, width: 2)),
+            border: Border(top: BorderSide(color: AppTheme.border, width: 1)),
           ),
           child: NavigationBar(
             selectedIndex: _tab,
@@ -288,6 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _featured(AppModule module) {
     final title = switch (module) {
       AppModule.actividades => 'Actividades del campo',
+      AppModule.tareasPlanta => 'Tus tareas de planta',
       AppModule.asignaciones => 'Tus envíos asignados',
       AppModule.almacenes => 'Tus almacenes',
       _ => module.label,
@@ -296,94 +298,97 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: AppTheme.fieldDeep,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.ink, width: 2),
-        boxShadow: AppTheme.stamp(6),
+        boxShadow: AppTheme.stamp(5),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: _largeText ? 72 : 112,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                const ColoredBox(color: Color(0xFF2C5E39)),
-                const ExcludeSemantics(
-                  child: CustomPaint(painter: FurrowPainter()),
-                ),
-                Positioned(
-                  left: 18,
-                  top: 16,
-                  child: ModuleMark(module, size: _largeText ? 40 : 52),
-                ),
-              ],
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF13331C), width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: _largeText ? 72 : 112,
+              child: const Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(color: Color(0xFF2C5E39)),
+                  ExcludeSemantics(
+                    child: CustomPaint(painter: FurrowPainter()),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.maize,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'Lo principal',
-                    style: TextStyle(
-                      color: AppTheme.ink,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.maize,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Lo principal',
+                      style: TextStyle(
+                        color: AppTheme.ink,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Semantics(
-                  header: true,
-                  child: Text(
-                    title,
+                  const SizedBox(height: 12),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        height: 1.15,
+                        letterSpacing: -.6,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    module.description,
                     style: const TextStyle(
-                      fontSize: 28,
-                      height: 1.15,
-                      letterSpacing: -.6,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      fontSize: 17,
+                      height: 1.4,
+                      color: Color(0xFFE6EFE2),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  module.description,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    height: 1.4,
-                    color: Color(0xFFE6EFE2),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => _open(module),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.maize,
-                      foregroundColor: AppTheme.ink,
-                      side: const BorderSide(color: AppTheme.ink, width: 2),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => _open(module),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.maize,
+                        foregroundColor: AppTheme.ink,
+                        side: const BorderSide(
+                          color: Color(0xFFC58C1F),
+                          width: 1,
+                        ),
+                      ),
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                      label: Text('Ver ${module.label.toLowerCase()}'),
                     ),
-                    icon: const Icon(Icons.arrow_forward_rounded),
-                    label: Text('Ver ${module.label.toLowerCase()}'),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -392,7 +397,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final look = module.look;
     return PressableCard(
       onTap: () => _open(module),
-      color: look.tone,
+      color: AppTheme.sprout,
+      borderColor: AppTheme.sproutBorder,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,9 +406,24 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ModuleMark(module, size: 52, solid: true),
+              ExcludeSemantics(
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppTheme.field,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: AppTheme.fieldDeep, width: 1),
+                  ),
+                  child: Icon(module.icon, color: Colors.white, size: 28),
+                ),
+              ),
               const Spacer(),
-              Icon(Icons.arrow_forward_rounded, size: 24, color: look.ink),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                size: 24,
+                color: AppTheme.fieldDeep,
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -415,7 +436,11 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 2),
           Text(
             look.hint,
-            style: TextStyle(fontSize: 15, height: 1.35, color: look.ink),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.35,
+              color: AppTheme.fieldDeep,
+            ),
           ),
         ],
       ),
@@ -483,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
         )
       else
         for (final group in visible.entries) ...[
-          SectionTitle(group.key, color: group.value.first.look.tone),
+          SectionTitle(group.key, color: AppTheme.field),
           const SizedBox(height: 14),
           for (final module in group.value) ...[
             _workRow(module),
@@ -494,36 +519,58 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-  Widget _workRow(AppModule module) => PressableCard(
-    onTap: () => _open(module),
-    padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-    child: Row(
-      children: [
-        ModuleMark(module, size: _largeText ? 44 : 56),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                module.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+  Widget _workRow(AppModule module) {
+    final badgeSize = _largeText ? 44.0 : 56.0;
+    return PressableCard(
+      onTap: () => _open(module),
+      padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+      child: Row(
+        children: [
+          ExcludeSemantics(
+            child: Container(
+              width: badgeSize,
+              height: badgeSize,
+              decoration: BoxDecoration(
+                color: AppTheme.field,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: AppTheme.fieldDeep, width: 1),
               ),
-              const SizedBox(height: 2),
-              Text(
-                module.description,
-                style: Theme.of(context).textTheme.bodyMedium,
+              child: Icon(
+                module.icon,
+                color: Colors.white,
+                size: badgeSize * 0.54,
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        const Icon(Icons.chevron_right_rounded, size: 32, color: AppTheme.ink),
-      ],
-    ),
-  );
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  module.label,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  module.description,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 32,
+            color: AppTheme.ink,
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _account() => Align(
     alignment: Alignment.centerLeft,
