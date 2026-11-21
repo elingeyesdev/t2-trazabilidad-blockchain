@@ -139,6 +139,7 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
 
     final parametros = <Map<String, Object?>>[];
     final summaryLines = <String>[
+      'Lote de resultado: ${detail.tarea.loteLabel}',
       'Proceso: ${detail.tarea.procesoNombre} (Etapa ${detail.tarea.orden})',
       'Máquina: ${detail.tarea.maquinaLabel}',
     ];
@@ -454,12 +455,16 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      DetailField(
+                        label: 'Lote de resultado',
+                        value: tarea.loteLabel,
+                      ),
                       for (
                         var i = 0;
                         i < detail.resultadoParametros.length;
                         i++
                       ) ...[
-                        if (i > 0) const Divider(height: 1),
+                        const Divider(height: 1),
                         DetailField(
                           label: detail.resultadoParametros[i].nombre,
                           value: detail.resultadoParametros[i].formattedValue,
@@ -563,6 +568,13 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text(
+              'Lote de resultado: ${detail.tarea.loteLabel}',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
             if (detail.parametrosRequeridos.isEmpty)
               const Text(
                 'Esta etapa no requiere mediciones adicionales. Puedes confirmar su cierre directamente.',

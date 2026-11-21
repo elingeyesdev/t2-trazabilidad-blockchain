@@ -209,4 +209,154 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Permite registrar cantidades producidas vinculadas a su lote de resultado en el cierre de procesamiento',
+    (tester) async {
+      var completed = false;
+      Map<String, dynamic>? sentBody;
+
+      const tareaEmpaque = {
+        'asignacionetapaplantaid': 610,
+        'orden': 2,
+        'estado': 'pendiente',
+        'creado_en': '2026-11-21T08:00:00Z',
+        'completada_en': null,
+        'observaciones': null,
+        'proceso': {'procesoplantaid': 12, 'nombre': 'Empaquetado final'},
+        'maquina': {
+          'maquinaplantaid': 5,
+          'nombre': 'Empacadora C1',
+          'codigo': 'MAQ-05',
+          'activo': true,
+        },
+        'lote_produccion': {
+          'loteproduccionpedidoid': 91,
+          'codigo_lote': 'LP-2026-091',
+          'nombre': 'Lote Papa Seleccionada',
+          'producto': 'Papa lavada 20kg',
+          'fecha_creacion': '2026-11-21',
+        },
+        'resultado': null,
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse({
+            'usuarioid': 15,
+            'nombre': 'Marco',
+            'apellido': 'Salazar',
+            'email': 'marco@example.test',
+            'activo': true,
+            'estado_cuenta': 'aprobado',
+            'roles': [
+              {'id': 5, 'name': 'planta'},
+            ],
+            'permissions': ['lote_produccion.view'],
+          });
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [
+              completed
+                  ? {...tareaEmpaque, 'estado': 'completada'}
+                  : tareaEmpaque,
+            ],
+            'meta': {'current_page': 1, 'last_page': 1, 'total': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/610' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': completed
+                ? {
+                    ...tareaEmpaque,
+                    'estado': 'completada',
+                    'completada_en': '2026-11-21T12:15:00Z',
+                    'resultado': {
+                      'registroprocesomaquinaplantaid': 95,
+                      'usuarioid': 15,
+                      'fecha_registro': '2026-11-21T12:15:00Z',
+                      'parametros': [
+                        {
+                          'variableestandarid': 30,
+                          'nombre': 'Cantidad producida',
+                          'unidad': 'kg',
+                          'valor': 85.25,
+                          'valor_decimal': '85.25',
+                        },
+                      ],
+                    },
+                  }
+                : tareaEmpaque,
+            'meta': {
+              'puede_completar': !completed,
+              'requisito_pendiente': null,
+              'maquinas_elegibles': completed ? <int>[] : [5],
+              'parametros_requeridos': [
+                {
+                  'variableestandarid': 30,
+                  'nombre': 'Cantidad producida',
+                  'unidad': 'kg',
+                  'valor_minimo': 1,
+                  'valor_maximo': 500,
+                },
+              ],
+              'permite_parciales': false,
+            },
+          });
+        }
+        if (request.url.path ==
+                '/api/planta/lotes-produccion/91/tareas/610/completar' &&
+            request.method == 'POST') {
+          sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+          completed = true;
+          return jsonResponse({
+            'data': {...tareaEmpaque, 'estado': 'completada'},
+            'meta': {'puede_completar': false},
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Empaquetado final'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Lote de resultado: LP-2026-091 · Lote Papa Seleccionada'),
+        findsOneWidget,
+      );
+
+      await tester.ensureVisible(find.byKey(const ValueKey('planta.param.30')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('planta.param.30')),
+        '85.25',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('planta.tarea.completar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('planta.tarea.completar')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Lote de resultado: LP-2026-091'),
+        findsAtLeastNWidgets(1),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirmar cierre'));
+      await tester.pumpAndSettle();
+
+      expect(sentBody, {
+        'parametros': [
+          {'variableestandarid': 30, 'valor': '85.25'},
+        ],
+      });
+      expect(find.text('Lote de resultado'), findsOneWidget);
+      expect(find.text('85.25 kg'), findsOneWidget);
+    },
+  );
 }
