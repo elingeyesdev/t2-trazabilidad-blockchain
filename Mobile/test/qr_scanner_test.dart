@@ -208,4 +208,57 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Permite introducir el código manualmente cuando no se utiliza la cámara',
+    (tester) async {
+      await storage.saveToken('1|qr-test');
+      String? sentCode;
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/qr/resolver' &&
+              request.method == 'POST') {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            sentCode = body['codigo'] as String?;
+            return jsonResponse(validQrResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: QrScannerScreen(
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            cameraBuilder: (context, onCodeDetected, onCameraIssue) =>
+                const SizedBox.shrink(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('qr.modo_manual')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('qr.manual_input')),
+        'QR-MANUAL-777',
+      );
+      await tester.tap(find.byKey(const ValueKey('qr.manual_submit')));
+      await tester.pumpAndSettle();
+
+      expect(sentCode, 'QR-MANUAL-777');
+      expect(
+        find.text('Código válido y listo para registrar recepción.'),
+        findsOneWidget,
+      );
+      expect(find.text('RUTA-045'), findsOneWidget);
+    },
+  );
 }

@@ -40,8 +40,11 @@ class QrScannerScreen extends StatefulWidget {
 }
 
 class _QrScannerScreenState extends State<QrScannerScreen> {
+  final _manualFormKey = GlobalKey<FormState>();
+  final _manualCtrl = TextEditingController();
   MobileScannerController? _scannerController;
 
+  bool _manualMode = false;
   bool _processing = false;
   String? _lastCode;
   QrResolucionResult? _result;
@@ -83,8 +86,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   @override
   void dispose() {
+    _manualCtrl.dispose();
     unawaited(_scannerController?.dispose());
     super.dispose();
+  }
+
+  Future<void> _submitManual() async {
+    if (!(_manualFormKey.currentState?.validate() ?? false)) return;
+    FocusScope.of(context).unfocus();
+    await _handleCode(_manualCtrl.text);
   }
 
   Future<void> _handleCode(String rawCode) async {
@@ -169,25 +179,88 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SectionTitle('Escaneo con cámara'),
-                  const SizedBox(height: 12),
-                  Container(
-                    key: const ValueKey('qr.camera_box'),
-                    height: 260,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: AppTheme.surface,
-                      borderRadius: BorderRadius.circular(AppTheme.radius),
-                      border: Border.all(color: AppTheme.ink, width: 2),
-                    ),
-                    child: widget.cameraBuilder != null
-                        ? widget.cameraBuilder!(
-                            context,
-                            (code) => unawaited(_handleCode(code)),
-                            (_) {},
-                          )
-                        : _defaultCamera(context),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        key: const ValueKey('qr.modo_camara'),
+                        label: const Text('Cámara'),
+                        selected: !_manualMode,
+                        selectedColor: AppTheme.maize,
+                        backgroundColor: AppTheme.surface,
+                        side: const BorderSide(color: AppTheme.ink, width: 1.5),
+                        onSelected: (_) => setState(() => _manualMode = false),
+                      ),
+                      ChoiceChip(
+                        key: const ValueKey('qr.modo_manual'),
+                        label: const Text('Ingreso manual'),
+                        selected: _manualMode,
+                        selectedColor: AppTheme.maize,
+                        backgroundColor: AppTheme.surface,
+                        side: const BorderSide(color: AppTheme.ink, width: 1.5),
+                        onSelected: (_) => setState(() => _manualMode = true),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
+                  if (!_manualMode) ...[
+                    const SectionTitle('Escaneo con cámara'),
+                    const SizedBox(height: 12),
+                    Container(
+                      key: const ValueKey('qr.camera_box'),
+                      height: 260,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(AppTheme.radius),
+                        border: Border.all(color: AppTheme.ink, width: 2),
+                      ),
+                      child: widget.cameraBuilder != null
+                          ? widget.cameraBuilder!(
+                              context,
+                              (code) => unawaited(_handleCode(code)),
+                              (_) {},
+                            )
+                          : _defaultCamera(context),
+                    ),
+                  ] else ...[
+                    const SectionTitle('Ingreso manual del código'),
+                    const SizedBox(height: 12),
+                    Form(
+                      key: _manualFormKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextFormField(
+                            key: const ValueKey('qr.manual_input'),
+                            controller: _manualCtrl,
+                            enabled: !_processing,
+                            decoration: const InputDecoration(
+                              labelText: 'Código QR o enlace de recepción',
+                              prefixIcon: Icon(Icons.qr_code_2_rounded),
+                            ),
+                            validator: (value) {
+                              if ((value ?? '').trim().isEmpty) {
+                                return 'Introduce o pega el código QR para validarlo.';
+                              }
+                              return null;
+                            },
+                            onFieldSubmitted: (_) => unawaited(_submitManual()),
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            key: const ValueKey('qr.manual_submit'),
+                            onPressed: _processing
+                                ? null
+                                : () => unawaited(_submitManual()),
+                            icon: const Icon(Icons.verified_outlined),
+                            label: const Text('Validar código'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_lastCode != null) ...[
                     const SizedBox(height: 16),
                     Container(
