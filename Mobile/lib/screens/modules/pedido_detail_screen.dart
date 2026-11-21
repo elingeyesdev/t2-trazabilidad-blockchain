@@ -93,10 +93,13 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
 
   void _backToList() {
     final navigator = Navigator.of(context);
+    final gestionRoute = '${AppModule.pedidos.route}/gestion';
     final listRoute = AppModule.pedidos.route;
     var found = false;
     navigator.popUntil((route) {
-      found = route.settings.name == listRoute;
+      found =
+          route.settings.name == gestionRoute ||
+          route.settings.name == listRoute;
       return found || route.isFirst;
     });
     if (!found) {
@@ -275,6 +278,22 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                           DetailField(
                             label: 'Equivalente en kg',
                             value: line.formattedKg!,
+                          ),
+                        ],
+                        if (line.almacenOrigenId != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Almacén origen',
+                            value: 'Almacén #${line.almacenOrigenId}',
+                          ),
+                        ],
+                        if ((line.inventarioPresentacionLoteId ??
+                                line.materiaPrimaLoteId)
+                            case final partidaId?) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Partida',
+                            value: 'Partida #$partidaId',
                           ),
                         ],
                       ],

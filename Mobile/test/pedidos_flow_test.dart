@@ -537,4 +537,79 @@ void main() {
       expect(find.byKey(const ValueKey('pedido.accion.aceptar')), findsNothing);
     },
   );
+
+  testWidgets(
+    'Al actualizar el detalle y regresar al listado los productos, cantidades y destino coinciden con la web',
+    (tester) async {
+      var detailCalls = 0;
+
+      final updatedFromWeb = {
+        ...createdDistribucion,
+        'estado': 'confirmado',
+        'destino': {'puntoventaid': 5, 'nombre': 'Tienda Central Norte'},
+        'detalles': [
+          {
+            'id': 801,
+            'producto_ref': null,
+            'insumoid': 90,
+            'materiaprimaloteid': null,
+            'producto': 'Hojuelas de Papa',
+            'produccionalmacenamientoid': null,
+            'presentacionid': 15,
+            'catalogotamanoconteoid': null,
+            'presentacion': 'Bolsa 500 g',
+            'cantidad': '30.000000',
+            'unidad': 'bolsas',
+            'cantidad_kg': '15.000000',
+            'almacen_origenid': 11,
+            'inventario_presentacion_loteid': 301,
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(minoristaProfile);
+        }
+        if (request.url.path == '/api/pedidos-distribucion' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [detailCalls > 1 ? updatedFromWeb : createdDistribucion],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/pedidos-distribucion/120' &&
+            request.method == 'GET') {
+          detailCalls++;
+          return jsonResponse({
+            'data': detailCalls == 1 ? createdDistribucion : updatedFromWeb,
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver pedidos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('PDV-2026-120'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tienda Central (PDV #5)'), findsOneWidget);
+      expect(find.text('24 bolsas'), findsOneWidget);
+      expect(find.text('12 kg'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('pedido.actualizar')));
+      await tester.pumpAndSettle();
+
+      expect(detailCalls, 2);
+      expect(find.text('Tienda Central Norte (PDV #5)'), findsOneWidget);
+      expect(find.text('30 bolsas'), findsOneWidget);
+      expect(find.text('15 kg'), findsOneWidget);
+      expect(find.text('Almacén #11'), findsOneWidget);
+      expect(find.text('Partida #301'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('pedido.volver')));
+      await tester.pumpAndSettle();
+      expect(find.text('PDV-2026-120'), findsOneWidget);
+    },
+  );
 }
