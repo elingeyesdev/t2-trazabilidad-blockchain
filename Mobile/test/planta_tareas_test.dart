@@ -359,4 +359,142 @@ void main() {
       );
     },
   );
+
+  testWidgets('Oculta tareas de planta a roles no autorizados', (tester) async {
+    await startApp(tester, (request) async {
+      if (request.url.path == '/api/me') {
+        return jsonResponse({
+          'usuarioid': 20,
+          'nombre': 'Elena',
+          'apellido': 'Vargas',
+          'email': 'elena@example.test',
+          'activo': true,
+          'estado_cuenta': 'aprobado',
+          'roles': [
+            {'id': 6, 'name': 'jefe_planta'},
+          ],
+          'permissions': ['lote_produccion.view', 'lotes.view'],
+        });
+      }
+      return jsonResponse({}, 404);
+    });
+
+    expect(find.text('Ver tareas de planta'), findsNothing);
+    await tester.tap(find.text('Trabajo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tareas de planta'), findsNothing);
+  });
+
+  testWidgets(
+    'Explica rechazos 422 y 409 del servidor conservando los datos ingresados',
+    (tester) async {
+      var submitAttempts = 0;
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioPlantaProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [tareaLavado],
+            'meta': {'current_page': 1, 'last_page': 1, 'total': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/501' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': tareaLavado,
+            'meta': {
+              'puede_completar': true,
+              'requisito_pendiente': null,
+              'maquinas_elegibles': [3],
+              'parametros_requeridos': [
+                {
+                  'variableestandarid': 12,
+                  'nombre': 'Temperatura de lavado',
+                  'unidad': '°C',
+                  'valor_minimo': 20,
+                  'valor_maximo': 80,
+                },
+              ],
+              'permite_parciales': false,
+            },
+          });
+        }
+        if (request.url.path ==
+                '/api/planta/lotes-produccion/90/tareas/501/completar' &&
+            request.method == 'POST') {
+          submitAttempts++;
+          if (submitAttempts == 1) {
+            return jsonResponse({
+              'message': 'Revisa las mediciones enviadas.',
+              'errors': {
+                'parametros.0.valor': [
+                  'El valor está fuera del rango configurado para esta etapa.',
+                ],
+              },
+            }, 422);
+          }
+          return jsonResponse({
+            'message':
+                'La etapa ya fue completada anteriormente con otros resultados.',
+          }, 409);
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lavado y desinfección'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const ValueKey('planta.param.12')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('planta.param.12')),
+        '70',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('planta.tarea.completar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('planta.tarea.completar')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirmar cierre'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('El valor está fuera del rango configurado para esta etapa.'),
+        findsOneWidget,
+      );
+      expect(find.text('70'), findsOneWidget);
+
+      // Corrige el valor y reenvía -> 409 conflicto explicado + botón para actualizar estado.
+      await tester.ensureVisible(find.byKey(const ValueKey('planta.param.12')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('planta.param.12')),
+        '65',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('planta.tarea.completar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('planta.tarea.completar')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Confirmar cierre'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'La etapa ya fue completada anteriormente con otros resultados.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('planta.tarea.recargar_tras_rechazo')),
+        findsOneWidget,
+      );
+    },
+  );
 }

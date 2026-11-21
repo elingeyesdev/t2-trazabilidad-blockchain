@@ -581,6 +581,18 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
             if (generalError != null) ...[
               const SizedBox(height: 14),
               AppNotice(tone: AppNoticeTone.error, message: generalError),
+              if (error?.statusCode == 409 || error?.statusCode == 403) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey('planta.tarea.recargar_tras_rechazo'),
+                    onPressed: _submitting ? null : _load,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Actualizar estado de la tarea'),
+                  ),
+                ),
+              ],
             ],
             const SizedBox(height: 20),
             FilledButton.icon(
