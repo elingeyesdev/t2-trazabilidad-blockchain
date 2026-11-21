@@ -419,6 +419,16 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
                 ),
                 const SizedBox(height: 12),
                 _completionForm(context, detail),
+              ] else if (!tarea.isCompleted) ...[
+                const SizedBox(height: 24),
+                SectionTitle(
+                  tarea.isCancelled
+                      ? 'Estado de la etapa'
+                      : 'Requisito pendiente',
+                  color: AppTheme.maize,
+                ),
+                const SizedBox(height: 12),
+                _prerequisiteNotice(context, detail),
               ],
               if (detail.resultadoParametros.isNotEmpty) ...[
                 const SizedBox(height: 24),
@@ -455,6 +465,61 @@ class _PlantaTareaDetailScreenState extends State<PlantaTareaDetailScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _prerequisiteNotice(BuildContext context, TareaPlantaDetail detail) {
+    final tarea = detail.tarea;
+    final reason = tarea.isCancelled
+        ? 'Esta tarea fue cancelada y no permite registrar resultados.'
+        : (detail.requisitoPendiente ??
+              (!tarea.maquinaActiva
+                  ? 'La máquina asignada (${tarea.maquinaLabel}) se encuentra en mantenimiento.'
+                  : 'Debes completar la etapa anterior del proceso antes de continuar con esta etapa.'));
+    return Container(
+      key: const ValueKey('planta.tarea.requisito'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.maizeSoft,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: const Color(0xFF8A5E00), width: 2),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            tarea.isCancelled
+                ? Icons.cancel_outlined
+                : Icons.lock_clock_rounded,
+            color: const Color(0xFF5F4100),
+            size: 26,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tarea.isCancelled
+                      ? 'Etapa cancelada'
+                      : 'No se puede completar todavía',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: const Color(0xFF5F4100),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  reason,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppTheme.ink),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

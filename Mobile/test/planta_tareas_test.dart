@@ -305,4 +305,58 @@ void main() {
       expect(find.text('65.5 °C'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Indica claramente el requisito o etapa faltante cuando no se puede continuar',
+    (tester) async {
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioPlantaProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [tareaSecado],
+            'meta': {'current_page': 1, 'last_page': 1, 'total': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/502' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': tareaSecado,
+            'meta': {
+              'puede_completar': false,
+              'requisito_pendiente':
+                  'Debe completarse primero la etapa 1 (Lavado y desinfección).',
+              'maquinas_elegibles': <int>[],
+              'parametros_requeridos': <Map<String, Object?>>[],
+              'permite_parciales': false,
+            },
+          });
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Secado controlado'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('planta.tarea.requisito')),
+        findsOneWidget,
+      );
+      expect(find.text('No se puede completar todavía'), findsOneWidget);
+      expect(
+        find.text(
+          'Debe completarse primero la etapa 1 (Lavado y desinfección).',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('planta.tarea.completar')),
+        findsNothing,
+      );
+    },
+  );
 }
