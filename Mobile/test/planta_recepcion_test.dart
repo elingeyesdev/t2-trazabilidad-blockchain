@@ -359,4 +359,65 @@ void main() {
       expect(find.text('85.25 kg'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Muestra confirmación detallada con lotes y cantidades antes de enviar y permite cancelar sin enviar',
+    (tester) async {
+      var confirmCalls = 0;
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(jefePlantaProfile);
+        }
+        if (request.url.path == '/api/planta/recepciones' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [pendingRecepcion],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/recepciones/60' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': pendingRecepcion});
+        }
+        if (request.url.path == '/api/planta/recepciones/60/confirmar' &&
+            request.method == 'POST') {
+          confirmCalls++;
+          return jsonResponse({'data': pendingRecepcion});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver recepciones en planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('PED-PLANTA-060'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('recepcion.cantidad.41')),
+        '92',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('recepcion.confirmar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('recepcion.confirmar')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Confirmar recepción en planta?'), findsOneWidget);
+      expect(find.textContaining('Solicitud: PED-PLANTA-060'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Papa Huaycha (Lote #25 · Cosecha #71): 92 kg recibidos (menor a 100 kg enviados)',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Revisar datos'));
+      await tester.pumpAndSettle();
+
+      expect(confirmCalls, 0);
+      expect(find.text('92'), findsOneWidget);
+    },
+  );
 }

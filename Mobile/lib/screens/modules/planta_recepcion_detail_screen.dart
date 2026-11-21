@@ -142,12 +142,19 @@ class _PlantaRecepcionDetailScreenState
     if (!validateForm(_formKey)) return;
 
     final cantidades = <String, String>{};
-    final summary = <String>['Solicitud: ${record.numeroSolicitud}'];
+    final summary = <String>[
+      'Solicitud: ${record.numeroSolicitud}',
+      if (record.almacenId != null) 'Almacén destino: #${record.almacenId}',
+    ];
     for (final line in record.lineas) {
       final raw = _controllerFor(line).text.trim().replaceAll(',', '.');
       cantidades['${line.detallePedidoId}'] = raw;
+      final parsed = double.tryParse(raw) ?? 0;
+      final discrepancy = parsed < line.enviadaValue - 1e-9
+          ? ' (menor a ${line.formattedEnviada} enviados)'
+          : '';
       summary.add(
-        '${line.producto} (${line.origenLoteLabel}): $raw ${line.unidad} recibidos',
+        '${line.producto} (${line.origenLoteLabel}): $raw ${line.unidad} recibidos$discrepancy',
       );
     }
 
@@ -158,6 +165,7 @@ class _PlantaRecepcionDetailScreenState
       message:
           'Se registrará el pesaje final de materia prima y se actualizará el inventario de planta.',
       details: summary,
+      cancelLabel: 'Revisar datos',
       confirmLabel: 'Confirmar recepción',
     );
     if (!mounted || !confirmed) return;
