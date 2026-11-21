@@ -255,6 +255,13 @@ class _PlantaRecepcionesScreenState extends State<PlantaRecepcionesScreen> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  if (record.isReceived) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Recibido: ${record.lineas.map((l) => l.formattedRecibida ?? l.formattedEnviada).join(' · ')}',
+                      style: theme.bodyMedium,
+                    ),
+                  ],
                 ],
               ],
             ),

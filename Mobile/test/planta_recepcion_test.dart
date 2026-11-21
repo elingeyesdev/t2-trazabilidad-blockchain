@@ -146,7 +146,7 @@ void main() {
       expect(sentBody, {
         'cantidades': {'41': '98.5'},
       });
-      expect(find.text('Recibida'), findsOneWidget);
+      expect(find.text('Recibida'), findsWidgets);
       expect(find.text('98.5 kg'), findsOneWidget);
     },
   );
@@ -512,6 +512,93 @@ void main() {
         find.byKey(const ValueKey('recepcion.recargar_tras_rechazo')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'La recepcion confirmada refleja los mismos lotes, cantidades y estado en comprobante y listado de recibidas',
+    (tester) async {
+      var received = false;
+      final confirmedRecepcion = {
+        ...pendingRecepcion,
+        'estado': 'recibido',
+        'fecha_recepcion_planta': '2026-11-21T11:30:00Z',
+        'recepcion_usuarioid': 20,
+        'recepcion': [
+          {'detallepedidoid': 41, 'cantidad_recibida': '96'},
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(jefePlantaProfile);
+        }
+        if (request.url.path == '/api/planta/recepciones' &&
+            request.method == 'GET') {
+          final wantReceived = request.url.queryParameters['recibido'] == '1';
+          final items = wantReceived
+              ? (received ? [confirmedRecepcion] : <Map<String, dynamic>>[])
+              : (received ? <Map<String, dynamic>>[] : [pendingRecepcion]);
+          return jsonResponse({
+            'data': items,
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/recepciones/60' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': received ? confirmedRecepcion : pendingRecepcion,
+          });
+        }
+        if (request.url.path == '/api/planta/recepciones/60/confirmar' &&
+            request.method == 'POST') {
+          received = true;
+          return jsonResponse({'data': confirmedRecepcion});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver recepciones en planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('PED-PLANTA-060'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('recepcion.cantidad.41')),
+        '96',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('recepcion.confirmar')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('recepcion.confirmar')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      // Comprobante con los mismos datos persistidos en el servidor.
+      expect(find.text('Comprobante de recepción'), findsOneWidget);
+      expect(find.text('Almacén #8'), findsOneWidget);
+      expect(find.text('2026-11-21T11:30:00Z'), findsOneWidget);
+      expect(find.text('Lote #25 · Cosecha #71'), findsOneWidget);
+      expect(find.text('100 kg'), findsOneWidget);
+      expect(find.text('96 kg'), findsOneWidget);
+
+      // Al volver al listado, se actualiza automáticamente y pasa a Recibidas.
+      await tester.tap(find.text('Volver a recepciones'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sin envíos pendientes de recepción'), findsOneWidget);
+
+      await tester.tap(find.text('Recibidas'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('PED-PLANTA-060'), findsOneWidget);
+      expect(find.text('Recibida'), findsWidgets);
+      expect(find.text('Origen: Lote #25 · Cosecha #71'), findsOneWidget);
+      expect(find.text('Recibido: 96 kg'), findsOneWidget);
     },
   );
 }

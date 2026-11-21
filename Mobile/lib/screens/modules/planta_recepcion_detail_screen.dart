@@ -333,6 +333,42 @@ class _PlantaRecepcionDetailScreenState
                 const SizedBox(height: 18),
                 AppNotice(tone: AppNoticeTone.success, message: notice),
               ],
+              if (record.isReceived) ...[
+                const SizedBox(height: 24),
+                SectionTitle('Comprobante de recepción', color: look.tone),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(AppTheme.radius),
+                    border: Border.all(color: AppTheme.ink, width: 2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      DetailField(label: 'Estado', value: record.estadoLabel),
+                      if (record.almacenId != null) ...[
+                        const Divider(height: 1),
+                        DetailField(
+                          label: 'Almacén destino',
+                          value: 'Almacén #${record.almacenId}',
+                        ),
+                      ],
+                      if (record.fechaRecepcion != null) ...[
+                        const Divider(height: 1),
+                        DetailField(
+                          label: 'Fecha de recepción',
+                          value: record.fechaRecepcion!,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               SectionTitle('Cantidades de materia prima', color: look.tone),
               const SizedBox(height: 12),
