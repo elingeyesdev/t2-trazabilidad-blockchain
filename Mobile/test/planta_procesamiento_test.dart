@@ -222,4 +222,84 @@ void main() {
     expect(find.text('Lote de producción #77'), findsOneWidget);
     expect(find.text('IND-077'), findsOneWidget);
   });
+
+  testWidgets(
+    'Muestra las cantidades de materia prima utilizadas con sus unidades y separa la cantidad recibida',
+    (tester) async {
+      final historicalPayload = {
+        ...recorridoPayload,
+        'origenes': [
+          ...(recorridoPayload['origenes'] as List),
+          {
+            'consumo_id': 503,
+            'insumo_id': 21,
+            'insumo': 'Aceite vegetal',
+            'almacen_id': 8,
+            'referencia_partida': 'HIST-001',
+            'materiaprimaloteid': 49,
+            'inventario_presentacion_loteid': null,
+            'cantidad_consumida': '12.250000',
+            'cantidad_unidades_consumidas': null,
+            'presentacion': null,
+            'unidad_presentacion': null,
+            'unidad_registrada': null,
+            'unidad_catalogo_actual': 'L',
+            'movimiento_consumo_id': null,
+            'cantidad_recibida': null,
+            'unidad_recepcion': null,
+            'recepcion': null,
+            'origen_agricola': null,
+            'origen_industrial_id': null,
+            'antecedente_restringido': false,
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(operarioProfile);
+        }
+        if (request.url.path == '/api/planta/tareas' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [tareaRow],
+            'meta': {'current_page': 1, 'last_page': 1},
+          });
+        }
+        if (request.url.path == '/api/planta/tareas/31' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': tareaRow});
+        }
+        if (request.url.path == '/api/planta/lotes-produccion/88' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': historicalPayload});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver tareas de planta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lavado y selección'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('tarea.ver_origen_resultado')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cantidad utilizada'), findsNWidgets(3));
+      expect(find.text('120.5 kg'), findsOneWidget);
+      expect(find.text('Cantidad recibida en recepción'), findsOneWidget);
+      expect(find.text('150 kg'), findsOneWidget);
+      expect(find.text('40 kg'), findsOneWidget);
+      expect(find.text('4 cajas'), findsOneWidget);
+      expect(
+        find.text('12.25 (unidad histórica desconocida; catálogo actual: L)'),
+        findsOneWidget,
+      );
+    },
+  );
 }

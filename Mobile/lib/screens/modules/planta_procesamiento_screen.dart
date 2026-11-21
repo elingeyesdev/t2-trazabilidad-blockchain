@@ -245,6 +245,25 @@ class _PlantaProcesamientoScreenState extends State<PlantaProcesamientoScreen> {
             const Divider(height: 1),
             DetailField(label: 'Presentación', value: origen.presentacion!),
           ],
+          const Divider(height: 1),
+          DetailField(
+            label: 'Cantidad utilizada',
+            value: origen.formattedConsumida,
+          ),
+          if (origen.formattedUnidadesConsumidas != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Unidades consumidas',
+              value: origen.formattedUnidadesConsumidas!,
+            ),
+          ],
+          if (origen.formattedRecibida != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Cantidad recibida en recepción',
+              value: origen.formattedRecibida!,
+            ),
+          ],
         ],
       ),
     );
