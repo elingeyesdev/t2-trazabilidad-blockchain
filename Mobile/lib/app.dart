@@ -19,6 +19,7 @@ import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
 import 'screens/modules/almacen_detail_screen.dart';
 import 'screens/modules/cosecha_form_screen.dart';
+import 'screens/modules/entrega_detail_screen.dart';
 import 'screens/modules/entregas_screen.dart';
 import 'screens/modules/envio_qr_detail_screen.dart';
 import 'screens/modules/inventario_alertas_screen.dart';
@@ -266,6 +267,29 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'entregas',
+          'ruta',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => EntregaDetailScreen(
+                key: ValueKey(_auth.user),
+                rutaId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onEntregaUpdated: () => _entregasUpdates.value++,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'entregas']) {
           return MaterialPageRoute<void>(

@@ -123,4 +123,91 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'El detalle muestra las paradas en orden, el destino y el estado del envío',
+    (tester) async {
+      const rutaDetailUnsorted = {
+        'rutamultientregaid': 18,
+        'nombre': 'Ruta Valle Alto #18',
+        'estado': 'en_ruta',
+        'fecha_salida': '2026-11-21T08:00:00Z',
+        'fecha_cierre': null,
+        'paradas': [
+          {
+            'rutaparadaid': 303,
+            'orden': 3,
+            'destino': 'Mercado Sur',
+            'estado': 'pendiente',
+            'externo_envio_id': 'ENV-303',
+          },
+          {
+            'rutaparadaid': 301,
+            'orden': 1,
+            'destino': 'Planta Procesadora Norte',
+            'estado': 'entregada',
+            'externo_envio_id': 'ENV-301',
+            'pedido': {
+              'direccion_texto': 'Av. Blanco Galindo Km 8',
+              'latitud': '-17.3935',
+              'longitud': '-66.2241',
+            },
+          },
+          {
+            'rutaparadaid': 302,
+            'orden': 2,
+            'destino': 'Tienda Central',
+            'estado': 'en_ruta',
+            'externo_envio_id': 'ENV-302',
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(transportistaProfile);
+        }
+        if (request.url.path == '/api/asignaciones-multiples' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': [], 'current_page': 1, 'last_page': 1});
+        }
+        if (request.url.path == '/api/rutas-multi' && request.method == 'GET') {
+          return jsonResponse({
+            'data': [rutaSummary],
+            'current_page': 1,
+            'last_page': 1,
+          });
+        }
+        if (request.url.path == '/api/rutas-multi/18' &&
+            request.method == 'GET') {
+          return jsonResponse(rutaDetailUnsorted);
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver asignaciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mis envíos y entregas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ruta Valle Alto #18'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Paradas en orden'), findsOneWidget);
+      expect(find.text('Planta Procesadora Norte'), findsOneWidget);
+      expect(find.text('Tienda Central'), findsOneWidget);
+      expect(find.text('Mercado Sur'), findsOneWidget);
+
+      final y1 = tester
+          .getTopLeft(find.byKey(const ValueKey('entrega.parada.1')))
+          .dy;
+      final y2 = tester
+          .getTopLeft(find.byKey(const ValueKey('entrega.parada.2')))
+          .dy;
+      final y3 = tester
+          .getTopLeft(find.byKey(const ValueKey('entrega.parada.3')))
+          .dy;
+      expect(y1, lessThan(y2));
+      expect(y2, lessThan(y3));
+    },
+  );
 }
