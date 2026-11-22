@@ -146,4 +146,100 @@ void main() {
       expect(acceptBtn, findsNothing);
     },
   );
+
+  testWidgets(
+    'Permite rechazar un pedido exigiendo el motivo obligatorio y muestra el rechazo registrado',
+    (tester) async {
+      await storage.saveToken('1|decision-reject');
+      var postCalls = 0;
+      Map<String, dynamic>? sentBody;
+
+      final pedidoRechazado = {
+        ...pedidoPendiente,
+        'estado': 'rechazado',
+        'motivo_rechazo': 'Sin stock disponible en almacén',
+        'decision': {
+          'accion': 'rechazar',
+          'estado_resultante': 'rechazado',
+          'motivo': 'Sin stock disponible en almacén',
+          'usuarioid': 30,
+          'fecha': '2026-11-22T01:55:00Z',
+        },
+        'acciones_disponibles': const <String>[],
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/pedidos-distribucion/120' &&
+              request.method == 'GET') {
+            return jsonResponse({'data': pedidoPendiente});
+          }
+          if (request.url.path ==
+                  '/api/pedidos-distribucion/120/transiciones' &&
+              request.method == 'POST') {
+            postCalls++;
+            sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return jsonResponse({'data': pedidoRechazado});
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: PedidoDetailScreen(
+            tipo: PedidoTipo.distribucion,
+            pedidoId: 120,
+            user: mayoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final rejectBtn = find.byKey(const ValueKey('pedido.accion.rechazar'));
+      await tester.ensureVisible(rejectBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(rejectBtn);
+      await tester.pumpAndSettle();
+
+      // Intento sin motivo -> bloqueado en validación local.
+      await tester.tap(find.byKey(const ValueKey('pedido.confirmar_rechazo')));
+      await tester.pumpAndSettle();
+      expect(find.text('Indica el motivo del rechazo.'), findsOneWidget);
+      expect(postCalls, 0);
+
+      // Ingresa motivo obligatorio y confirma.
+      await tester.enterText(
+        find.byKey(const ValueKey('pedido.motivo_rechazo_input')),
+        'Sin stock disponible en almacén',
+      );
+      await tester.tap(find.byKey(const ValueKey('pedido.confirmar_rechazo')));
+      await tester.pumpAndSettle();
+
+      expect(postCalls, 1);
+      expect(sentBody, {
+        'accion': 'rechazar',
+        'motivo_rechazo': 'Sin stock disponible en almacén',
+      });
+      final historial = find.byKey(const ValueKey('pedido.historial'));
+      expect(
+        find.descendant(of: historial, matching: find.text('Rechazado')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historial,
+          matching: find.text('Sin stock disponible en almacén'),
+        ),
+        findsOneWidget,
+      );
+      expect(rejectBtn, findsNothing);
+    },
+  );
 }

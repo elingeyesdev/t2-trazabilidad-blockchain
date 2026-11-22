@@ -121,6 +121,17 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
     }
   }
 
+  Future<void> _promptReject(PedidoRecord record) async {
+    if (_acting) return;
+    final motivo = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          _RejectPedidoDialog(numeroSolicitud: record.numeroSolicitud),
+    );
+    if (!mounted || motivo == null || motivo.isEmpty) return;
+    await _executeAction(record, 'rechazar', motivoRechazo: motivo);
+  }
+
   Future<void> _executeAction(
     PedidoRecord record,
     String accion, {
@@ -510,9 +521,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
             if (accion == 'rechazar')
               OutlinedButton.icon(
                 key: ValueKey('pedido.accion.$accion'),
-                onPressed: _acting
-                    ? null
-                    : () => _executeAction(record, accion),
+                onPressed: _acting ? null : () => _promptReject(record),
                 icon: const Icon(Icons.cancel_outlined, size: 18),
                 label: Text(pedidoAccionLabel(accion)),
               )
@@ -527,6 +536,77 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
               ),
         ],
       ),
+    );
+  }
+}
+
+class _RejectPedidoDialog extends StatefulWidget {
+  const _RejectPedidoDialog({required this.numeroSolicitud});
+
+  final String numeroSolicitud;
+
+  @override
+  State<_RejectPedidoDialog> createState() => _RejectPedidoDialogState();
+}
+
+class _RejectPedidoDialogState extends State<_RejectPedidoDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rechazar pedido'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Indica el motivo obligatorio para rechazar ${widget.numeroSolicitud}.',
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: const ValueKey('pedido.motivo_rechazo_input'),
+              controller: _controller,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: const InputDecoration(labelText: 'Motivo de rechazo'),
+              validator: (value) {
+                final text = (value ?? '').trim();
+                if (text.isEmpty) {
+                  return 'Indica el motivo del rechazo.';
+                }
+                if (text.length > 500) {
+                  return 'El motivo no puede superar 500 caracteres.';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          key: const ValueKey('pedido.confirmar_rechazo'),
+          onPressed: () {
+            if (!(_formKey.currentState?.validate() ?? false)) return;
+            Navigator.of(context).pop(_controller.text.trim());
+          },
+          child: const Text('Confirmar rechazo'),
+        ),
+      ],
     );
   }
 }
