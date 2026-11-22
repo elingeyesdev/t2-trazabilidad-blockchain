@@ -315,4 +315,99 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Muestra el comprobante correspondiente a la recepción al consultarlo desde el envío',
+    (tester) async {
+      await storage.saveToken('1|post-entrega-comp');
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/distribucion/45' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': {
+                'id': 45,
+                'tipo': 'distribucion',
+                'referencia': 'RUTA-045',
+                'estado': 'completada',
+                'destinos': [
+                  {'id': 5, 'nombre': 'Tienda Central'},
+                ],
+                'lineas': [
+                  {
+                    'id': 101,
+                    'pedido_id': 120,
+                    'pedido': 'PDV-2026-120',
+                    'producto': 'Hojuelas de Papa',
+                    'cantidad_enviada': '24.000000',
+                    'unidad': 'bolsas',
+                  },
+                ],
+                'fechas': {'salida': '2026-11-21T10:00:00Z'},
+                'recepciones': [
+                  {'id': 12, 'fecha': '2026-11-22T01:15:00Z'},
+                ],
+              },
+            });
+          }
+          if (request.url.path == '/api/recepciones-envio/12' &&
+              request.method == 'GET') {
+            return jsonResponse(comprobanteResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.distribucion,
+            envioId: 45,
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final verBtn = find.byKey(const ValueKey('envio_qr.ver_comprobante.12'));
+      await tester.ensureVisible(verBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(verBtn);
+      await tester.pumpAndSettle();
+
+      final compCard = find.byKey(
+        const ValueKey('recepcion_envio.comprobante'),
+      );
+      expect(compCard, findsOneWidget);
+      expect(
+        find.descendant(of: compCard, matching: find.text('Recepción #12')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: compCard, matching: find.text('Lucía Mendoza')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: compCard,
+          matching: find.text('Registrada y verificada'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: compCard,
+          matching: find.text('Disponible en el servidor'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

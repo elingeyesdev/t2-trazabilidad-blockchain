@@ -694,11 +694,34 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                       children: [
                         for (var i = 0; i < envio.recepciones.length; i++) ...[
                           if (i > 0) const Divider(height: 1),
-                          DetailField(
-                            label: 'Recepción #${envio.recepciones[i].id}',
-                            value:
-                                envio.recepciones[i].fecha ??
-                                'Registrada en el servidor',
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: DetailField(
+                                    label:
+                                        'Recepción #${envio.recepciones[i].id}',
+                                    value:
+                                        envio.recepciones[i].fecha ??
+                                        'Registrada en el servidor',
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  key: ValueKey(
+                                    'envio_qr.ver_comprobante.${envio.recepciones[i].id}',
+                                  ),
+                                  onPressed: () => unawaited(
+                                    _loadComprobante(envio.recepciones[i].id),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.receipt_long_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Ver comprobante'),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ],
@@ -803,6 +826,20 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
             DetailField(
               label: 'Fecha de confirmación',
               value: comprobante.fecha!,
+            ),
+          ],
+          if (comprobante.firmaUrl != null) ...[
+            const Divider(height: 1),
+            const DetailField(
+              label: 'Firma digitalizada',
+              value: 'Registrada y verificada',
+            ),
+          ],
+          if (comprobante.comprobanteUrl != null) ...[
+            const Divider(height: 1),
+            const DetailField(
+              label: 'Comprobante oficial',
+              value: 'Disponible en el servidor',
             ),
           ],
           for (final linea in comprobante.lineas) ...[
