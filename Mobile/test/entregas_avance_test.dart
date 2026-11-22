@@ -482,4 +482,105 @@ void main() {
       expect(launchedUri!.queryParameters['query'], '-17.3935,-66.2241');
     },
   );
+
+  testWidgets(
+    'Al actualizar el detalle y el listado el avance del envío coincide con el registrado en la web',
+    (tester) async {
+      var detailCalls = 0;
+
+      const initialRuta = {
+        'rutamultientregaid': 18,
+        'nombre': 'Ruta Valle Alto #18',
+        'estado': 'planificada',
+        'fecha_salida': '2026-11-21T08:00:00Z',
+        'fecha_cierre': null,
+        'paradas': [
+          {
+            'rutaparadaid': 301,
+            'orden': 1,
+            'destino': 'Planta Procesadora Norte',
+            'estado': 'pendiente',
+          },
+        ],
+      };
+
+      const webUpdatedRuta = {
+        'rutamultientregaid': 18,
+        'nombre': 'Ruta Valle Alto #18',
+        'estado': 'completada',
+        'fecha_salida': '2026-11-21T08:00:00Z',
+        'fecha_cierre': '2026-11-22T09:15:00Z',
+        'paradas': [
+          {
+            'rutaparadaid': 301,
+            'orden': 1,
+            'destino': 'Planta Procesadora Norte',
+            'estado': 'entregada',
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(transportistaProfile);
+        }
+        if (request.url.path == '/api/asignaciones-multiples' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': [], 'current_page': 1, 'last_page': 1});
+        }
+        if (request.url.path == '/api/rutas-multi' && request.method == 'GET') {
+          return jsonResponse({
+            'data': [detailCalls > 1 ? webUpdatedRuta : initialRuta],
+            'current_page': 1,
+            'last_page': 1,
+          });
+        }
+        if (request.url.path == '/api/rutas-multi/18' &&
+            request.method == 'GET') {
+          detailCalls++;
+          return jsonResponse(detailCalls == 1 ? initialRuta : webUpdatedRuta);
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver asignaciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mis envíos y entregas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ruta Valle Alto #18'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('entrega.estado_badge')),
+          matching: find.text('Planificada'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('entrega.actualizar')));
+      await tester.pumpAndSettle();
+
+      expect(detailCalls, 2);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('entrega.estado_badge')),
+          matching: find.text('Completada'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Cierre: 2026-11-22T09:15:00Z'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('entrega.avanzar.en_ruta')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('entrega.volver')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('entregas.actualizar')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completada'), findsOneWidget);
+    },
+  );
 }

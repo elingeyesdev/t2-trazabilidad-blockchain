@@ -237,10 +237,14 @@ class _EntregasScreenState extends State<EntregasScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-      itemCount: page.items.length,
-      itemBuilder: (context, index) => _rutaCard(context, page.items[index]),
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        itemCount: page.items.length,
+        itemBuilder: (context, index) => _rutaCard(context, page.items[index]),
+      ),
     );
   }
 

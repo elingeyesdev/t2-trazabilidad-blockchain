@@ -87,8 +87,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
       PedidoPermissions.canViewAny(widget.user);
 
   bool get _canOpenEntregas =>
-      (widget.module == AppModule.rutas ||
-          widget.module == AppModule.asignaciones) &&
+      widget.module == AppModule.asignaciones &&
       EntregaPermissions.canViewAny(widget.user);
 
   @override
