@@ -200,6 +200,8 @@ void main() {
             service: ModuleService(api),
             onRefreshPermissions: () {},
             initialResolution: resolution,
+            signatureExporter: () async =>
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
           ),
         ),
       );
@@ -279,4 +281,111 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Firma lista para confirmar'), findsOneWidget);
   });
+
+  testWidgets(
+    'Al confirmar se registra una única recepción con cantidades y firma y se muestra el comprobante',
+    (tester) async {
+      await storage.saveToken('1|recepcion-confirm');
+      var postCalls = 0;
+      Map<String, dynamic>? sentBody;
+
+      const comprobanteResponse = {
+        'data': {
+          'id': 12,
+          'firmante': {'id': 40, 'nombre': 'Lucía Mendoza'},
+          'fecha': '2026-11-22T00:35:00Z',
+          'firma_url': 'https://example.test/api/recepciones-envio/12/firma',
+          'comprobante_url':
+              'https://example.test/api/recepciones-envio/12/comprobante',
+          'lineas': [
+            {
+              'id': 101,
+              'producto': 'Hojuelas de Papa',
+              'cantidad_enviada': '24.000000',
+              'cantidad_recibida': '24.000000',
+              'unidad': 'bolsas',
+            },
+          ],
+        },
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/distribucion/45/recepcion' &&
+              request.method == 'POST') {
+            postCalls++;
+            sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return jsonResponse(comprobanteResponse, 201);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      final resolution = QrResolucionResult.fromJson(
+        validQrResponse,
+        codigo: 'QR-CONFIRM-45',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.distribucion,
+            envioId: 45,
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: resolution,
+            signatureExporter: () async =>
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final pad = find.byKey(const ValueKey('recepcion_envio.firma_pad'));
+      await tester.ensureVisible(pad);
+      await tester.pumpAndSettle();
+      await tester.drag(pad, const Offset(80, 30));
+      await tester.pumpAndSettle();
+
+      final submitBtn = find.byKey(const ValueKey('recepcion_envio.confirmar'));
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(postCalls, 1);
+      expect(sentBody?['codigo'], 'QR-CONFIRM-45');
+      expect(
+        (sentBody?['imagen_firma'] as String?)?.startsWith(
+          'data:image/png;base64,',
+        ),
+        isTrue,
+      );
+      expect(sentBody?['lineas'], [
+        {'id': 101, 'cantidad_recibida': '24'},
+      ]);
+
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.comprobante')),
+        findsOneWidget,
+      );
+      expect(find.text('Recepción #12'), findsOneWidget);
+      expect(find.text('Lucía Mendoza'), findsOneWidget);
+      expect(
+        find.text('Recibido: 24 bolsas (enviado: 24 bolsas)'),
+        findsOneWidget,
+      );
+      expect(submitBtn, findsNothing);
+    },
+  );
 }

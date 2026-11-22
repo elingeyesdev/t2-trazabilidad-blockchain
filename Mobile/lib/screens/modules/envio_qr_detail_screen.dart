@@ -26,6 +26,7 @@ class EnvioQrDetailScreen extends StatefulWidget {
     required this.service,
     required this.onRefreshPermissions,
     this.initialResolution,
+    this.signatureExporter,
   });
 
   final EnvioTipo tipo;
@@ -34,6 +35,7 @@ class EnvioQrDetailScreen extends StatefulWidget {
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
   final QrResolucionResult? initialResolution;
+  final Future<String?> Function()? signatureExporter;
 
   @override
   State<EnvioQrDetailScreen> createState() => _EnvioQrDetailScreenState();
@@ -46,9 +48,14 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
   final _signatureController = SignaturePadController();
 
   EnvioResumen? _envio;
+  RecepcionEnvioComprobante? _comprobante;
   bool _loading = true;
+  bool _submitting = false;
   String? _error;
   int? _errorStatus;
+  String? _submitError;
+  String? _signatureError;
+  String? _notice;
 
   TextEditingController _qtyControllerFor(EnvioLinea linea) =>
       _qtyControllers.putIfAbsent(linea.id, () {
@@ -126,6 +133,101 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
     }
   }
 
+  Future<void> _confirmarRecepcion(
+    EnvioResumen envio,
+    QrResolucionResult resolution,
+  ) async {
+    if (_submitting || _comprobante != null) return;
+    final validForm = validateForm(_formKey);
+    if (!_signatureController.hasSignature) {
+      setState(() {
+        _signatureError = 'Añade tu firma antes de confirmar la recepción.';
+      });
+      return;
+    }
+    if (!validForm) return;
+
+    final lineasPayload = <Map<String, dynamic>>[];
+    final summary = <String>['Envío: ${envio.referencia}'];
+    for (final linea in envio.lineas) {
+      final qty = _qtyControllerFor(linea).text.trim().replaceAll(',', '.');
+      final motivo = _motivoControllerFor(linea).text.trim();
+      lineasPayload.add({
+        'id': linea.id,
+        'cantidad_recibida': qty,
+        if (envio.tipo == EnvioTipo.traslado && motivo.isNotEmpty)
+          'motivo': motivo,
+      });
+      summary.add('${linea.title}: $qty ${linea.unidad}');
+    }
+    summary.add('Firma de conformidad adjunta');
+
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.fact_check_rounded,
+      title: '¿Confirmar recepción con firma?',
+      message:
+          'Se registrará la recepción definitiva y se consumirá el código QR.',
+      details: summary,
+      cancelLabel: 'Revisar datos',
+      confirmLabel: 'Confirmar recepción',
+    );
+    if (!mounted || !confirmed) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+      _signatureError = null;
+      _notice = null;
+    });
+
+    try {
+      final exporter =
+          widget.signatureExporter ?? _signatureController.exportPngDataUrl;
+      final dataUrl = await exporter();
+      if (dataUrl == null) {
+        if (!mounted) return;
+        setState(() {
+          _submitting = false;
+          _signatureError = 'No se pudo generar la imagen de la firma.';
+        });
+        return;
+      }
+      final comprobante = await widget.service.confirmarRecepcionEnvio(
+        widget.user,
+        tipo: envio.tipo,
+        envioId: envio.id,
+        codigo: resolution.codigo,
+        imagenFirma: dataUrl,
+        lineas: lineasPayload,
+      );
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _comprobante = comprobante;
+        _notice = 'Recepción #${comprobante.id} registrada correctamente.';
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      final recepcionErrors = error.validationErrors['recepcion'];
+      final message = (recepcionErrors != null && recepcionErrors.isNotEmpty)
+          ? recepcionErrors.join('\n')
+          : error.message;
+      setState(() {
+        _submitting = false;
+        _submitError = message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _submitError =
+            'No se pudo confirmar la recepción por un error de conexión. Tus cantidades y firma se conservaron para reintentar.';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!QrPermissions.canUseQr(widget.user) ||
@@ -138,6 +240,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
 
     final resolution = widget.initialResolution;
     final isRecepcionMode =
+        _comprobante == null &&
         resolution != null &&
         !resolution.utilizado &&
         resolution.puedeConfirmar;
@@ -230,14 +333,24 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                AppNotice(
-                  tone: isRecepcionMode
-                      ? AppNoticeTone.success
-                      : AppNoticeTone.info,
-                  message: isRecepcionMode
-                      ? 'Código QR validado para recepción. Revisa los destinos y productos del envío.'
-                      : 'Vista de consulta del envío asociado al código QR.',
-                ),
+                if (_notice case final notice?) ...[
+                  AppNotice(tone: AppNoticeTone.success, message: notice),
+                  const SizedBox(height: 12),
+                ] else
+                  AppNotice(
+                    tone: isRecepcionMode
+                        ? AppNoticeTone.success
+                        : AppNoticeTone.info,
+                    message: isRecepcionMode
+                        ? 'Código QR validado para recepción. Revisa los destinos y productos del envío.'
+                        : 'Vista de consulta del envío asociado al código QR.',
+                  ),
+                if (_comprobante case final comprobante?) ...[
+                  const SizedBox(height: 20),
+                  const SectionTitle('Comprobante de recepción'),
+                  const SizedBox(height: 12),
+                  _comprobanteCard(context, comprobante),
+                ],
                 const SizedBox(height: 24),
                 const SectionTitle('Destinos y fechas'),
                 const SizedBox(height: 12),
@@ -297,7 +410,49 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                         const SizedBox(height: 12),
                         const SectionTitle('Firma de conformidad'),
                         const SizedBox(height: 12),
-                        SignaturePad(controller: _signatureController),
+                        SignaturePad(
+                          controller: _signatureController,
+                          enabled: !_submitting,
+                        ),
+                        if (_signatureError case final sigError?) ...[
+                          const SizedBox(height: 10),
+                          AppNotice(
+                            tone: AppNoticeTone.error,
+                            message: sigError,
+                          ),
+                        ],
+                        if (_submitError case final subError?) ...[
+                          const SizedBox(height: 12),
+                          AppNotice(
+                            key: const ValueKey('recepcion_envio.submit_error'),
+                            tone: AppNoticeTone.error,
+                            message: subError,
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        FilledButton.icon(
+                          key: const ValueKey('recepcion_envio.confirmar'),
+                          onPressed: _submitting
+                              ? null
+                              : () => _confirmarRecepcion(
+                                  envio,
+                                  widget.initialResolution!,
+                                ),
+                          icon: _submitting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.fact_check_rounded),
+                          label: Text(
+                            _submitting
+                                ? 'Confirmando recepción...'
+                                : 'Registrar recepción con firma',
+                          ),
+                        ),
                       ],
                     ),
                   )
@@ -425,6 +580,49 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
               decoration: const InputDecoration(
                 labelText: 'Motivo de diferencia (si aplica)',
               ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _comprobanteCard(
+    BuildContext context,
+    RecepcionEnvioComprobante comprobante,
+  ) {
+    return Container(
+      key: const ValueKey('recepcion_envio.comprobante'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DetailField(
+            label: 'Comprobante',
+            value: 'Recepción #${comprobante.id}',
+          ),
+          if (comprobante.firmanteNombre != null) ...[
+            const Divider(height: 1),
+            DetailField(label: 'Firmante', value: comprobante.firmanteNombre!),
+          ],
+          if (comprobante.fecha != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Fecha de confirmación',
+              value: comprobante.fecha!,
+            ),
+          ],
+          for (final linea in comprobante.lineas) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: linea.producto,
+              value:
+                  'Recibido: ${linea.formattedRecibida} (enviado: ${linea.formattedEnviada})',
             ),
           ],
         ],
