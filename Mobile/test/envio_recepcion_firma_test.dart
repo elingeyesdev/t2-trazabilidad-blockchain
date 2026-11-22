@@ -388,4 +388,83 @@ void main() {
       expect(submitBtn, findsNothing);
     },
   );
+
+  testWidgets(
+    'Un código ya utilizado muestra el comprobante registrado y no permite duplicar la recepción',
+    (tester) async {
+      await storage.saveToken('1|recepcion-usado');
+
+      const comprobanteResponse = {
+        'data': {
+          'id': 12,
+          'firmante': {'id': 40, 'nombre': 'Lucía Mendoza'},
+          'fecha': '2026-11-22T00:35:00Z',
+          'lineas': [
+            {
+              'id': 101,
+              'producto': 'Hojuelas de Papa',
+              'cantidad_enviada': '24.000000',
+              'cantidad_recibida': '24.000000',
+              'unidad': 'bolsas',
+            },
+          ],
+        },
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/recepciones-envio/12' &&
+              request.method == 'GET') {
+            return jsonResponse(comprobanteResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      final usedResolution = QrResolucionResult.fromJson({
+        'data': {
+          ...(validQrResponse['data'] as Map<String, dynamic>),
+          'utilizado': true,
+          'puede_confirmar': false,
+        },
+      }, codigo: 'QR-USADO-45');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.distribucion,
+            envioId: 45,
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: usedResolution,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.ya_utilizado')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.comprobante')),
+        findsOneWidget,
+      );
+      expect(find.text('Recepción #12'), findsOneWidget);
+      expect(find.text('Lucía Mendoza'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.confirmar')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.firma_pad')),
+        findsNothing,
+      );
+    },
+  );
 }

@@ -49,6 +49,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
 
   EnvioResumen? _envio;
   RecepcionEnvioComprobante? _comprobante;
+  bool _alreadyUsed = false;
   bool _loading = true;
   bool _submitting = false;
   String? _error;
@@ -94,9 +95,26 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
         initial.envio.id == widget.envioId &&
         initial.envio.tipo == widget.tipo) {
       _envio = initial.envio;
+      _alreadyUsed = initial.utilizado;
       _loading = false;
+      if (initial.utilizado && initial.recepcionId > 0) {
+        unawaited(_loadComprobante(initial.recepcionId));
+      }
     } else {
       unawaited(_load());
+    }
+  }
+
+  Future<void> _loadComprobante(int recepcionId) async {
+    try {
+      final result = await widget.service.loadRecepcionEnvioComprobante(
+        widget.user,
+        recepcionId,
+      );
+      if (!mounted) return;
+      setState(() => _comprobante = result);
+    } catch (_) {
+      // Si el comprobante aún no está disponible, se mantiene el detalle del envío.
     }
   }
 
@@ -210,6 +228,17 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
       });
     } on ApiException catch (error) {
       if (!mounted) return;
+      if (error.statusCode == 409) {
+        setState(() {
+          _submitting = false;
+          _alreadyUsed = true;
+          _submitError = null;
+        });
+        if (resolution.recepcionId > 0) {
+          unawaited(_loadComprobante(resolution.recepcionId));
+        }
+        return;
+      }
       final recepcionErrors = error.validationErrors['recepcion'];
       final message = (recepcionErrors != null && recepcionErrors.isNotEmpty)
           ? recepcionErrors.join('\n')
@@ -241,6 +270,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
     final resolution = widget.initialResolution;
     final isRecepcionMode =
         _comprobante == null &&
+        !_alreadyUsed &&
         resolution != null &&
         !resolution.utilizado &&
         resolution.puedeConfirmar;
@@ -333,7 +363,15 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (_notice case final notice?) ...[
+                if (_alreadyUsed) ...[
+                  const AppNotice(
+                    key: ValueKey('recepcion_envio.ya_utilizado'),
+                    tone: AppNoticeTone.warning,
+                    message:
+                        'Este código QR ya fue utilizado. Se muestra el resultado registrado y no es posible duplicar la recepción.',
+                  ),
+                  const SizedBox(height: 12),
+                ] else if (_notice case final notice?) ...[
                   AppNotice(tone: AppNoticeTone.success, message: notice),
                   const SizedBox(height: 12),
                 ] else
