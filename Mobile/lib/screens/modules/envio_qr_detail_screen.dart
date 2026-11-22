@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/incidente_models.dart';
 import '../../models/inventario_models.dart';
 import '../../models/pedido_models.dart';
 import '../../models/qr_envio_models.dart';
@@ -111,6 +112,27 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
     } else {
       unawaited(_load());
     }
+  }
+
+  String get _incidenteAfectadoTipo => switch (widget.tipo) {
+    EnvioTipo.agricola => 'envio_agricola',
+    EnvioTipo.distribucion => 'distribucion',
+    EnvioTipo.traslado => 'traslado',
+  };
+
+  Future<void> _reportarIncidencia(EnvioResumen envio) async {
+    final created = await Navigator.of(context).pushNamed<IncidenteRecord?>(
+      '/modules/incidentes/nuevo',
+      arguments: IncidenteFormArgs(
+        afectadoTipo: _incidenteAfectadoTipo,
+        afectadoId: envio.id,
+        referenciaLabel: '${envio.referencia} (${envio.tipo.label})',
+      ),
+    );
+    if (!mounted || created == null) return;
+    setState(() {
+      _notice = 'Incidencia #${created.id} reportada correctamente.';
+    });
   }
 
   Future<void> _loadComprobante(int recepcionId) async {
@@ -536,6 +558,18 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                           ),
                         ],
                       ],
+                    ),
+                  ),
+                ],
+                if (IncidentePermissions.canCreate(widget.user)) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('envio_qr.reportar_incidencia'),
+                      onPressed: () => unawaited(_reportarIncidencia(envio)),
+                      icon: const Icon(Icons.report_problem_outlined),
+                      label: const Text('Reportar incidencia'),
                     ),
                   ),
                 ],

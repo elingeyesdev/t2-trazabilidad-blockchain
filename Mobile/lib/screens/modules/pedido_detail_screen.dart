@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/incidente_models.dart';
 import '../../models/pedido_models.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
@@ -121,6 +122,25 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
         _error = 'No se pudo consultar el detalle del pedido.';
       });
     }
+  }
+
+  String get _afectadoTipo => widget.tipo == PedidoTipo.agricola
+      ? 'pedido_agricola'
+      : 'pedido_distribucion';
+
+  Future<void> _reportarIncidencia(PedidoRecord record) async {
+    final created = await Navigator.of(context).pushNamed<IncidenteRecord?>(
+      '/modules/incidentes/nuevo',
+      arguments: IncidenteFormArgs(
+        afectadoTipo: _afectadoTipo,
+        afectadoId: record.id,
+        referenciaLabel: '${record.numeroSolicitud} (${record.tipo.label})',
+      ),
+    );
+    if (!mounted || created == null) return;
+    setState(() {
+      _notice = 'Incidencia #${created.id} reportada correctamente.';
+    });
   }
 
   Future<void> _promptReject(PedidoRecord record) async {
@@ -397,6 +417,18 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                 SectionTitle('Acciones disponibles', color: look.tone),
                 const SizedBox(height: 12),
                 _accionesCard(context, record),
+                if (IncidentePermissions.canCreate(widget.user)) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('pedido.reportar_incidencia'),
+                      onPressed: () => unawaited(_reportarIncidencia(record)),
+                      icon: const Icon(Icons.report_problem_outlined),
+                      label: const Text('Reportar incidencia'),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 SectionTitle('Productos solicitados', color: look.tone),
                 const SizedBox(height: 12),

@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:agrofusion_mobile/config/api_config.dart';
 import 'package:agrofusion_mobile/models/auth_user.dart';
+import 'package:agrofusion_mobile/models/incidente_models.dart';
 import 'package:agrofusion_mobile/models/pedido_models.dart';
+import 'package:agrofusion_mobile/screens/modules/incidente_form_screen.dart';
 import 'package:agrofusion_mobile/screens/modules/pedido_detail_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/module_service.dart';
@@ -309,6 +311,108 @@ void main() {
       await tester.tap(refreshPerms);
       await tester.pumpAndSettle();
       expect(refreshedPermissions, 1);
+    },
+  );
+
+  testWidgets(
+    'Permite reportar una incidencia vinculada al pedido enviando los datos al servidor',
+    (tester) async {
+      await storage.saveToken('1|incidente-create');
+      Map<String, dynamic>? sentBody;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/pedidos-distribucion/120' &&
+              request.method == 'GET') {
+            return jsonResponse({'data': pedidoPendiente});
+          }
+          if (request.url.path == '/api/incidentes' &&
+              request.method == 'POST') {
+            sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return jsonResponse({
+              'incidenteenvioid': 77,
+              'tipo': sentBody?['tipo'],
+              'descripcion': sentBody?['descripcion'],
+              'estado': 'abierto',
+              'seguimiento': 'Pendiente de resolución',
+              'afectado_referencia': 'Pedido de distribución #120',
+            }, 201);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          onGenerateRoute: (settings) {
+            if (settings.name == '/modules/incidentes/nuevo') {
+              return MaterialPageRoute<IncidenteRecord?>(
+                settings: settings,
+                builder: (_) => IncidenteFormScreen(
+                  args: settings.arguments as IncidenteFormArgs,
+                  user: mayoristaUser,
+                  service: ModuleService(api),
+                  onRefreshPermissions: () {},
+                ),
+              );
+            }
+            return null;
+          },
+          home: PedidoDetailScreen(
+            tipo: PedidoTipo.distribucion,
+            pedidoId: 120,
+            user: mayoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final reportBtn = find.byKey(
+        const ValueKey('pedido.reportar_incidencia'),
+      );
+      await tester.ensureVisible(reportBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(reportBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('PDV-2026-120 (Distribución)'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('incidente.tipo')),
+        'Empaque dañado',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('incidente.descripcion')),
+        'Dos cajas llegaron golpeadas en la descarga.',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('incidente.responsable')),
+        '30',
+      );
+
+      final saveBtn = find.byKey(const ValueKey('incidente.guardar'));
+      await tester.ensureVisible(saveBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+
+      expect(sentBody, {
+        'afectado_tipo': 'pedido_distribucion',
+        'afectado_id': 120,
+        'tipo': 'Empaque dañado',
+        'descripcion': 'Dos cajas llegaron golpeadas en la descarga.',
+        'responsable_usuarioid': 30,
+      });
+      expect(
+        find.text('Incidencia #77 reportada correctamente.'),
+        findsOneWidget,
+      );
     },
   );
 }

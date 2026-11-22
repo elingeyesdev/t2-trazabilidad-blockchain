@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'config/api_config.dart';
 import 'controllers/auth_controller.dart';
 import 'models/actividad_models.dart';
+import 'models/incidente_models.dart';
 import 'models/lote_models.dart';
 import 'models/pedido_models.dart';
 import 'models/qr_envio_models.dart';
@@ -22,6 +23,7 @@ import 'screens/modules/cosecha_form_screen.dart';
 import 'screens/modules/entrega_detail_screen.dart';
 import 'screens/modules/entregas_screen.dart';
 import 'screens/modules/envio_qr_detail_screen.dart';
+import 'screens/modules/incidente_form_screen.dart';
 import 'screens/modules/inventario_alertas_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/lote_form_screen.dart';
@@ -267,6 +269,23 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'incidentes', 'nuevo']) {
+          final args = settings.arguments;
+          if (args is! IncidenteFormArgs) return null;
+          return MaterialPageRoute<IncidenteRecord?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => IncidenteFormScreen(
+                key: ValueKey(_auth.user),
+                args: args,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
         }
         if (uri.pathSegments case [
           'modules',

@@ -7,6 +7,7 @@ import '../models/api_exception.dart';
 import '../models/auth_user.dart';
 import '../models/cosecha_models.dart';
 import '../models/entrega_models.dart';
+import '../models/incidente_models.dart';
 import '../models/inventario_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
@@ -834,6 +835,58 @@ class ModuleService {
       body: body,
     );
     return PedidoRecord.fromJson(response);
+  }
+
+  Future<IncidentesPage> loadIncidentes(
+    AuthUser user, {
+    String? afectadoTipo,
+    int? afectadoId,
+    int page = 1,
+  }) async {
+    if (!IncidentePermissions.canView(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar incidencias.',
+        statusCode: 403,
+      );
+    }
+    final query = <String, String>{
+      'page': '$page',
+      if (afectadoTipo != null && afectadoTipo.isNotEmpty)
+        'afectado_tipo': afectadoTipo,
+      if (afectadoId != null && afectadoId > 0) 'afectado_id': '$afectadoId',
+    };
+    final response = await _api.request(
+      'GET',
+      'incidentes',
+      queryParameters: query,
+    );
+    return IncidentesPage.fromJson(response);
+  }
+
+  Future<IncidenteRecord> createIncidente(
+    AuthUser user, {
+    required String afectadoTipo,
+    required int afectadoId,
+    required String tipo,
+    required String descripcion,
+    int? responsableUsuarioId,
+  }) async {
+    if (!IncidentePermissions.canCreate(user)) {
+      throw const ApiException(
+        'No tienes permiso para reportar incidencias.',
+        statusCode: 403,
+      );
+    }
+    final body = <String, dynamic>{
+      'afectado_tipo': afectadoTipo,
+      'afectado_id': afectadoId,
+      'tipo': tipo.trim(),
+      'descripcion': descripcion.trim(),
+      if (responsableUsuarioId != null && responsableUsuarioId > 0)
+        'responsable_usuarioid': responsableUsuarioId,
+    };
+    final response = await _api.request('POST', 'incidentes', body: body);
+    return IncidenteRecord.fromJson(response);
   }
 
   Future<QrResolucionResult> resolveEnvioQr(
