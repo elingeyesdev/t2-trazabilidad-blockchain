@@ -298,4 +298,99 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Los errores de cambio de estado y conexión se muestran sin presentar un avance sin confirmar',
+    (tester) async {
+      var patchCalls = 0;
+
+      const rutaPlanificada = {
+        'rutamultientregaid': 18,
+        'nombre': 'Ruta Valle Alto #18',
+        'estado': 'planificada',
+        'fecha_salida': '2026-11-21T08:00:00Z',
+        'fecha_cierre': null,
+        'paradas': [
+          {
+            'rutaparadaid': 301,
+            'orden': 1,
+            'destino': 'Planta Procesadora Norte',
+            'estado': 'pendiente',
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(transportistaProfile);
+        }
+        if (request.url.path == '/api/asignaciones-multiples' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': [], 'current_page': 1, 'last_page': 1});
+        }
+        if (request.url.path == '/api/rutas-multi' && request.method == 'GET') {
+          return jsonResponse({
+            'data': [rutaPlanificada],
+            'current_page': 1,
+            'last_page': 1,
+          });
+        }
+        if (request.url.path == '/api/rutas-multi/18' &&
+            request.method == 'GET') {
+          return jsonResponse(rutaPlanificada);
+        }
+        if (request.url.path == '/api/rutas-multi/18' &&
+            request.method == 'PATCH') {
+          patchCalls++;
+          if (patchCalls == 1) {
+            return jsonResponse({
+              'message': 'No se puede iniciar la ruta en este estado.',
+            }, 409);
+          }
+          throw http.ClientException('Sin conexión');
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver asignaciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mis envíos y entregas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ruta Valle Alto #18'));
+      await tester.pumpAndSettle();
+
+      // 1) Error 409 de cambio de estado.
+      await tester.tap(find.byKey(const ValueKey('entrega.avanzar.en_ruta')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Iniciar ruta').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No se puede iniciar la ruta en este estado.'),
+        findsOneWidget,
+      );
+      final badge = find.byKey(const ValueKey('entrega.estado_badge'));
+      expect(
+        find.descendant(of: badge, matching: find.text('Planificada')),
+        findsOneWidget,
+      );
+      expect(find.text('En ruta'), findsNothing);
+
+      // 2) Error de conexión.
+      await tester.tap(find.byKey(const ValueKey('entrega.avanzar.en_ruta')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Iniciar ruta').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('entrega.update_error')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: badge, matching: find.text('Planificada')),
+        findsOneWidget,
+      );
+      expect(find.text('En ruta'), findsNothing);
+    },
+  );
 }

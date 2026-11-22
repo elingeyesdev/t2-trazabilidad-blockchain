@@ -129,9 +129,13 @@ class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
       });
     } on ApiException catch (error) {
       if (!mounted) return;
+      final estadoErrors = error.validationErrors['estado'];
+      final message = (estadoErrors != null && estadoErrors.isNotEmpty)
+          ? estadoErrors.join('\n')
+          : error.message;
       setState(() {
         _updating = false;
-        _updateError = error.message;
+        _updateError = message;
       });
     } catch (_) {
       if (!mounted) return;
