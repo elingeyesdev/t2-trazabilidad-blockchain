@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
@@ -23,6 +24,7 @@ class EntregaDetailScreen extends StatefulWidget {
     required this.service,
     required this.onRefreshPermissions,
     this.onEntregaUpdated,
+    this.mapLauncher,
   });
 
   final int rutaId;
@@ -30,6 +32,7 @@ class EntregaDetailScreen extends StatefulWidget {
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
   final VoidCallback? onEntregaUpdated;
+  final Future<bool> Function(Uri uri)? mapLauncher;
 
   @override
   State<EntregaDetailScreen> createState() => _EntregaDetailScreenState();
@@ -145,6 +148,18 @@ class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
             'No se pudo confirmar el avance por un error de conexión. El estado no fue modificado.';
       });
     }
+  }
+
+  Future<void> _openInMaps(Uri uri) async {
+    final launcher =
+        widget.mapLauncher ??
+        (target) => launchUrl(target, mode: LaunchMode.externalApplication);
+    final launched = await launcher(uri);
+    if (!mounted || launched) return;
+    setState(() {
+      _updateError =
+          'No se pudo abrir la aplicación de mapas externa en este dispositivo.';
+    });
   }
 
   @override
@@ -347,6 +362,18 @@ class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
           if (parada.externoEnvioId != null) ...[
             const Divider(height: 1),
             DetailField(label: 'Envío', value: parada.externoEnvioId!),
+          ],
+          if (parada.mapsUri case final mapsUri?) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: ValueKey('entrega.mapa.${parada.orden}'),
+                onPressed: () => unawaited(_openInMaps(mapsUri)),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Abrir en mapas'),
+              ),
+            ),
           ],
         ],
       ),

@@ -2,8 +2,12 @@ import 'dart:convert';
 
 import 'package:agrofusion_mobile/app.dart';
 import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/models/auth_user.dart';
+import 'package:agrofusion_mobile/screens/modules/entrega_detail_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
+import 'package:agrofusion_mobile/services/module_service.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
+import 'package:agrofusion_mobile/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -391,6 +395,91 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('En ruta'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Si hay ubicación disponible permite abrir el destino en una aplicación de mapas externa',
+    (tester) async {
+      await storage.saveToken('1|entregas-map');
+      Uri? launchedUri;
+
+      const rutaWithAndWithoutLocation = {
+        'rutamultientregaid': 18,
+        'nombre': 'Ruta Valle Alto #18',
+        'estado': 'en_ruta',
+        'fecha_salida': '2026-11-21T08:00:00Z',
+        'paradas': [
+          {
+            'rutaparadaid': 301,
+            'orden': 1,
+            'destino': 'Planta Procesadora Norte',
+            'estado': 'pendiente',
+            'pedido': {
+              'direccion_texto': 'Av. Blanco Galindo Km 8',
+              'latitud': '-17.3935',
+              'longitud': '-66.2241',
+            },
+          },
+          {
+            'rutaparadaid': 302,
+            'orden': 2,
+            'destino': null,
+            'estado': 'pendiente',
+          },
+        ],
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/rutas-multi/18' &&
+              request.method == 'GET') {
+            return jsonResponse(rutaWithAndWithoutLocation);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      const user = AuthUser(
+        id: 50,
+        name: 'Raúl',
+        lastName: 'Vega',
+        email: 'raul@example.test',
+        roles: ['transportista'],
+        permissions: {'rutas_multi.view', 'rutas_multi.update'},
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EntregaDetailScreen(
+            rutaId: 18,
+            user: user,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            mapLauncher: (uri) async {
+              launchedUri = uri;
+              return true;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('entrega.mapa.1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('entrega.mapa.2')), findsNothing);
+
+      await tester.ensureVisible(find.byKey(const ValueKey('entrega.mapa.1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('entrega.mapa.1')));
+      await tester.pumpAndSettle();
+
+      expect(launchedUri, isNotNull);
+      expect(launchedUri!.host, 'www.google.com');
+      expect(launchedUri!.queryParameters['query'], '-17.3935,-66.2241');
     },
   );
 }
