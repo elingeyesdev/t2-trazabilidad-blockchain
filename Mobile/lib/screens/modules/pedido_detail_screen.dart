@@ -49,6 +49,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
   String? _error;
   int? _errorStatus;
   String? _actionError;
+  int? _actionErrorStatus;
   String? _notice;
 
   bool get _canView => widget.tipo == PedidoTipo.agricola
@@ -104,6 +105,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
         _record = result;
         _loading = false;
         _actionError = null;
+        _actionErrorStatus = null;
       });
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -159,6 +161,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
     setState(() {
       _acting = true;
       _actionError = null;
+      _actionErrorStatus = null;
       _notice = null;
     });
     try {
@@ -188,6 +191,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
       setState(() {
         _acting = false;
         _actionError = message;
+        _actionErrorStatus = error.statusCode;
       });
     } catch (_) {
       if (!mounted) return;
@@ -323,14 +327,29 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                     message: actionError,
                   ),
                   const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      key: const ValueKey('pedido.recargar_tras_error'),
-                      onPressed: _loading || _acting ? null : _load,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: const Text('Actualizar estado del pedido'),
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      TextButton.icon(
+                        key: const ValueKey('pedido.recargar_tras_error'),
+                        onPressed: _loading || _acting ? null : _load,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Actualizar estado del pedido'),
+                      ),
+                      if (_actionErrorStatus == 403)
+                        TextButton.icon(
+                          key: const ValueKey('pedido.refrescar_permisos'),
+                          onPressed: _loading || _acting
+                              ? null
+                              : widget.onRefreshPermissions,
+                          icon: const Icon(
+                            Icons.verified_user_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('Actualizar permisos'),
+                        ),
+                    ],
                   ),
                 ],
                 const SizedBox(height: 24),

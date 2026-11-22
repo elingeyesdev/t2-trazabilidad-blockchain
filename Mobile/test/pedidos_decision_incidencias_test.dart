@@ -242,4 +242,73 @@ void main() {
       expect(rejectBtn, findsNothing);
     },
   );
+
+  testWidgets(
+    'Gestiona rechazos 403 de permisos desde Laravel ofreciendo actualizar permisos y estado',
+    (tester) async {
+      await storage.saveToken('1|decision-403');
+      var refreshedPermissions = 0;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/pedidos-distribucion/120' &&
+              request.method == 'GET') {
+            return jsonResponse({'data': pedidoPendiente});
+          }
+          if (request.url.path ==
+                  '/api/pedidos-distribucion/120/transiciones' &&
+              request.method == 'POST') {
+            return jsonResponse({
+              'message':
+                  'No tienes facultad operativa sobre el almacén de este pedido.',
+            }, 403);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: PedidoDetailScreen(
+            tipo: PedidoTipo.distribucion,
+            pedidoId: 120,
+            user: mayoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () => refreshedPermissions++,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final acceptBtn = find.byKey(const ValueKey('pedido.accion.aceptar'));
+      await tester.ensureVisible(acceptBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(acceptBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Aceptar pedido').last,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'No tienes facultad operativa sobre el almacén de este pedido.',
+        ),
+        findsOneWidget,
+      );
+      final refreshPerms = find.byKey(
+        const ValueKey('pedido.refrescar_permisos'),
+      );
+      expect(refreshPerms, findsOneWidget);
+      await tester.ensureVisible(refreshPerms);
+      await tester.pumpAndSettle();
+      await tester.tap(refreshPerms);
+      await tester.pumpAndSettle();
+      expect(refreshedPermissions, 1);
+    },
+  );
 }
