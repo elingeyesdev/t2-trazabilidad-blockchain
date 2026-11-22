@@ -513,4 +513,163 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Después de cada operación se actualiza la información y coincide con la web sin duplicar cambios',
+    (tester) async {
+      await storage.saveToken('1|sync-all');
+      var decisionPosts = 0;
+      var incidentePosts = 0;
+      var pedidoConfirmed = false;
+      var incidenteCreated = false;
+      var incidenteResolvedOnWeb = false;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/pedidos-distribucion/120' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': {
+                ...pedidoPendiente,
+                'estado': pedidoConfirmed ? 'confirmado' : 'pendiente',
+                'acciones_disponibles': pedidoConfirmed
+                    ? const <String>[]
+                    : ['aceptar', 'rechazar'],
+              },
+            });
+          }
+          if (request.url.path ==
+                  '/api/pedidos-distribucion/120/transiciones' &&
+              request.method == 'POST') {
+            decisionPosts++;
+            pedidoConfirmed = true;
+            return jsonResponse({
+              'data': {
+                ...pedidoPendiente,
+                'estado': 'confirmado',
+                'acciones_disponibles': const <String>[],
+              },
+            });
+          }
+          if (request.url.path == '/api/incidentes' &&
+              request.method == 'POST') {
+            incidentePosts++;
+            incidenteCreated = true;
+            return jsonResponse({
+              'incidenteenvioid': 77,
+              'tipo': 'Empaque dañado',
+              'descripcion': 'Caja golpeada.',
+              'estado': 'abierto',
+              'seguimiento': 'Pendiente de resolución',
+            }, 201);
+          }
+          if (request.url.path == '/api/incidentes' &&
+              request.method == 'GET') {
+            if (!incidenteCreated) {
+              return jsonResponse({
+                'data': const <Map<String, Object?>>[],
+                'meta': {'current_page': 1, 'last_page': 1},
+              });
+            }
+            return jsonResponse({
+              'data': [
+                {
+                  'incidenteenvioid': 77,
+                  'tipo': 'Empaque dañado',
+                  'descripcion': 'Caja golpeada.',
+                  'estado': incidenteResolvedOnWeb ? 'resuelto' : 'abierto',
+                  'seguimiento': incidenteResolvedOnWeb
+                      ? 'Resuelta'
+                      : 'Pendiente de resolución',
+                  'nota_resolucion': incidenteResolvedOnWeb
+                      ? 'Reposición confirmada desde la web.'
+                      : null,
+                },
+              ],
+              'meta': {'current_page': 1, 'last_page': 1},
+            });
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          onGenerateRoute: (settings) {
+            if (settings.name == '/modules/incidentes/nuevo') {
+              return MaterialPageRoute<IncidenteRecord?>(
+                settings: settings,
+                builder: (_) => IncidenteFormScreen(
+                  args: settings.arguments as IncidenteFormArgs,
+                  user: mayoristaUser,
+                  service: ModuleService(api),
+                  onRefreshPermissions: () {},
+                ),
+              );
+            }
+            return null;
+          },
+          home: PedidoDetailScreen(
+            tipo: PedidoTipo.distribucion,
+            pedidoId: 120,
+            user: mayoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1) Acepta el pedido una sola vez.
+      final acceptBtn = find.byKey(const ValueKey('pedido.accion.aceptar'));
+      await tester.ensureVisible(acceptBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(acceptBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Aceptar pedido').last,
+      );
+      await tester.pumpAndSettle();
+      expect(decisionPosts, 1);
+
+      // 2) Reporta incidencia vinculada -> se recarga y aparece pendiente.
+      final reportBtn = find.byKey(
+        const ValueKey('pedido.reportar_incidencia'),
+      );
+      await tester.ensureVisible(reportBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(reportBtn);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('incidente.tipo')),
+        'Empaque dañado',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('incidente.descripcion')),
+        'Caja golpeada.',
+      );
+      final saveBtn = find.byKey(const ValueKey('incidente.guardar'));
+      await tester.ensureVisible(saveBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+
+      expect(incidentePosts, 1);
+      expect(find.text('Pendiente de resolución'), findsOneWidget);
+
+      // 3) Se resuelve en la web y al actualizar coincide sin duplicar POSTs.
+      incidenteResolvedOnWeb = true;
+      await tester.tap(find.byKey(const ValueKey('pedido.actualizar')));
+      await tester.pumpAndSettle();
+
+      expect(decisionPosts, 1);
+      expect(incidentePosts, 1);
+      expect(find.text('Resuelta'), findsOneWidget);
+      expect(find.text('Reposición confirmada desde la web.'), findsOneWidget);
+    },
+  );
 }
