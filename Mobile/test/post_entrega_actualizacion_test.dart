@@ -203,4 +203,116 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Actualiza las cantidades disponibles afectadas por la operación tras confirmar',
+    (tester) async {
+      await storage.saveToken('1|post-entrega-stock');
+      var existenciasCalls = 0;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/distribucion/45/recepcion' &&
+              request.method == 'POST') {
+            return jsonResponse(comprobanteResponse, 201);
+          }
+          if (request.url.path == '/api/pedidos-distribucion/120' &&
+              request.method == 'GET') {
+            return jsonResponse(pedidoEntregadoResponse);
+          }
+          if (request.url.path == '/api/almacenes' && request.method == 'GET') {
+            return jsonResponse({
+              'data': [
+                {'almacenid': 5, 'nombre': 'Almacén PDV Central'},
+              ],
+            });
+          }
+          if (request.url.path == '/api/almacenes/5/existencias' &&
+              request.method == 'GET') {
+            existenciasCalls++;
+            return jsonResponse({
+              'data': [
+                {
+                  'insumoid': 90,
+                  'nombre': 'Hojuelas de Papa',
+                  'unidad': 'bolsas',
+                  'cantidad_fisica': '44.000000',
+                  'cantidad_disponible': '44.000000',
+                  'cantidad_vencida': '0',
+                  'cantidad_bloqueada': '0',
+                  'cantidad_reservada': '0',
+                  'cantidad_sin_partida': '0',
+                  'existencias_bajas': false,
+                  'partidas': [],
+                },
+              ],
+              'meta': {'current_page': 1, 'last_page': 1},
+            });
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      final resolution = QrResolucionResult.fromJson(
+        validQrResponse,
+        codigo: 'QR-STOCK-45',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.distribucion,
+            envioId: 45,
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: resolution,
+            signatureExporter: () async => fakeSignature,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final pad = find.byKey(const ValueKey('recepcion_envio.firma_pad'));
+      await tester.ensureVisible(pad);
+      await tester.pumpAndSettle();
+      await tester.drag(pad, const Offset(80, 30));
+      await tester.pumpAndSettle();
+
+      final submitBtn = find.byKey(const ValueKey('recepcion_envio.confirmar'));
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(existenciasCalls, 1);
+      expect(find.text('Existencias actualizadas'), findsOneWidget);
+      final stockBox = find.byKey(
+        const ValueKey('recepcion_envio.existencias'),
+      );
+      expect(stockBox, findsOneWidget);
+      expect(
+        find.descendant(
+          of: stockBox,
+          matching: find.text('Hojuelas de Papa · Almacén PDV Central'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: stockBox,
+          matching: find.text('Disponible: 44 bolsas'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

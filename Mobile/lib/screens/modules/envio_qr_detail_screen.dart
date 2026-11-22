@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/inventario_models.dart';
 import '../../models/pedido_models.dart';
 import '../../models/qr_envio_models.dart';
 import '../../navigation/app_module.dart';
@@ -54,6 +55,8 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
   EnvioResumen? _envio;
   RecepcionEnvioComprobante? _comprobante;
   List<PedidoRecord> _updatedPedidos = const [];
+  List<(String almacenNombre, AlmacenExistencia item)> _updatedExistencias =
+      const [];
   bool _alreadyUsed = false;
   bool _loading = true;
   bool _submitting = false;
@@ -157,6 +160,57 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
     setState(() => _updatedPedidos = loaded);
   }
 
+  Future<void> _refreshAffectedExistencias(EnvioResumen envio) async {
+    if (!InventarioPermissions.canViewExistencias(widget.user)) return;
+    try {
+      final almacenes = await widget.service.loadAuthorizedAlmacenes(
+        widget.user,
+      );
+      if (almacenes.isEmpty) return;
+
+      final destinoIds = envio.destinos
+          .map((d) => d.id)
+          .whereType<int>()
+          .toSet();
+      final targets = almacenes
+          .where((a) => destinoIds.contains(a.id))
+          .toList();
+      final selected = targets.isNotEmpty
+          ? targets
+          : almacenes.take(3).toList();
+      final productNames = envio.lineas
+          .map((l) => l.producto.trim().toLowerCase())
+          .toSet();
+
+      final results = <(String, AlmacenExistencia)>[];
+      for (final almacen in selected) {
+        try {
+          final page = await widget.service.loadAlmacenExistencias(
+            widget.user,
+            almacen.id,
+          );
+          final matched = page.items
+              .where(
+                (item) =>
+                    productNames.isEmpty ||
+                    productNames.contains(item.nombre.trim().toLowerCase()),
+              )
+              .toList();
+          final toAdd = matched.isNotEmpty ? matched : page.items.take(3);
+          for (final item in toAdd) {
+            results.add((almacen.name, item));
+          }
+        } catch (_) {
+          // Ignora almacenes sin existencias accesibles.
+        }
+      }
+      if (!mounted) return;
+      setState(() => _updatedExistencias = results);
+    } catch (_) {
+      // No interrumpe el comprobante si no se pudo consultar existencias.
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -181,6 +235,8 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
               : null);
       if (comprobanteId != null && comprobanteId > 0) {
         unawaited(_loadComprobante(comprobanteId));
+        unawaited(_refreshRelatedPedidos(result));
+        unawaited(_refreshAffectedExistencias(result));
       }
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -275,6 +331,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
         _notice = 'Recepción #${comprobante.id} registrada correctamente.';
       });
       await _refreshRelatedPedidos(envio);
+      await _refreshAffectedExistencias(envio);
     } on ApiException catch (error) {
       if (!mounted) return;
       if (error.statusCode == 409) {
@@ -446,6 +503,41 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                     _updatedPedidoCard(context, pedido),
                     const SizedBox(height: 10),
                   ],
+                ],
+                if (_updatedExistencias.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const SectionTitle('Existencias actualizadas'),
+                  const SizedBox(height: 12),
+                  Container(
+                    key: const ValueKey('recepcion_envio.existencias'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                      border: Border.all(color: AppTheme.ink, width: 2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (
+                          var i = 0;
+                          i < _updatedExistencias.length;
+                          i++
+                        ) ...[
+                          if (i > 0) const Divider(height: 1),
+                          DetailField(
+                            label:
+                                '${_updatedExistencias[i].$2.nombre} · ${_updatedExistencias[i].$1}',
+                            value:
+                                'Disponible: ${_updatedExistencias[i].$2.formattedDisponible}',
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 24),
                 const SectionTitle('Destinos y fechas'),
