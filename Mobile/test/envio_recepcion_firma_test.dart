@@ -1,0 +1,648 @@
+import 'dart:convert';
+
+import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/models/auth_user.dart';
+import 'package:agrofusion_mobile/models/qr_envio_models.dart';
+import 'package:agrofusion_mobile/screens/modules/envio_qr_detail_screen.dart';
+import 'package:agrofusion_mobile/screens/modules/qr_scanner_screen.dart';
+import 'package:agrofusion_mobile/services/api_client.dart';
+import 'package:agrofusion_mobile/services/module_service.dart';
+import 'package:agrofusion_mobile/services/session_storage.dart';
+import 'package:agrofusion_mobile/theme/app_theme.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+void main() {
+  const storage = SessionStorage();
+
+  const minoristaUser = AuthUser(
+    id: 40,
+    name: 'Lucía',
+    lastName: 'Mendoza',
+    email: 'lucia@example.test',
+    roles: ['minorista'],
+    permissions: {'pedidos_distribucion.view', 'pedidos_distribucion.update'},
+  );
+
+  const validQrResponse = {
+    'data': {
+      'recepcion_id': 12,
+      'utilizado': false,
+      'puede_confirmar': true,
+      'envio': {
+        'id': 45,
+        'tipo': 'distribucion',
+        'referencia': 'RUTA-045',
+        'estado': 'en_ruta',
+        'destinos': [
+          {'id': 5, 'nombre': 'Tienda Central', 'direccion': 'Av. América 123'},
+        ],
+        'lineas': [
+          {
+            'id': 101,
+            'pedido_id': 120,
+            'pedido': 'PDV-2026-120',
+            'producto': 'Hojuelas de Papa',
+            'presentacion': 'Bolsa 500 g',
+            'cantidad_enviada': '24.000000',
+            'unidad': 'bolsas',
+          },
+        ],
+        'fechas': {
+          'salida': '2026-11-21T10:00:00Z',
+          'llegada_confirmada': null,
+        },
+        'recepciones': [],
+      },
+    },
+  };
+
+  http.Response jsonResponse(Object? value, [int status = 200]) =>
+      http.Response(
+        jsonEncode(value),
+        status,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  testWidgets(
+    'El destinatario autorizado puede abrir la recepción del envío mediante su código',
+    (tester) async {
+      await storage.saveToken('1|recepcion-firma-test');
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/qr/resolver' &&
+              request.method == 'POST') {
+            return jsonResponse(validQrResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          onGenerateRoute: (settings) {
+            if (settings.name == '/modules/envios/distribucion/45') {
+              return MaterialPageRoute<void>(
+                settings: settings,
+                builder: (_) => EnvioQrDetailScreen(
+                  tipo: EnvioTipo.distribucion,
+                  envioId: 45,
+                  user: minoristaUser,
+                  service: ModuleService(api),
+                  onRefreshPermissions: () {},
+                  initialResolution: settings.arguments as QrResolucionResult?,
+                ),
+              );
+            }
+            return null;
+          },
+          home: QrScannerScreen(
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            cameraBuilder: (context, onCodeDetected, onCameraIssue) =>
+                const SizedBox.shrink(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('qr.modo_manual')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('qr.manual_input')),
+        'SECRET-DEST-45',
+      );
+      await tester.tap(find.byKey(const ValueKey('qr.manual_submit')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('qr.abrir_destino')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('qr.abrir_destino')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recepción de envío'), findsOneWidget);
+      expect(find.text('RUTA-045'), findsOneWidget);
+      expect(
+        find.textContaining('Código QR validado para recepción.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Permite revisar e introducir las cantidades recibidas validando límites del trayecto',
+    (tester) async {
+      await storage.saveToken('1|recepcion-qty');
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async => jsonResponse({}, 404)),
+      );
+      addTearDown(api.close);
+
+      const jefePlanta = AuthUser(
+        id: 20,
+        name: 'Elena',
+        lastName: 'Vargas',
+        email: 'elena@example.test',
+        roles: ['jefe_planta'],
+        permissions: {'recepcion_planta.view', 'recepcion_planta.confirm'},
+      );
+
+      final resolution = QrResolucionResult.fromJson({
+        'data': {
+          'recepcion_id': 20,
+          'utilizado': false,
+          'puede_confirmar': true,
+          'envio': {
+            'id': 70,
+            'tipo': 'agricola',
+            'referencia': 'ENV-AGR-070',
+            'estado': 'en_transporte_planta',
+            'destinos': [
+              {'nombre': 'Planta Sur'},
+            ],
+            'lineas': [
+              {
+                'id': 501,
+                'pedido_id': 60,
+                'pedido': 'PED-060',
+                'producto': 'Papa Huaycha',
+                'cantidad_enviada': '100.000000',
+                'unidad': 'kg',
+              },
+            ],
+            'fechas': {},
+            'recepciones': [],
+          },
+        },
+      }, codigo: 'QR-AGR-70');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.agricola,
+            envioId: 70,
+            user: jefePlanta,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: resolution,
+            signatureExporter: () async =>
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final field = find.byKey(const ValueKey('recepcion_envio.cantidad.501'));
+      expect(field, findsOneWidget);
+      expect(find.text('100'), findsOneWidget);
+
+      await tester.enterText(field, '120');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No puede superar la cantidad enviada (100 kg).'),
+        findsOneWidget,
+      );
+
+      await tester.enterText(field, '95.5');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No puede superar la cantidad enviada (100 kg).'),
+        findsNothing,
+      );
+      expect(find.text('95.5'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Permite añadir, revisar y limpiar la firma antes de confirmar', (
+    tester,
+  ) async {
+    await storage.saveToken('1|recepcion-firma-pad');
+    final api = ApiClient(
+      config: ApiConfig(baseUrl: 'https://example.test/api'),
+      sessionStorage: storage,
+      client: MockClient((request) async => jsonResponse({}, 404)),
+    );
+    addTearDown(api.close);
+
+    final resolution = QrResolucionResult.fromJson(
+      validQrResponse,
+      codigo: 'QR-SIG-45',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: EnvioQrDetailScreen(
+          tipo: EnvioTipo.distribucion,
+          envioId: 45,
+          user: minoristaUser,
+          service: ModuleService(api),
+          onRefreshPermissions: () {},
+          initialResolution: resolution,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Firma de conformidad'), findsOneWidget);
+    expect(find.text('Traza tu firma en el recuadro'), findsOneWidget);
+
+    final pad = find.byKey(const ValueKey('recepcion_envio.firma_pad'));
+    await tester.ensureVisible(pad);
+    await tester.pumpAndSettle();
+    await tester.drag(pad, const Offset(80, 30));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Firma lista para confirmar'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('recepcion_envio.limpiar_firma')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Traza tu firma en el recuadro'), findsOneWidget);
+
+    await tester.drag(pad, const Offset(60, 20));
+    await tester.pumpAndSettle();
+    expect(find.text('Firma lista para confirmar'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Al confirmar se registra una única recepción con cantidades y firma y se muestra el comprobante',
+    (tester) async {
+      await storage.saveToken('1|recepcion-confirm');
+      var postCalls = 0;
+      Map<String, dynamic>? sentBody;
+
+      const comprobanteResponse = {
+        'data': {
+          'id': 12,
+          'firmante': {'id': 40, 'nombre': 'Lucía Mendoza'},
+          'fecha': '2026-11-22T00:35:00Z',
+          'firma_url': 'https://example.test/api/recepciones-envio/12/firma',
+          'comprobante_url':
+              'https://example.test/api/recepciones-envio/12/comprobante',
+          'lineas': [
+            {
+              'id': 101,
+              'producto': 'Hojuelas de Papa',
+              'cantidad_enviada': '24.000000',
+              'cantidad_recibida': '24.000000',
+              'unidad': 'bolsas',
+            },
+          ],
+        },
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/distribucion/45/recepcion' &&
+              request.method == 'POST') {
+            postCalls++;
+            sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return jsonResponse(comprobanteResponse, 201);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      final resolution = QrResolucionResult.fromJson(
+        validQrResponse,
+        codigo: 'QR-CONFIRM-45',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.distribucion,
+            envioId: 45,
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: resolution,
+            signatureExporter: () async =>
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final pad = find.byKey(const ValueKey('recepcion_envio.firma_pad'));
+      await tester.ensureVisible(pad);
+      await tester.pumpAndSettle();
+      await tester.drag(pad, const Offset(80, 30));
+      await tester.pumpAndSettle();
+
+      final submitBtn = find.byKey(const ValueKey('recepcion_envio.confirmar'));
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(postCalls, 1);
+      expect(sentBody?['codigo'], 'QR-CONFIRM-45');
+      expect(
+        (sentBody?['imagen_firma'] as String?)?.startsWith(
+          'data:image/png;base64,',
+        ),
+        isTrue,
+      );
+      expect(sentBody?['lineas'], [
+        {'id': 101, 'cantidad_recibida': '24'},
+      ]);
+
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.comprobante')),
+        findsOneWidget,
+      );
+      expect(find.text('Recepción #12'), findsOneWidget);
+      expect(find.text('Lucía Mendoza'), findsOneWidget);
+      expect(
+        find.text('Recibido: 24 bolsas (enviado: 24 bolsas)'),
+        findsOneWidget,
+      );
+      expect(submitBtn, findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Un código ya utilizado muestra el comprobante registrado y no permite duplicar la recepción',
+    (tester) async {
+      await storage.saveToken('1|recepcion-usado');
+
+      const comprobanteResponse = {
+        'data': {
+          'id': 12,
+          'firmante': {'id': 40, 'nombre': 'Lucía Mendoza'},
+          'fecha': '2026-11-22T00:35:00Z',
+          'lineas': [
+            {
+              'id': 101,
+              'producto': 'Hojuelas de Papa',
+              'cantidad_enviada': '24.000000',
+              'cantidad_recibida': '24.000000',
+              'unidad': 'bolsas',
+            },
+          ],
+        },
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/recepciones-envio/12' &&
+              request.method == 'GET') {
+            return jsonResponse(comprobanteResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      final usedResolution = QrResolucionResult.fromJson({
+        'data': {
+          ...(validQrResponse['data'] as Map<String, dynamic>),
+          'utilizado': true,
+          'puede_confirmar': false,
+        },
+      }, codigo: 'QR-USADO-45');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.distribucion,
+            envioId: 45,
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: usedResolution,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.ya_utilizado')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.comprobante')),
+        findsOneWidget,
+      );
+      expect(find.text('Recepción #12'), findsOneWidget);
+      expect(find.text('Lucía Mendoza'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.confirmar')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.firma_pad')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'Los errores conservan cantidades y firma para reintentar y la confirmación coincide con la web',
+    (tester) async {
+      await storage.saveToken('1|recepcion-retry');
+      var postCalls = 0;
+
+      const jefePlanta = AuthUser(
+        id: 20,
+        name: 'Elena',
+        lastName: 'Vargas',
+        email: 'elena@example.test',
+        roles: ['jefe_planta'],
+        permissions: {'recepcion_planta.view', 'recepcion_planta.confirm'},
+      );
+
+      final resolution = QrResolucionResult.fromJson({
+        'data': {
+          'recepcion_id': 20,
+          'utilizado': false,
+          'puede_confirmar': true,
+          'envio': {
+            'id': 70,
+            'tipo': 'agricola',
+            'referencia': 'ENV-AGR-070',
+            'estado': 'en_transporte_planta',
+            'destinos': [
+              {'nombre': 'Planta Sur'},
+            ],
+            'lineas': [
+              {
+                'id': 501,
+                'pedido_id': 60,
+                'pedido': 'PED-060',
+                'producto': 'Papa Huaycha',
+                'cantidad_enviada': '100.000000',
+                'unidad': 'kg',
+              },
+            ],
+            'fechas': {},
+            'recepciones': [],
+          },
+        },
+      }, codigo: 'QR-AGR-70');
+
+      const comprobanteResponse = {
+        'data': {
+          'id': 20,
+          'firmante': {'id': 20, 'nombre': 'Elena Vargas'},
+          'fecha': '2026-11-22T01:10:00Z',
+          'lineas': [
+            {
+              'id': 501,
+              'producto': 'Papa Huaycha',
+              'cantidad_enviada': '100.000000',
+              'cantidad_recibida': '95.000000',
+              'unidad': 'kg',
+            },
+          ],
+        },
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/agricola/70/recepcion' &&
+              request.method == 'POST') {
+            postCalls++;
+            if (postCalls == 1) {
+              throw http.ClientException('Sin conexión');
+            }
+            return jsonResponse(comprobanteResponse, 201);
+          }
+          if (request.url.path == '/api/envios/agricola/70' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': {
+                'id': 70,
+                'tipo': 'agricola',
+                'referencia': 'ENV-AGR-070',
+                'estado': 'recibido',
+                'destinos': [
+                  {'nombre': 'Planta Sur'},
+                ],
+                'lineas': [
+                  {
+                    'id': 501,
+                    'pedido_id': 60,
+                    'pedido': 'PED-060',
+                    'producto': 'Papa Huaycha',
+                    'cantidad_enviada': '100.000000',
+                    'unidad': 'kg',
+                  },
+                ],
+                'fechas': {},
+                'recepciones': [
+                  {'id': 20, 'fecha': '2026-11-22T01:10:00Z'},
+                ],
+              },
+            });
+          }
+          if (request.url.path == '/api/recepciones-envio/20' &&
+              request.method == 'GET') {
+            return jsonResponse(comprobanteResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.agricola,
+            envioId: 70,
+            user: jefePlanta,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: resolution,
+            signatureExporter: () async =>
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('recepcion_envio.cantidad.501')),
+        '95',
+      );
+      final pad = find.byKey(const ValueKey('recepcion_envio.firma_pad'));
+      await tester.ensureVisible(pad);
+      await tester.pumpAndSettle();
+      await tester.drag(pad, const Offset(80, 30));
+      await tester.pumpAndSettle();
+
+      // Primer intento falla por conexión -> conserva 95 y la firma.
+      final submitBtn = find.byKey(const ValueKey('recepcion_envio.confirmar'));
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.submit_error')),
+        findsOneWidget,
+      );
+      expect(find.text('95'), findsOneWidget);
+      expect(find.text('Firma lista para confirmar'), findsOneWidget);
+
+      // Reintento exitoso -> muestra comprobante y coincide tras actualizar.
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(postCalls, 2);
+      expect(find.text('Recepción #20'), findsOneWidget);
+      expect(find.text('Elena Vargas'), findsOneWidget);
+      expect(find.text('Recibido: 95 kg (enviado: 100 kg)'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('envio_qr.actualizar')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completado'), findsOneWidget);
+      expect(find.text('Recepción #20'), findsWidgets);
+    },
+  );
+}

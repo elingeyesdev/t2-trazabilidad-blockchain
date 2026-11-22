@@ -6,7 +6,10 @@ import 'package:flutter/material.dart';
 import 'config/api_config.dart';
 import 'controllers/auth_controller.dart';
 import 'models/actividad_models.dart';
+import 'models/incidente_models.dart';
 import 'models/lote_models.dart';
+import 'models/pedido_models.dart';
+import 'models/qr_envio_models.dart';
 import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
@@ -17,16 +20,25 @@ import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
 import 'screens/modules/almacen_detail_screen.dart';
 import 'screens/modules/cosecha_form_screen.dart';
+import 'screens/modules/entrega_detail_screen.dart';
+import 'screens/modules/entregas_screen.dart';
+import 'screens/modules/envio_qr_detail_screen.dart';
+import 'screens/modules/incidente_form_screen.dart';
 import 'screens/modules/inventario_alertas_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
 import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
 import 'screens/modules/module_screen.dart';
+import 'screens/modules/pedido_detail_screen.dart';
+import 'screens/modules/pedido_form_screen.dart';
+import 'screens/modules/pedidos_screen.dart';
+import 'screens/modules/planta_procesamiento_screen.dart';
 import 'screens/modules/planta_recepcion_detail_screen.dart';
 import 'screens/modules/planta_recepciones_screen.dart';
 import 'screens/modules/planta_tarea_detail_screen.dart';
 import 'screens/modules/planta_tareas_screen.dart';
+import 'screens/modules/qr_scanner_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
 import 'services/api_health_service.dart';
@@ -74,6 +86,8 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _cosechaUpdates = ValueNotifier(0);
   final ValueNotifier<int> _plantaUpdates = ValueNotifier(0);
   final ValueNotifier<int> _recepcionUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _pedidosUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _entregasUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -97,6 +111,8 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _cosechaUpdates.dispose();
     _plantaUpdates.dispose();
     _recepcionUpdates.dispose();
+    _pedidosUpdates.dispose();
+    _entregasUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -215,6 +231,16 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     onRefreshPermissions: _auth.restoreSession,
                     updates: _recepcionUpdates,
                   )
+                : module == AppModule.pedidos &&
+                      !PedidoPermissions.canViewAgricola(_auth.user!) &&
+                      PedidoPermissions.canViewDistribucion(_auth.user!)
+                ? PedidosScreen(
+                    key: ValueKey(_auth.user),
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                    updates: _pedidosUpdates,
+                  )
                 : ModuleScreen(
                     key: ValueKey(_auth.user),
                     module: module,
@@ -243,6 +269,188 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'incidentes', 'nuevo']) {
+          final args = settings.arguments;
+          if (args is! IncidenteFormArgs) return null;
+          return MaterialPageRoute<IncidenteRecord?>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => IncidenteFormScreen(
+                key: ValueKey(_auth.user),
+                args: args,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'entregas',
+          'ruta',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => EntregaDetailScreen(
+                key: ValueKey(_auth.user),
+                rutaId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onEntregaUpdated: () => _entregasUpdates.value++,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'entregas']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => EntregasScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                updates: _entregasUpdates,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'envios',
+          final rawTipo,
+          final rawId,
+        ]) {
+          final tipo = EnvioTipo.fromValue(rawTipo);
+          final id = int.tryParse(rawId);
+          if (tipo == null || id == null || id <= 0) return null;
+          final initialResolution = settings.arguments is QrResolucionResult
+              ? settings.arguments as QrResolucionResult
+              : null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => EnvioQrDetailScreen(
+                key: ValueKey(_auth.user),
+                tipo: tipo,
+                envioId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                initialResolution: initialResolution,
+                onRecepcionConfirmed: () {
+                  _pedidosUpdates.value++;
+                  _entregasUpdates.value++;
+                },
+              ),
+              requiresAuthentication: true,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'qr']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => QrScannerScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'pedidos', 'gestion']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PedidosScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                updates: _pedidosUpdates,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.pedidos,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'pedidos', 'nuevo']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PedidoFormScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onPedidoCreated: () => _pedidosUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.pedidos,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'pedidos',
+          final rawTipo,
+          final rawId,
+        ]) {
+          final tipo = PedidoTipo.fromValue(rawTipo);
+          final id = int.tryParse(rawId);
+          if (tipo == null || id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PedidoDetailScreen(
+                key: ValueKey(_auth.user),
+                tipo: tipo,
+                pedidoId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                updates: _pedidosUpdates,
+                onPedidoUpdated: () => _pedidosUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.pedidos,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'planta',
+          'lotes-produccion',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => PlantaProcesamientoScreen(
+                key: ValueKey(_auth.user),
+                loteProduccionId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
         }
         if (uri.pathSegments case [
           'modules',

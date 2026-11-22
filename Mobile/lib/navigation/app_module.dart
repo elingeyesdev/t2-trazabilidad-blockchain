@@ -192,6 +192,10 @@ enum AppModule {
   };
 
   bool canOpen(AuthUser user) {
+    if (this == AppModule.pedidos) {
+      return user.permissions.contains('pedidos.view') ||
+          user.permissions.contains('pedidos_distribucion.view');
+    }
     if (!user.permissions.contains(permission)) return false;
     if (this == AppModule.tareasPlanta) {
       return !user.roles.contains('jefe_planta');

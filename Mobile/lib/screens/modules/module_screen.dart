@@ -5,9 +5,11 @@ import '../../models/actividad_models.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/cosecha_models.dart';
+import '../../models/entrega_models.dart';
 import '../../models/inventario_models.dart';
 import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
+import '../../models/pedido_models.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
@@ -79,6 +81,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
   bool get _canViewInventarioAlertas =>
       widget.module == AppModule.almacenes &&
       InventarioPermissions.canViewExistencias(widget.user);
+
+  bool get _canOpenPedidosGestion =>
+      widget.module == AppModule.pedidos &&
+      PedidoPermissions.canViewAny(widget.user);
+
+  bool get _canOpenEntregas =>
+      widget.module == AppModule.asignaciones &&
+      EntregaPermissions.canViewAny(widget.user);
 
   @override
   void initState() {
@@ -301,7 +311,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 (_canCreateLote ||
                         _canAssignActividad ||
                         _canCreateCosecha ||
-                        _canViewInventarioAlertas) &&
+                        _canViewInventarioAlertas ||
+                        _canOpenPedidosGestion ||
+                        _canOpenEntregas) &&
                     !loading &&
                     !snapshot.hasError
                 ? FloatingActionButton.extended(
@@ -318,9 +330,19 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               ? _assignActividad
                               : (_canCreateCosecha
                                     ? _createCosecha
-                                    : () => Navigator.of(context).pushNamed(
-                                        '${AppModule.almacenes.route}/alertas',
-                                      ))),
+                                    : (_canViewInventarioAlertas
+                                          ? () => Navigator.of(context).pushNamed(
+                                              '${AppModule.almacenes.route}/alertas',
+                                            )
+                                          : (_canOpenPedidosGestion
+                                                ? () => Navigator.of(context)
+                                                      .pushNamed(
+                                                        '${AppModule.pedidos.route}/gestion',
+                                                      )
+                                                : () => Navigator.of(context)
+                                                      .pushNamed(
+                                                        '/modules/entregas',
+                                                      ))))),
                     icon: Icon(
                       _canCreateLote
                           ? Icons.add_rounded
@@ -328,7 +350,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                 ? Icons.assignment_add
                                 : (_canCreateCosecha
                                       ? Icons.grass_rounded
-                                      : Icons.notifications_active_outlined)),
+                                      : (_canViewInventarioAlertas
+                                            ? Icons
+                                                  .notifications_active_outlined
+                                            : (_canOpenPedidosGestion
+                                                  ? Icons.receipt_long_rounded
+                                                  : Icons
+                                                        .local_shipping_outlined)))),
                     ),
                     label: Text(
                       _canCreateLote
@@ -337,7 +365,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                 ? 'Asignar actividad'
                                 : (_canCreateCosecha
                                       ? 'Registrar cosecha'
-                                      : 'Ver alertas')),
+                                      : (_canViewInventarioAlertas
+                                            ? 'Ver alertas'
+                                            : (_canOpenPedidosGestion
+                                                  ? 'Solicitudes y pedidos'
+                                                  : 'Mis envíos y entregas')))),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,

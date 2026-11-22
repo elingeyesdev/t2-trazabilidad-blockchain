@@ -6,10 +6,14 @@ import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
 import '../models/cosecha_models.dart';
+import '../models/entrega_models.dart';
+import '../models/incidente_models.dart';
 import '../models/inventario_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
+import '../models/pedido_models.dart';
 import '../models/planta_models.dart';
+import '../models/qr_envio_models.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
 
@@ -720,6 +724,348 @@ class ModuleService {
       body: {'cantidades': cantidades},
     );
     return RecepcionPlantaRecord.fromJson(response);
+  }
+
+  Future<ProcesamientoRecorrido> loadProcesamientoRecorrido(
+    AuthUser user,
+    int loteProduccionId,
+  ) async {
+    if (!PlantaPermissions.canViewProcesamiento(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar el procesamiento de planta.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'planta/lotes-produccion/$loteProduccionId',
+    );
+    return ProcesamientoRecorrido.fromJson(response);
+  }
+
+  Future<PedidosPage> loadPedidosMovil(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    String? estado,
+    int page = 1,
+  }) async {
+    final allowed = tipo == PedidoTipo.agricola
+        ? PedidoPermissions.canViewAgricola(user)
+        : PedidoPermissions.canViewDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para consultar este tipo de pedidos.',
+        statusCode: 403,
+      );
+    }
+    final query = <String, String>{
+      'page': '$page',
+      if (estado != null && estado.trim().isNotEmpty) 'estado': estado.trim(),
+    };
+    final response = await _api.request(
+      'GET',
+      tipo.endpoint,
+      queryParameters: query,
+    );
+    return PedidosPage.fromJson(response);
+  }
+
+  Future<PedidoRecord> loadPedidoMovilDetail(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    required int id,
+  }) async {
+    final allowed = tipo == PedidoTipo.agricola
+        ? PedidoPermissions.canViewAgricola(user)
+        : PedidoPermissions.canViewDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para consultar el detalle de este pedido.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', '${tipo.endpoint}/$id');
+    return PedidoRecord.fromJson(response);
+  }
+
+  Future<PedidoRecord> createPedidoMovil(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    required Map<String, dynamic> body,
+  }) async {
+    final allowed = tipo == PedidoTipo.agricola
+        ? PedidoPermissions.canCreateAgricola(user)
+        : PedidoPermissions.canCreateDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para crear este tipo de pedido.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('POST', tipo.endpoint, body: body);
+    return PedidoRecord.fromJson(response);
+  }
+
+  Future<PedidoRecord> executePedidoTransicion(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    required int pedidoId,
+    required String accion,
+    String? motivoRechazo,
+  }) async {
+    final allowed =
+        !user.roles.contains('admin') &&
+        (tipo == PedidoTipo.agricola
+            ? user.permissions.contains('pedidos.update')
+            : user.permissions.contains('pedidos_distribucion.update'));
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para decidir sobre este pedido.',
+        statusCode: 403,
+      );
+    }
+    final body = <String, dynamic>{
+      'accion': accion,
+      if (motivoRechazo != null && motivoRechazo.trim().isNotEmpty)
+        'motivo_rechazo': motivoRechazo.trim(),
+    };
+    final response = await _api.request(
+      'POST',
+      '${tipo.endpoint}/$pedidoId/transiciones',
+      body: body,
+    );
+    return PedidoRecord.fromJson(response);
+  }
+
+  Future<IncidentesPage> loadIncidentes(
+    AuthUser user, {
+    String? afectadoTipo,
+    int? afectadoId,
+    int page = 1,
+  }) async {
+    if (!IncidentePermissions.canView(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar incidencias.',
+        statusCode: 403,
+      );
+    }
+    final query = <String, String>{
+      'page': '$page',
+      if (afectadoTipo != null && afectadoTipo.isNotEmpty)
+        'afectado_tipo': afectadoTipo,
+      if (afectadoId != null && afectadoId > 0) 'afectado_id': '$afectadoId',
+    };
+    final response = await _api.request(
+      'GET',
+      'incidentes',
+      queryParameters: query,
+    );
+    return IncidentesPage.fromJson(response);
+  }
+
+  Future<IncidenteRecord> createIncidente(
+    AuthUser user, {
+    required String afectadoTipo,
+    required int afectadoId,
+    required String tipo,
+    required String descripcion,
+    int? responsableUsuarioId,
+  }) async {
+    if (!IncidentePermissions.canCreate(user)) {
+      throw const ApiException(
+        'No tienes permiso para reportar incidencias.',
+        statusCode: 403,
+      );
+    }
+    final body = <String, dynamic>{
+      'afectado_tipo': afectadoTipo,
+      'afectado_id': afectadoId,
+      'tipo': tipo.trim(),
+      'descripcion': descripcion.trim(),
+      if (responsableUsuarioId != null && responsableUsuarioId > 0)
+        'responsable_usuarioid': responsableUsuarioId,
+    };
+    final response = await _api.request('POST', 'incidentes', body: body);
+    return IncidenteRecord.fromJson(response);
+  }
+
+  Future<QrResolucionResult> resolveEnvioQr(
+    AuthUser user,
+    String codigo,
+  ) async {
+    if (!QrPermissions.canUseQr(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar o validar códigos QR de envío.',
+        statusCode: 403,
+      );
+    }
+    final normalized = codigo.trim();
+    final response = await _api.request(
+      'POST',
+      'envios/qr/resolver',
+      body: {'codigo': normalized},
+    );
+    return QrResolucionResult.fromJson(response, codigo: normalized);
+  }
+
+  Future<EnvioResumen> loadEnvioMovilDetail(
+    AuthUser user, {
+    required EnvioTipo tipo,
+    required int id,
+  }) async {
+    if (!QrPermissions.canUseQr(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar este envío.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'envios/${tipo.value}/$id');
+    final root =
+        response is Map<String, dynamic> &&
+            response['data'] is Map<String, dynamic>
+        ? response['data'] as Map<String, dynamic>
+        : response is Map<String, dynamic>
+        ? response
+        : const <String, dynamic>{};
+    return EnvioResumen.fromJson(root);
+  }
+
+  Future<RecepcionEnvioComprobante> confirmarRecepcionEnvio(
+    AuthUser user, {
+    required EnvioTipo tipo,
+    required int envioId,
+    required String codigo,
+    required String imagenFirma,
+    required List<Map<String, dynamic>> lineas,
+  }) async {
+    final canConfirm =
+        !user.roles.contains('admin') &&
+        (tipo == EnvioTipo.agricola
+            ? user.permissions.contains('recepcion_planta.confirm')
+            : user.permissions.contains('pedidos_distribucion.update'));
+    if (!canConfirm) {
+      throw const ApiException(
+        'No tienes permiso para confirmar la recepción de este envío.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'POST',
+      'envios/${tipo.value}/$envioId/recepcion',
+      body: {
+        'codigo': codigo.trim(),
+        'imagen_firma': imagenFirma,
+        'lineas': lineas,
+      },
+    );
+    return RecepcionEnvioComprobante.fromJson(response);
+  }
+
+  Future<RecepcionEnvioComprobante> loadRecepcionEnvioComprobante(
+    AuthUser user,
+    int recepcionId,
+  ) async {
+    if (!QrPermissions.canUseQr(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar este comprobante de recepción.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'recepciones-envio/$recepcionId',
+    );
+    return RecepcionEnvioComprobante.fromJson(response);
+  }
+
+  Future<RutasEntregaPage> loadRutasEntrega(
+    AuthUser user, {
+    int page = 1,
+  }) async {
+    if (!EntregaPermissions.canViewRutas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las rutas de entrega.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'rutas-multi',
+      queryParameters: {'page': '$page'},
+    );
+    return RutasEntregaPage.fromJson(response);
+  }
+
+  Future<RutaEntregaRecord> loadRutaEntregaDetail(
+    AuthUser user,
+    int rutaId,
+  ) async {
+    if (!EntregaPermissions.canViewRutas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta ruta de entrega.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'rutas-multi/$rutaId');
+    return RutaEntregaRecord.fromJson(response);
+  }
+
+  Future<RutaEntregaRecord> updateRutaEntregaEstado(
+    AuthUser user, {
+    required int rutaId,
+    required String estado,
+  }) async {
+    if (!EntregaPermissions.canUpdateAvance(user)) {
+      throw const ApiException(
+        'No tienes permiso para registrar avances en esta entrega.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'PATCH',
+      'rutas-multi/$rutaId',
+      body: {'estado': estado},
+    );
+    return RutaEntregaRecord.fromJson(response);
+  }
+
+  Future<List<EnvioResumen>> loadEnviosMovilList(
+    AuthUser user, {
+    required EnvioTipo tipo,
+    String? estado,
+    int page = 1,
+  }) async {
+    final allowed = tipo == EnvioTipo.agricola
+        ? EntregaPermissions.canViewEnviosAgricolas(user)
+        : EntregaPermissions.canViewEnviosDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para consultar este tipo de envíos.',
+        statusCode: 403,
+      );
+    }
+    final query = <String, String>{
+      'page': '$page',
+      if (estado != null && estado.trim().isNotEmpty) 'estado': estado.trim(),
+    };
+    final response = await _api.request(
+      'GET',
+      'envios/${tipo.value}',
+      queryParameters: query,
+    );
+    final rows = response is List
+        ? response
+        : response is Map<String, dynamic> && response['data'] is List
+        ? response['data'] as List
+        : const [];
+    final items = <EnvioResumen>[];
+    for (final row in rows) {
+      if (row is Map<String, dynamic>) {
+        final item = EnvioResumen.fromJson(row);
+        if (item.id > 0) items.add(item);
+      }
+    }
+    return items;
   }
 
   Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(
