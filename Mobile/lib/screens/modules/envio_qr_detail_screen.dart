@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
+import '../../models/pedido_models.dart';
 import '../../models/qr_envio_models.dart';
+import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
@@ -27,6 +29,7 @@ class EnvioQrDetailScreen extends StatefulWidget {
     required this.onRefreshPermissions,
     this.initialResolution,
     this.signatureExporter,
+    this.onRecepcionConfirmed,
   });
 
   final EnvioTipo tipo;
@@ -36,6 +39,7 @@ class EnvioQrDetailScreen extends StatefulWidget {
   final VoidCallback onRefreshPermissions;
   final QrResolucionResult? initialResolution;
   final Future<String?> Function()? signatureExporter;
+  final VoidCallback? onRecepcionConfirmed;
 
   @override
   State<EnvioQrDetailScreen> createState() => _EnvioQrDetailScreenState();
@@ -49,6 +53,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
 
   EnvioResumen? _envio;
   RecepcionEnvioComprobante? _comprobante;
+  List<PedidoRecord> _updatedPedidos = const [];
   bool _alreadyUsed = false;
   bool _loading = true;
   bool _submitting = false;
@@ -116,6 +121,40 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
     } catch (_) {
       // Si el comprobante aún no está disponible, se mantiene el detalle del envío.
     }
+  }
+
+  Future<void> _refreshRelatedPedidos(EnvioResumen envio) async {
+    if (envio.tipo == EnvioTipo.traslado) return;
+    final pedidoTipo = envio.tipo == EnvioTipo.agricola
+        ? PedidoTipo.agricola
+        : PedidoTipo.distribucion;
+    final canViewPedido = pedidoTipo == PedidoTipo.agricola
+        ? PedidoPermissions.canViewAgricola(widget.user)
+        : PedidoPermissions.canViewDistribucion(widget.user);
+    if (!canViewPedido) return;
+
+    final ids = envio.lineas
+        .map((l) => l.pedidoId)
+        .whereType<int>()
+        .where((id) => id > 0)
+        .toSet();
+    if (ids.isEmpty) return;
+
+    final loaded = <PedidoRecord>[];
+    for (final pedidoId in ids) {
+      try {
+        final pedido = await widget.service.loadPedidoMovilDetail(
+          widget.user,
+          tipo: pedidoTipo,
+          id: pedidoId,
+        );
+        loaded.add(pedido);
+      } catch (_) {
+        // Ignora pedidos no accesibles individualmente sin romper el comprobante.
+      }
+    }
+    if (!mounted) return;
+    setState(() => _updatedPedidos = loaded);
   }
 
   Future<void> _load() async {
@@ -229,11 +268,13 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
         lineas: lineasPayload,
       );
       if (!mounted) return;
+      widget.onRecepcionConfirmed?.call();
       setState(() {
         _submitting = false;
         _comprobante = comprobante;
         _notice = 'Recepción #${comprobante.id} registrada correctamente.';
       });
+      await _refreshRelatedPedidos(envio);
     } on ApiException catch (error) {
       if (!mounted) return;
       if (error.statusCode == 409) {
@@ -396,6 +437,15 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                   const SectionTitle('Comprobante de recepción'),
                   const SizedBox(height: 12),
                   _comprobanteCard(context, comprobante),
+                ],
+                if (_updatedPedidos.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const SectionTitle('Estado actualizado del pedido'),
+                  const SizedBox(height: 12),
+                  for (final pedido in _updatedPedidos) ...[
+                    _updatedPedidoCard(context, pedido),
+                    const SizedBox(height: 10),
+                  ],
                 ],
                 const SizedBox(height: 24),
                 const SectionTitle('Destinos y fechas'),
@@ -671,6 +721,55 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                   'Recibido: ${linea.formattedRecibida} (enviado: ${linea.formattedEnviada})',
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _updatedPedidoCard(BuildContext context, PedidoRecord pedido) {
+    return Container(
+      key: ValueKey('recepcion_envio.pedido_actualizado.${pedido.id}'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  pedido.numeroSolicitud,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              RecordStatusBadge(status: pedido.estadoLabel),
+            ],
+          ),
+          if (pedido.fechaRecepcion != null) ...[
+            const SizedBox(height: 8),
+            DetailField(
+              label: 'Fecha de recepción',
+              value: pedido.fechaRecepcion!,
+            ),
+          ],
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: ValueKey('recepcion_envio.ver_pedido.${pedido.id}'),
+              onPressed: () => Navigator.of(context).pushNamed(
+                '${AppModule.pedidos.route}/${pedido.tipo.value}/${pedido.id}',
+              ),
+              icon: const Icon(Icons.history_rounded),
+              label: const Text('Ver historial del pedido'),
+            ),
+          ),
         ],
       ),
     );

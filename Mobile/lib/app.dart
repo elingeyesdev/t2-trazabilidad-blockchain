@@ -329,6 +329,10 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 service: ModuleService(_api),
                 onRefreshPermissions: _auth.restoreSession,
                 initialResolution: initialResolution,
+                onRecepcionConfirmed: () {
+                  _pedidosUpdates.value++;
+                  _entregasUpdates.value++;
+                },
               ),
               requiresAuthentication: true,
             ),
