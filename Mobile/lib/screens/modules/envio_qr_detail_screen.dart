@@ -12,6 +12,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
+import '../../widgets/form_validation.dart';
 import '../../widgets/record_status_badge.dart';
 import 'module_access_denied.dart';
 
@@ -38,10 +39,37 @@ class EnvioQrDetailScreen extends StatefulWidget {
 }
 
 class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final Map<int, TextEditingController> _qtyControllers = {};
+  final Map<int, TextEditingController> _motivoControllers = {};
+
   EnvioResumen? _envio;
   bool _loading = true;
   String? _error;
   int? _errorStatus;
+
+  TextEditingController _qtyControllerFor(EnvioLinea linea) =>
+      _qtyControllers.putIfAbsent(linea.id, () {
+        final normalized = linea.cantidadEnviada.trim().replaceAll(',', '.');
+        final clean = normalized.contains('.')
+            ? normalized.replaceFirst(RegExp(r'\.?0+$'), '')
+            : normalized;
+        return TextEditingController(text: clean);
+      });
+
+  TextEditingController _motivoControllerFor(EnvioLinea linea) =>
+      _motivoControllers.putIfAbsent(linea.id, TextEditingController.new);
+
+  @override
+  void dispose() {
+    for (final c in _qtyControllers.values) {
+      c.dispose();
+    }
+    for (final c in _motivoControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -247,38 +275,56 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const SectionTitle('Productos del envío'),
+                SectionTitle(
+                  isRecepcionMode
+                      ? 'Cantidades recibidas'
+                      : 'Productos del envío',
+                ),
                 const SizedBox(height: 12),
-                for (final linea in envio.lineas) ...[
-                  Container(
-                    key: ValueKey('envio_qr.linea.${linea.id}'),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surface,
-                      borderRadius: BorderRadius.circular(AppTheme.radius),
-                      border: Border.all(color: AppTheme.ink, width: 2),
-                    ),
+                if (isRecepcionMode)
+                  Form(
+                    key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          linea.title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        DetailField(
-                          label: 'Cantidad enviada',
-                          value: linea.formattedEnviada,
-                        ),
-                        if (linea.pedido != null) ...[
-                          const Divider(height: 1),
-                          DetailField(label: 'Pedido', value: linea.pedido!),
+                        for (final linea in envio.lineas) ...[
+                          _editableLineCard(context, envio.tipo, linea),
+                          const SizedBox(height: 12),
                         ],
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                  )
+                else
+                  for (final linea in envio.lineas) ...[
+                    Container(
+                      key: ValueKey('envio_qr.linea.${linea.id}'),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surface,
+                        borderRadius: BorderRadius.circular(AppTheme.radius),
+                        border: Border.all(color: AppTheme.ink, width: 2),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            linea.title,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          DetailField(
+                            label: 'Cantidad enviada',
+                            value: linea.formattedEnviada,
+                          ),
+                          if (linea.pedido != null) ...[
+                            const Divider(height: 1),
+                            DetailField(label: 'Pedido', value: linea.pedido!),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                 if (envio.recepciones.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const SectionTitle('Recepciones registradas'),
@@ -313,6 +359,68 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _editableLineCard(
+    BuildContext context,
+    EnvioTipo tipo,
+    EnvioLinea linea,
+  ) {
+    final enviadaValue =
+        double.tryParse(linea.cantidadEnviada.trim().replaceAll(',', '.')) ?? 0;
+    final scrollPadding = formScrollPadding(context);
+
+    return Container(
+      key: ValueKey('envio_qr.linea.${linea.id}'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(linea.title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          DetailField(label: 'Cantidad enviada', value: linea.formattedEnviada),
+          if (linea.pedido != null) ...[
+            const Divider(height: 1),
+            DetailField(label: 'Pedido', value: linea.pedido!),
+          ],
+          const SizedBox(height: 12),
+          TextFormField(
+            key: ValueKey('recepcion_envio.cantidad.${linea.id}'),
+            controller: _qtyControllerFor(linea),
+            scrollPadding: scrollPadding,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Cantidad recibida',
+              suffixText: linea.unidad,
+              prefixIcon: const Icon(Icons.scale_outlined),
+            ),
+            validator: (value) => validateEnvioRecepcionQuantity(
+              value,
+              tipo: tipo,
+              enviada: enviadaValue,
+              unidad: linea.unidad,
+            ),
+          ),
+          if (tipo == EnvioTipo.traslado) ...[
+            const SizedBox(height: 10),
+            TextFormField(
+              key: ValueKey('recepcion_envio.motivo.${linea.id}'),
+              controller: _motivoControllerFor(linea),
+              scrollPadding: scrollPadding,
+              decoration: const InputDecoration(
+                labelText: 'Motivo de diferencia (si aplica)',
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

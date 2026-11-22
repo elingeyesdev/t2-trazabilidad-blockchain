@@ -140,4 +140,89 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Permite revisar e introducir las cantidades recibidas validando límites del trayecto',
+    (tester) async {
+      await storage.saveToken('1|recepcion-qty');
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async => jsonResponse({}, 404)),
+      );
+      addTearDown(api.close);
+
+      const jefePlanta = AuthUser(
+        id: 20,
+        name: 'Elena',
+        lastName: 'Vargas',
+        email: 'elena@example.test',
+        roles: ['jefe_planta'],
+        permissions: {'recepcion_planta.view', 'recepcion_planta.confirm'},
+      );
+
+      final resolution = QrResolucionResult.fromJson({
+        'data': {
+          'recepcion_id': 20,
+          'utilizado': false,
+          'puede_confirmar': true,
+          'envio': {
+            'id': 70,
+            'tipo': 'agricola',
+            'referencia': 'ENV-AGR-070',
+            'estado': 'en_transporte_planta',
+            'destinos': [
+              {'nombre': 'Planta Sur'},
+            ],
+            'lineas': [
+              {
+                'id': 501,
+                'pedido_id': 60,
+                'pedido': 'PED-060',
+                'producto': 'Papa Huaycha',
+                'cantidad_enviada': '100.000000',
+                'unidad': 'kg',
+              },
+            ],
+            'fechas': {},
+            'recepciones': [],
+          },
+        },
+      }, codigo: 'QR-AGR-70');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.agricola,
+            envioId: 70,
+            user: jefePlanta,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: resolution,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final field = find.byKey(const ValueKey('recepcion_envio.cantidad.501'));
+      expect(field, findsOneWidget);
+      expect(find.text('100'), findsOneWidget);
+
+      await tester.enterText(field, '120');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No puede superar la cantidad enviada (100 kg).'),
+        findsOneWidget,
+      );
+
+      await tester.enterText(field, '95.5');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No puede superar la cantidad enviada (100 kg).'),
+        findsNothing,
+      );
+      expect(find.text('95.5'), findsOneWidget);
+    },
+  );
 }
