@@ -195,4 +195,29 @@ class RegistroCuentaTest extends TestCase
             'rol_solicitado' => 'minorista',
         ]);
     }
+
+    public function test_registro_operarios_agricultor_y_planta_crea_solicitud_pendiente(): void
+    {
+        foreach (['agricultor', 'planta'] as $i => $rol) {
+            $email = $rol.'.operario@test.local';
+            $response = $this->post(route('register.post'), [
+                'nombre' => 'Carlos',
+                'apellido' => 'Rojas',
+                'email' => $email,
+                'telefono' => '+591 7333444'.$i,
+                'ci_nit' => '654321'.$i,
+                'rol_solicitado' => $rol,
+                'carta_motivacion' => str_repeat('Quiero trabajar como operario en el sistema AgroFusion. ', 2),
+                'password' => 'secret123',
+                'password_confirmation' => 'secret123',
+            ]);
+
+            $response->assertRedirect(route('register.enviado'));
+            $this->assertDatabaseHas('usuario', [
+                'email' => $email,
+                'estado_cuenta' => CuentaEstado::PENDIENTE,
+                'rol_solicitado' => $rol,
+            ]);
+        }
+    }
 }

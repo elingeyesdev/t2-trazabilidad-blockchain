@@ -120,7 +120,7 @@
 @section('content')
 <div class="form-header">
     <h2>Solicitar acceso</h2>
-    <p>Registro para jefes de producción agrícola, jefes de planta, transportistas o minoristas. Un administrador revisará tu solicitud.</p>
+    <p>Registro para jefes y operarios agrícolas o de planta, transportistas o minoristas. Un administrador revisará tu solicitud.</p>
 </div>
 
 @if($errors->any())
@@ -147,6 +147,12 @@
                     @elseif($rol === 'jefe_planta')
                         <i class="fas fa-industry"></i>
                         <span>Jefe Planta</span>
+                    @elseif($rol === 'agricultor')
+                        <i class="fas fa-seedling"></i>
+                        <span>Agricultor (Operario)</span>
+                    @elseif($rol === 'planta')
+                        <i class="fas fa-hard-hat"></i>
+                        <span>Planta (Operario)</span>
                     @elseif($rol === 'transportista')
                         <i class="fas fa-truck"></i>
                         <span>Transportista</span>
