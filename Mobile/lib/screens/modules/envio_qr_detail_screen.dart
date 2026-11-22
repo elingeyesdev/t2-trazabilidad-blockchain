@@ -135,6 +135,14 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
         _envio = result;
         _loading = false;
       });
+      final comprobanteId =
+          _comprobante?.id ??
+          (widget.initialResolution?.utilizado == true
+              ? widget.initialResolution?.recepcionId
+              : null);
+      if (comprobanteId != null && comprobanteId > 0) {
+        unawaited(_loadComprobante(comprobanteId));
+      }
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {

@@ -467,4 +467,182 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Los errores conservan cantidades y firma para reintentar y la confirmación coincide con la web',
+    (tester) async {
+      await storage.saveToken('1|recepcion-retry');
+      var postCalls = 0;
+
+      const jefePlanta = AuthUser(
+        id: 20,
+        name: 'Elena',
+        lastName: 'Vargas',
+        email: 'elena@example.test',
+        roles: ['jefe_planta'],
+        permissions: {'recepcion_planta.view', 'recepcion_planta.confirm'},
+      );
+
+      final resolution = QrResolucionResult.fromJson({
+        'data': {
+          'recepcion_id': 20,
+          'utilizado': false,
+          'puede_confirmar': true,
+          'envio': {
+            'id': 70,
+            'tipo': 'agricola',
+            'referencia': 'ENV-AGR-070',
+            'estado': 'en_transporte_planta',
+            'destinos': [
+              {'nombre': 'Planta Sur'},
+            ],
+            'lineas': [
+              {
+                'id': 501,
+                'pedido_id': 60,
+                'pedido': 'PED-060',
+                'producto': 'Papa Huaycha',
+                'cantidad_enviada': '100.000000',
+                'unidad': 'kg',
+              },
+            ],
+            'fechas': {},
+            'recepciones': [],
+          },
+        },
+      }, codigo: 'QR-AGR-70');
+
+      const comprobanteResponse = {
+        'data': {
+          'id': 20,
+          'firmante': {'id': 20, 'nombre': 'Elena Vargas'},
+          'fecha': '2026-11-22T01:10:00Z',
+          'lineas': [
+            {
+              'id': 501,
+              'producto': 'Papa Huaycha',
+              'cantidad_enviada': '100.000000',
+              'cantidad_recibida': '95.000000',
+              'unidad': 'kg',
+            },
+          ],
+        },
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/envios/agricola/70/recepcion' &&
+              request.method == 'POST') {
+            postCalls++;
+            if (postCalls == 1) {
+              throw http.ClientException('Sin conexión');
+            }
+            return jsonResponse(comprobanteResponse, 201);
+          }
+          if (request.url.path == '/api/envios/agricola/70' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': {
+                'id': 70,
+                'tipo': 'agricola',
+                'referencia': 'ENV-AGR-070',
+                'estado': 'recibido',
+                'destinos': [
+                  {'nombre': 'Planta Sur'},
+                ],
+                'lineas': [
+                  {
+                    'id': 501,
+                    'pedido_id': 60,
+                    'pedido': 'PED-060',
+                    'producto': 'Papa Huaycha',
+                    'cantidad_enviada': '100.000000',
+                    'unidad': 'kg',
+                  },
+                ],
+                'fechas': {},
+                'recepciones': [
+                  {'id': 20, 'fecha': '2026-11-22T01:10:00Z'},
+                ],
+              },
+            });
+          }
+          if (request.url.path == '/api/recepciones-envio/20' &&
+              request.method == 'GET') {
+            return jsonResponse(comprobanteResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: EnvioQrDetailScreen(
+            tipo: EnvioTipo.agricola,
+            envioId: 70,
+            user: jefePlanta,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            initialResolution: resolution,
+            signatureExporter: () async =>
+                'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('recepcion_envio.cantidad.501')),
+        '95',
+      );
+      final pad = find.byKey(const ValueKey('recepcion_envio.firma_pad'));
+      await tester.ensureVisible(pad);
+      await tester.pumpAndSettle();
+      await tester.drag(pad, const Offset(80, 30));
+      await tester.pumpAndSettle();
+
+      // Primer intento falla por conexión -> conserva 95 y la firma.
+      final submitBtn = find.byKey(const ValueKey('recepcion_envio.confirmar'));
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('recepcion_envio.submit_error')),
+        findsOneWidget,
+      );
+      expect(find.text('95'), findsOneWidget);
+      expect(find.text('Firma lista para confirmar'), findsOneWidget);
+
+      // Reintento exitoso -> muestra comprobante y coincide tras actualizar.
+      await tester.ensureVisible(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(submitBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirmar recepción'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(postCalls, 2);
+      expect(find.text('Recepción #20'), findsOneWidget);
+      expect(find.text('Elena Vargas'), findsOneWidget);
+      expect(find.text('Recibido: 95 kg (enviado: 100 kg)'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('envio_qr.actualizar')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completado'), findsOneWidget);
+      expect(find.text('Recepción #20'), findsWidgets);
+    },
+  );
 }
