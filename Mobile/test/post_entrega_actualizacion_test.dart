@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:agrofusion_mobile/config/api_config.dart';
 import 'package:agrofusion_mobile/models/auth_user.dart';
+import 'package:agrofusion_mobile/models/pedido_models.dart';
 import 'package:agrofusion_mobile/models/qr_envio_models.dart';
 import 'package:agrofusion_mobile/screens/modules/envio_qr_detail_screen.dart';
+import 'package:agrofusion_mobile/screens/modules/pedido_detail_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/module_service.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
@@ -405,6 +407,77 @@ void main() {
         find.descendant(
           of: compCard,
           matching: find.text('Disponible en el servidor'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Al volver al pedido tras confirmar la entrega se recupera su historial actualizado',
+    (tester) async {
+      await storage.saveToken('1|post-entrega-hist');
+      final updates = ValueNotifier<int>(0);
+      addTearDown(updates.dispose);
+      var delivered = false;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/pedidos-distribucion/120' &&
+              request.method == 'GET') {
+            if (!delivered) {
+              return jsonResponse({
+                'data': {
+                  ...(pedidoEntregadoResponse['data'] as Map<String, dynamic>),
+                  'estado': 'confirmado',
+                  'fecha_recepcion': null,
+                },
+              });
+            }
+            return jsonResponse(pedidoEntregadoResponse);
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: PedidoDetailScreen(
+            tipo: PedidoTipo.distribucion,
+            pedidoId: 120,
+            user: minoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+            updates: updates,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final historial = find.byKey(const ValueKey('pedido.historial'));
+      expect(
+        find.descendant(of: historial, matching: find.text('Confirmado')),
+        findsOneWidget,
+      );
+      expect(find.text('2026-11-22T01:15:00Z'), findsNothing);
+
+      // Se confirma la entrega y se notifica la actualización al volver al pedido.
+      delivered = true;
+      updates.value++;
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(of: historial, matching: find.text('Entregado')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: historial,
+          matching: find.text('2026-11-22T01:15:00Z'),
         ),
         findsOneWidget,
       );

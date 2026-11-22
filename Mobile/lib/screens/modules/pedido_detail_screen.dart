@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/api_exception.dart';
@@ -25,6 +26,7 @@ class PedidoDetailScreen extends StatefulWidget {
     required this.user,
     required this.service,
     required this.onRefreshPermissions,
+    this.updates,
   });
 
   final PedidoTipo tipo;
@@ -32,6 +34,7 @@ class PedidoDetailScreen extends StatefulWidget {
   final AuthUser user;
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
+  final ValueListenable<int>? updates;
 
   @override
   State<PedidoDetailScreen> createState() => _PedidoDetailScreenState();
@@ -50,12 +53,33 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
   @override
   void initState() {
     super.initState();
+    widget.updates?.addListener(_onExternalUpdate);
     if (_canView) {
       unawaited(_load());
     } else {
       _loading = false;
       _errorStatus = 403;
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant PedidoDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.updates != widget.updates) {
+      oldWidget.updates?.removeListener(_onExternalUpdate);
+      widget.updates?.addListener(_onExternalUpdate);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.updates?.removeListener(_onExternalUpdate);
+    super.dispose();
+  }
+
+  void _onExternalUpdate() {
+    if (!mounted || !_canView) return;
+    unawaited(_load());
   }
 
   Future<void> _load() async {
