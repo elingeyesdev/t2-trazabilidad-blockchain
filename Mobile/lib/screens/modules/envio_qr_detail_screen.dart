@@ -14,6 +14,7 @@ import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
 import '../../widgets/form_validation.dart';
 import '../../widgets/record_status_badge.dart';
+import '../../widgets/signature_pad.dart';
 import 'module_access_denied.dart';
 
 class EnvioQrDetailScreen extends StatefulWidget {
@@ -42,6 +43,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
   final _formKey = GlobalKey<FormState>();
   final Map<int, TextEditingController> _qtyControllers = {};
   final Map<int, TextEditingController> _motivoControllers = {};
+  final _signatureController = SignaturePadController();
 
   EnvioResumen? _envio;
   bool _loading = true;
@@ -62,6 +64,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
 
   @override
   void dispose() {
+    _signatureController.dispose();
     for (final c in _qtyControllers.values) {
       c.dispose();
     }
@@ -291,6 +294,10 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
                           _editableLineCard(context, envio.tipo, linea),
                           const SizedBox(height: 12),
                         ],
+                        const SizedBox(height: 12),
+                        const SectionTitle('Firma de conformidad'),
+                        const SizedBox(height: 12),
+                        SignaturePad(controller: _signatureController),
                       ],
                     ),
                   )

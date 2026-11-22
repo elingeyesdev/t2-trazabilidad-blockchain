@@ -225,4 +225,58 @@ void main() {
       expect(find.text('95.5'), findsOneWidget);
     },
   );
+
+  testWidgets('Permite añadir, revisar y limpiar la firma antes de confirmar', (
+    tester,
+  ) async {
+    await storage.saveToken('1|recepcion-firma-pad');
+    final api = ApiClient(
+      config: ApiConfig(baseUrl: 'https://example.test/api'),
+      sessionStorage: storage,
+      client: MockClient((request) async => jsonResponse({}, 404)),
+    );
+    addTearDown(api.close);
+
+    final resolution = QrResolucionResult.fromJson(
+      validQrResponse,
+      codigo: 'QR-SIG-45',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: EnvioQrDetailScreen(
+          tipo: EnvioTipo.distribucion,
+          envioId: 45,
+          user: minoristaUser,
+          service: ModuleService(api),
+          onRefreshPermissions: () {},
+          initialResolution: resolution,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Firma de conformidad'), findsOneWidget);
+    expect(find.text('Traza tu firma en el recuadro'), findsOneWidget);
+
+    final pad = find.byKey(const ValueKey('recepcion_envio.firma_pad'));
+    await tester.ensureVisible(pad);
+    await tester.pumpAndSettle();
+    await tester.drag(pad, const Offset(80, 30));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Firma lista para confirmar'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('recepcion_envio.limpiar_firma')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Traza tu firma en el recuadro'), findsOneWidget);
+
+    await tester.drag(pad, const Offset(60, 20));
+    await tester.pumpAndSettle();
+    expect(find.text('Firma lista para confirmar'), findsOneWidget);
+  });
 }
