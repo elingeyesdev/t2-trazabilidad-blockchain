@@ -210,4 +210,92 @@ void main() {
       expect(y2, lessThan(y3));
     },
   );
+
+  testWidgets(
+    'El transportista puede registrar los avances permitidos de su entrega',
+    (tester) async {
+      var currentEstado = 'planificada';
+      final sentEstados = <String>[];
+
+      Map<String, dynamic> buildRuta() => {
+        'rutamultientregaid': 18,
+        'nombre': 'Ruta Valle Alto #18',
+        'estado': currentEstado,
+        'fecha_salida': '2026-11-21T08:00:00Z',
+        'fecha_cierre': currentEstado == 'completada'
+            ? '2026-11-21T16:00:00Z'
+            : null,
+        'paradas': [
+          {
+            'rutaparadaid': 301,
+            'orden': 1,
+            'destino': 'Planta Procesadora Norte',
+            'estado': currentEstado == 'completada' ? 'entregada' : 'pendiente',
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(transportistaProfile);
+        }
+        if (request.url.path == '/api/asignaciones-multiples' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': [], 'current_page': 1, 'last_page': 1});
+        }
+        if (request.url.path == '/api/rutas-multi' && request.method == 'GET') {
+          return jsonResponse({
+            'data': [buildRuta()],
+            'current_page': 1,
+            'last_page': 1,
+          });
+        }
+        if (request.url.path == '/api/rutas-multi/18' &&
+            request.method == 'GET') {
+          return jsonResponse(buildRuta());
+        }
+        if (request.url.path == '/api/rutas-multi/18' &&
+            request.method == 'PATCH') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          currentEstado = body['estado'] as String;
+          sentEstados.add(currentEstado);
+          return jsonResponse(buildRuta());
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await tester.tap(find.text('Ver asignaciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mis envíos y entregas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ruta Valle Alto #18'));
+      await tester.pumpAndSettle();
+
+      // Planificada -> En ruta.
+      await tester.tap(find.byKey(const ValueKey('entrega.avanzar.en_ruta')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Iniciar ruta').last);
+      await tester.pumpAndSettle();
+
+      expect(sentEstados, ['en_ruta']);
+      expect(find.text('Avance registrado: En ruta.'), findsOneWidget);
+
+      // En ruta -> Completada.
+      await tester.tap(
+        find.byKey(const ValueKey('entrega.avanzar.completada')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Finalizar entrega').last,
+      );
+      await tester.pumpAndSettle();
+
+      expect(sentEstados, ['en_ruta', 'completada']);
+      expect(find.text('Avance registrado: Completada.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('entrega.avanzar.completada')),
+        findsNothing,
+      );
+    },
+  );
 }

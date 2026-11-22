@@ -38,8 +38,11 @@ class EntregaDetailScreen extends StatefulWidget {
 class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
   RutaEntregaRecord? _ruta;
   bool _loading = true;
+  bool _updating = false;
   String? _error;
   int? _errorStatus;
+  String? _updateError;
+  String? _notice;
 
   @override
   void initState() {
@@ -67,6 +70,7 @@ class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
       setState(() {
         _ruta = result;
         _loading = false;
+        _updateError = null;
       });
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -80,6 +84,61 @@ class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
       setState(() {
         _loading = false;
         _error = 'No se pudo consultar el detalle de la entrega.';
+      });
+    }
+  }
+
+  Future<void> _advanceTo(
+    RutaEntregaRecord ruta,
+    String nextEstado,
+    String actionLabel,
+  ) async {
+    if (_updating) return;
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.local_shipping_rounded,
+      title: '¿Confirmar avance de entrega?',
+      message: 'Se actualizará el estado oficial de la ruta en el servidor.',
+      details: [
+        'Ruta: ${ruta.nombre}',
+        'Estado actual: ${ruta.estadoLabel}',
+        'Acción: $actionLabel',
+      ],
+      cancelLabel: 'Cancelar',
+      confirmLabel: actionLabel,
+    );
+    if (!mounted || !confirmed) return;
+
+    setState(() {
+      _updating = true;
+      _updateError = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.service.updateRutaEntregaEstado(
+        widget.user,
+        rutaId: ruta.id,
+        estado: nextEstado,
+      );
+      if (!mounted) return;
+      widget.onEntregaUpdated?.call();
+      setState(() {
+        _ruta = updated;
+        _updating = false;
+        _notice = 'Avance registrado: ${updated.estadoLabel}.';
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _updating = false;
+        _updateError = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _updating = false;
+        _updateError =
+            'No se pudo confirmar el avance por un error de conexión. El estado no fue modificado.';
       });
     }
   }
@@ -186,6 +245,49 @@ class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
                     ],
                   ),
                 ),
+                if (_notice case final notice?) ...[
+                  const SizedBox(height: 16),
+                  AppNotice(tone: AppNoticeTone.success, message: notice),
+                ],
+                if (_updateError case final updateError?) ...[
+                  const SizedBox(height: 16),
+                  AppNotice(
+                    key: const ValueKey('entrega.update_error'),
+                    tone: AppNoticeTone.error,
+                    message: updateError,
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('entrega.recargar_tras_error'),
+                      onPressed: _loading || _updating ? null : _load,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Actualizar estado desde el servidor'),
+                    ),
+                  ),
+                ],
+                if (EntregaPermissions.canUpdateAvance(widget.user) &&
+                    ruta.nextAllowedAdvances.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  const SectionTitle('Avance de la entrega'),
+                  const SizedBox(height: 12),
+                  for (final (nextEstado, label) in ruta.nextAllowedAdvances)
+                    FilledButton.icon(
+                      key: ValueKey('entrega.avanzar.$nextEstado'),
+                      onPressed: _updating
+                          ? null
+                          : () => _advanceTo(ruta, nextEstado, label),
+                      icon: _updating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.play_arrow_rounded),
+                      label: Text(_updating ? 'Guardando avance...' : label),
+                    ),
+                ],
                 const SizedBox(height: 24),
                 const SectionTitle('Paradas en orden'),
                 const SizedBox(height: 12),
