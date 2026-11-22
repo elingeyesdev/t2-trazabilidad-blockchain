@@ -404,6 +404,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 service: ModuleService(_api),
                 onRefreshPermissions: _auth.restoreSession,
                 updates: _pedidosUpdates,
+                onPedidoUpdated: () => _pedidosUpdates.value++,
               ),
               requiresAuthentication: true,
               module: AppModule.pedidos,

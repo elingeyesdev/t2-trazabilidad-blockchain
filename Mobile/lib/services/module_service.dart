@@ -805,6 +805,37 @@ class ModuleService {
     return PedidoRecord.fromJson(response);
   }
 
+  Future<PedidoRecord> executePedidoTransicion(
+    AuthUser user, {
+    required PedidoTipo tipo,
+    required int pedidoId,
+    required String accion,
+    String? motivoRechazo,
+  }) async {
+    final allowed =
+        !user.roles.contains('admin') &&
+        (tipo == PedidoTipo.agricola
+            ? user.permissions.contains('pedidos.update')
+            : user.permissions.contains('pedidos_distribucion.update'));
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para decidir sobre este pedido.',
+        statusCode: 403,
+      );
+    }
+    final body = <String, dynamic>{
+      'accion': accion,
+      if (motivoRechazo != null && motivoRechazo.trim().isNotEmpty)
+        'motivo_rechazo': motivoRechazo.trim(),
+    };
+    final response = await _api.request(
+      'POST',
+      '${tipo.endpoint}/$pedidoId/transiciones',
+      body: body,
+    );
+    return PedidoRecord.fromJson(response);
+  }
+
   Future<QrResolucionResult> resolveEnvioQr(
     AuthUser user,
     String codigo,

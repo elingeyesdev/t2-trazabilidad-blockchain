@@ -27,6 +27,7 @@ class PedidoDetailScreen extends StatefulWidget {
     required this.service,
     required this.onRefreshPermissions,
     this.updates,
+    this.onPedidoUpdated,
   });
 
   final PedidoTipo tipo;
@@ -35,6 +36,7 @@ class PedidoDetailScreen extends StatefulWidget {
   final ModuleService service;
   final VoidCallback onRefreshPermissions;
   final ValueListenable<int>? updates;
+  final VoidCallback? onPedidoUpdated;
 
   @override
   State<PedidoDetailScreen> createState() => _PedidoDetailScreenState();
@@ -43,8 +45,11 @@ class PedidoDetailScreen extends StatefulWidget {
 class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
   PedidoRecord? _record;
   bool _loading = true;
+  bool _acting = false;
   String? _error;
   int? _errorStatus;
+  String? _actionError;
+  String? _notice;
 
   bool get _canView => widget.tipo == PedidoTipo.agricola
       ? PedidoPermissions.canViewAgricola(widget.user)
@@ -98,6 +103,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
       setState(() {
         _record = result;
         _loading = false;
+        _actionError = null;
       });
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -111,6 +117,73 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
       setState(() {
         _loading = false;
         _error = 'No se pudo consultar el detalle del pedido.';
+      });
+    }
+  }
+
+  Future<void> _executeAction(
+    PedidoRecord record,
+    String accion, {
+    String? motivoRechazo,
+  }) async {
+    if (_acting) return;
+    if (accion != 'rechazar') {
+      final label = pedidoAccionLabel(accion);
+      final confirmed = await confirmImportantAction(
+        context,
+        icon: Icons.check_circle_outline_rounded,
+        title: '¿$label?',
+        message: 'Se registrará tu decisión oficial sobre este pedido.',
+        details: [
+          'Pedido: ${record.numeroSolicitud}',
+          'Destino: ${record.destino.label}',
+          'Estado actual: ${record.estadoLabel}',
+        ],
+        cancelLabel: 'Cancelar',
+        confirmLabel: label,
+      );
+      if (!mounted || !confirmed) return;
+    }
+
+    setState(() {
+      _acting = true;
+      _actionError = null;
+      _notice = null;
+    });
+    try {
+      final updated = await widget.service.executePedidoTransicion(
+        widget.user,
+        tipo: record.tipo,
+        pedidoId: record.id,
+        accion: accion,
+        motivoRechazo: motivoRechazo,
+      );
+      if (!mounted) return;
+      widget.onPedidoUpdated?.call();
+      setState(() {
+        _record = updated;
+        _acting = false;
+        _notice = 'Decisión registrada: estado ${updated.estadoLabel}.';
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      final motivoErr = error.validationErrors['motivo_rechazo'];
+      final detallesErr = error.validationErrors['detalles'];
+      final message = (motivoErr != null && motivoErr.isNotEmpty)
+          ? motivoErr.join('\n')
+          : (detallesErr != null && detallesErr.isNotEmpty)
+          ? detallesErr.join('\n')
+          : error.message;
+      setState(() {
+        _acting = false;
+        _actionError = message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _acting = false;
+        _actionError =
+            'No se pudo registrar la decisión por un error de conexión.';
       });
     }
   }
@@ -227,6 +300,28 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                     ],
                   ),
                 ),
+                if (_notice case final notice?) ...[
+                  const SizedBox(height: 16),
+                  AppNotice(tone: AppNoticeTone.success, message: notice),
+                ],
+                if (_actionError case final actionError?) ...[
+                  const SizedBox(height: 16),
+                  AppNotice(
+                    key: const ValueKey('pedido.accion_error'),
+                    tone: AppNoticeTone.error,
+                    message: actionError,
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('pedido.recargar_tras_error'),
+                      onPressed: _loading || _acting ? null : _load,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Actualizar estado del pedido'),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 SectionTitle('Destino y resumen', color: look.tone),
                 const SizedBox(height: 12),
@@ -412,18 +507,24 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
         runSpacing: 8,
         children: [
           for (final accion in acciones)
-            Chip(
-              key: ValueKey('pedido.accion.$accion'),
-              backgroundColor: AppTheme.maize,
-              side: const BorderSide(color: AppTheme.ink, width: 1.5),
-              label: Text(
-                pedidoAccionLabel(accion),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.ink,
-                ),
+            if (accion == 'rechazar')
+              OutlinedButton.icon(
+                key: ValueKey('pedido.accion.$accion'),
+                onPressed: _acting
+                    ? null
+                    : () => _executeAction(record, accion),
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: Text(pedidoAccionLabel(accion)),
+              )
+            else
+              FilledButton.icon(
+                key: ValueKey('pedido.accion.$accion'),
+                onPressed: _acting
+                    ? null
+                    : () => _executeAction(record, accion),
+                icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                label: Text(pedidoAccionLabel(accion)),
               ),
-            ),
         ],
       ),
     );
