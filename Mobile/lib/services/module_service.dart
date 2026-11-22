@@ -6,6 +6,7 @@ import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
 import '../models/cosecha_models.dart';
+import '../models/entrega_models.dart';
 import '../models/inventario_models.dart';
 import '../models/lote_models.dart';
 import '../models/module_page.dart';
@@ -843,6 +844,96 @@ class ModuleService {
         ? response
         : const <String, dynamic>{};
     return EnvioResumen.fromJson(root);
+  }
+
+  Future<RutasEntregaPage> loadRutasEntrega(
+    AuthUser user, {
+    int page = 1,
+  }) async {
+    if (!EntregaPermissions.canViewRutas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar las rutas de entrega.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'rutas-multi',
+      queryParameters: {'page': '$page'},
+    );
+    return RutasEntregaPage.fromJson(response);
+  }
+
+  Future<RutaEntregaRecord> loadRutaEntregaDetail(
+    AuthUser user,
+    int rutaId,
+  ) async {
+    if (!EntregaPermissions.canViewRutas(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta ruta de entrega.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'rutas-multi/$rutaId');
+    return RutaEntregaRecord.fromJson(response);
+  }
+
+  Future<RutaEntregaRecord> updateRutaEntregaEstado(
+    AuthUser user, {
+    required int rutaId,
+    required String estado,
+  }) async {
+    if (!EntregaPermissions.canUpdateAvance(user)) {
+      throw const ApiException(
+        'No tienes permiso para registrar avances en esta entrega.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'PATCH',
+      'rutas-multi/$rutaId',
+      body: {'estado': estado},
+    );
+    return RutaEntregaRecord.fromJson(response);
+  }
+
+  Future<List<EnvioResumen>> loadEnviosMovilList(
+    AuthUser user, {
+    required EnvioTipo tipo,
+    String? estado,
+    int page = 1,
+  }) async {
+    final allowed = tipo == EnvioTipo.agricola
+        ? EntregaPermissions.canViewEnviosAgricolas(user)
+        : EntregaPermissions.canViewEnviosDistribucion(user);
+    if (!allowed) {
+      throw const ApiException(
+        'No tienes permiso para consultar este tipo de envíos.',
+        statusCode: 403,
+      );
+    }
+    final query = <String, String>{
+      'page': '$page',
+      if (estado != null && estado.trim().isNotEmpty) 'estado': estado.trim(),
+    };
+    final response = await _api.request(
+      'GET',
+      'envios/${tipo.value}',
+      queryParameters: query,
+    );
+    final rows = response is List
+        ? response
+        : response is Map<String, dynamic> && response['data'] is List
+        ? response['data'] as List
+        : const [];
+    final items = <EnvioResumen>[];
+    for (final row in rows) {
+      if (row is Map<String, dynamic>) {
+        final item = EnvioResumen.fromJson(row);
+        if (item.id > 0) items.add(item);
+      }
+    }
+    return items;
   }
 
   Future<List<AlmacenFiltroOption>> loadAuthorizedAlmacenes(

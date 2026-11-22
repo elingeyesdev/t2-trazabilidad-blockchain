@@ -19,6 +19,7 @@ import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
 import 'screens/modules/almacen_detail_screen.dart';
 import 'screens/modules/cosecha_form_screen.dart';
+import 'screens/modules/entregas_screen.dart';
 import 'screens/modules/envio_qr_detail_screen.dart';
 import 'screens/modules/inventario_alertas_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
@@ -83,6 +84,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _plantaUpdates = ValueNotifier(0);
   final ValueNotifier<int> _recepcionUpdates = ValueNotifier(0);
   final ValueNotifier<int> _pedidosUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _entregasUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -107,6 +109,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _plantaUpdates.dispose();
     _recepcionUpdates.dispose();
     _pedidosUpdates.dispose();
+    _entregasUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -263,6 +266,21 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'entregas']) {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => EntregasScreen(
+                key: ValueKey(_auth.user),
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                updates: _entregasUpdates,
+              ),
+              requiresAuthentication: true,
+            ),
+          );
         }
         if (uri.pathSegments case [
           'modules',

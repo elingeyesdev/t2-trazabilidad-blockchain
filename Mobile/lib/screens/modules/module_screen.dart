@@ -5,6 +5,7 @@ import '../../models/actividad_models.dart';
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/cosecha_models.dart';
+import '../../models/entrega_models.dart';
 import '../../models/inventario_models.dart';
 import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
@@ -84,6 +85,11 @@ class _ModuleScreenState extends State<ModuleScreen> {
   bool get _canOpenPedidosGestion =>
       widget.module == AppModule.pedidos &&
       PedidoPermissions.canViewAny(widget.user);
+
+  bool get _canOpenEntregas =>
+      (widget.module == AppModule.rutas ||
+          widget.module == AppModule.asignaciones) &&
+      EntregaPermissions.canViewAny(widget.user);
 
   @override
   void initState() {
@@ -307,7 +313,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         _canAssignActividad ||
                         _canCreateCosecha ||
                         _canViewInventarioAlertas ||
-                        _canOpenPedidosGestion) &&
+                        _canOpenPedidosGestion ||
+                        _canOpenEntregas) &&
                     !loading &&
                     !snapshot.hasError
                 ? FloatingActionButton.extended(
@@ -328,9 +335,15 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                           ? () => Navigator.of(context).pushNamed(
                                               '${AppModule.almacenes.route}/alertas',
                                             )
-                                          : () => Navigator.of(context).pushNamed(
-                                              '${AppModule.pedidos.route}/gestion',
-                                            )))),
+                                          : (_canOpenPedidosGestion
+                                                ? () => Navigator.of(context)
+                                                      .pushNamed(
+                                                        '${AppModule.pedidos.route}/gestion',
+                                                      )
+                                                : () => Navigator.of(context)
+                                                      .pushNamed(
+                                                        '/modules/entregas',
+                                                      ))))),
                     icon: Icon(
                       _canCreateLote
                           ? Icons.add_rounded
@@ -341,7 +354,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                       : (_canViewInventarioAlertas
                                             ? Icons
                                                   .notifications_active_outlined
-                                            : Icons.receipt_long_rounded))),
+                                            : (_canOpenPedidosGestion
+                                                  ? Icons.receipt_long_rounded
+                                                  : Icons
+                                                        .local_shipping_outlined)))),
                     ),
                     label: Text(
                       _canCreateLote
@@ -352,7 +368,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
                                       ? 'Registrar cosecha'
                                       : (_canViewInventarioAlertas
                                             ? 'Ver alertas'
-                                            : 'Solicitudes y pedidos'))),
+                                            : (_canOpenPedidosGestion
+                                                  ? 'Solicitudes y pedidos'
+                                                  : 'Mis envíos y entregas')))),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
