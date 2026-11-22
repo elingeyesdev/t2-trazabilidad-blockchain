@@ -415,4 +415,102 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Permite consultar si la incidencia está pendiente o resuelta y la explicación de su solución',
+    (tester) async {
+      await storage.saveToken('1|incidente-view');
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/pedidos-distribucion/120' &&
+              request.method == 'GET') {
+            return jsonResponse({'data': pedidoPendiente});
+          }
+          if (request.url.path == '/api/incidentes' &&
+              request.method == 'GET') {
+            expect(
+              request.url.queryParameters['afectado_tipo'],
+              'pedido_distribucion',
+            );
+            expect(request.url.queryParameters['afectado_id'], '120');
+            return jsonResponse({
+              'data': [
+                {
+                  'incidenteenvioid': 77,
+                  'tipo': 'Demora en transporte',
+                  'descripcion': 'Tráfico en carretera principal.',
+                  'estado': 'abierto',
+                  'seguimiento': 'Pendiente de resolución',
+                  'responsable_nombre': 'Diego Rojas',
+                  'nota_resolucion': null,
+                  'fecha_resolucion': null,
+                },
+                {
+                  'incidenteenvioid': 78,
+                  'tipo': 'Empaque dañado',
+                  'descripcion': 'Dos cajas golpeadas.',
+                  'estado': 'resuelto',
+                  'seguimiento': 'Resuelta',
+                  'responsable_nombre': 'Diego Rojas',
+                  'nota_resolucion':
+                      'Se repusieron las dos cajas dañadas en el siguiente despacho.',
+                  'resuelto_por': {'usuarioid': 30, 'nombre': 'Diego Rojas'},
+                  'fecha_resolucion': '2026-11-22T02:00:00Z',
+                },
+              ],
+              'meta': {'current_page': 1, 'last_page': 1},
+            });
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: PedidoDetailScreen(
+            tipo: PedidoTipo.distribucion,
+            pedidoId: 120,
+            user: mayoristaUser,
+            service: ModuleService(api),
+            onRefreshPermissions: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Incidencias vinculadas'), findsOneWidget);
+      final inc77 = find.byKey(const ValueKey('incidente.item.77'));
+      expect(
+        find.descendant(
+          of: inc77,
+          matching: find.text('Pendiente de resolución'),
+        ),
+        findsOneWidget,
+      );
+
+      final inc78 = find.byKey(const ValueKey('incidente.item.78'));
+      expect(
+        find.descendant(of: inc78, matching: find.text('Resuelta')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: inc78,
+          matching: find.text(
+            'Se repusieron las dos cajas dañadas en el siguiente despacho.',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: inc78, matching: find.text('2026-11-22T02:00:00Z')),
+        findsOneWidget,
+      );
+    },
+  );
 }

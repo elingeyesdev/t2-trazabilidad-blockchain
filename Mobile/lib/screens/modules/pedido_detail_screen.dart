@@ -45,6 +45,7 @@ class PedidoDetailScreen extends StatefulWidget {
 
 class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
   PedidoRecord? _record;
+  List<IncidenteRecord> _incidentes = const [];
   bool _loading = true;
   bool _acting = false;
   String? _error;
@@ -108,6 +109,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
         _actionError = null;
         _actionErrorStatus = null;
       });
+      unawaited(_loadIncidentes());
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -128,6 +130,21 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
       ? 'pedido_agricola'
       : 'pedido_distribucion';
 
+  Future<void> _loadIncidentes() async {
+    if (!IncidentePermissions.canView(widget.user)) return;
+    try {
+      final page = await widget.service.loadIncidentes(
+        widget.user,
+        afectadoTipo: _afectadoTipo,
+        afectadoId: widget.pedidoId,
+      );
+      if (!mounted) return;
+      setState(() => _incidentes = page.items);
+    } catch (_) {
+      // Mantiene el detalle del pedido aunque no haya incidencias disponibles.
+    }
+  }
+
   Future<void> _reportarIncidencia(PedidoRecord record) async {
     final created = await Navigator.of(context).pushNamed<IncidenteRecord?>(
       '/modules/incidentes/nuevo',
@@ -141,6 +158,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
     setState(() {
       _notice = 'Incidencia #${created.id} reportada correctamente.';
     });
+    await _loadIncidentes();
   }
 
   Future<void> _promptReject(PedidoRecord record) async {
@@ -429,6 +447,22 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                     ),
                   ),
                 ],
+                if (IncidentePermissions.canView(widget.user) &&
+                    _incidentes.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  SectionTitle('Incidencias vinculadas', color: look.tone),
+                  const SizedBox(height: 12),
+                  Column(
+                    key: const ValueKey('pedido.incidencias'),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final inc in _incidentes) ...[
+                        _incidenteCard(context, inc),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 24),
                 SectionTitle('Productos solicitados', color: look.tone),
                 const SizedBox(height: 12),
@@ -585,6 +619,63 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                 icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: Text(pedidoAccionLabel(accion)),
               ),
+        ],
+      ),
+    );
+  }
+
+  Widget _incidenteCard(BuildContext context, IncidenteRecord inc) {
+    return Container(
+      key: ValueKey('incidente.item.${inc.id}'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: AppTheme.ink, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  inc.tipo,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              RecordStatusBadge(status: inc.seguimiento),
+            ],
+          ),
+          const SizedBox(height: 8),
+          DetailField(label: 'Descripción', value: inc.descripcion),
+          if (inc.responsableNombre != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Responsable de atención',
+              value: inc.responsableNombre!,
+            ),
+          ],
+          if (inc.notaResolucion != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Explicación de la solución',
+              value: inc.notaResolucion!,
+            ),
+          ],
+          if (inc.resueltoPorNombre != null) ...[
+            const Divider(height: 1),
+            DetailField(label: 'Resuelto por', value: inc.resueltoPorNombre!),
+          ],
+          if (inc.fechaResolucion != null) ...[
+            const Divider(height: 1),
+            DetailField(
+              label: 'Fecha de resolución',
+              value: inc.fechaResolucion!,
+            ),
+          ],
         ],
       ),
     );
