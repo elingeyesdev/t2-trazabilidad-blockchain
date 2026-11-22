@@ -34,6 +34,7 @@ class ModuleScreen extends StatefulWidget {
     this.loteUpdates,
     this.actividadUpdates,
     this.cosechaUpdates,
+    this.usuarioUpdates,
   });
 
   final AppModule module;
@@ -43,6 +44,7 @@ class ModuleScreen extends StatefulWidget {
   final ValueListenable<int>? loteUpdates;
   final ValueListenable<int>? actividadUpdates;
   final ValueListenable<int>? cosechaUpdates;
+  final ValueListenable<int>? usuarioUpdates;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
@@ -65,6 +67,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
       widget.module == AppModule.actividades ||
       widget.module == AppModule.producciones ||
       widget.module == AppModule.almacenes;
+
+  bool get _supportsDetail =>
+      _supportsSearch || widget.module == AppModule.usuarios;
 
   bool get _canCreateLote =>
       widget.module == AppModule.lotes &&
@@ -96,6 +101,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     widget.loteUpdates?.addListener(_onLoteUpdated);
     widget.actividadUpdates?.addListener(_onActividadUpdated);
     widget.cosechaUpdates?.addListener(_onCosechaUpdated);
+    widget.usuarioUpdates?.addListener(_onUsuarioUpdated);
   }
 
   @override
@@ -113,6 +119,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
       oldWidget.cosechaUpdates?.removeListener(_onCosechaUpdated);
       widget.cosechaUpdates?.addListener(_onCosechaUpdated);
     }
+    if (oldWidget.usuarioUpdates != widget.usuarioUpdates) {
+      oldWidget.usuarioUpdates?.removeListener(_onUsuarioUpdated);
+      widget.usuarioUpdates?.addListener(_onUsuarioUpdated);
+    }
   }
 
   @override
@@ -120,8 +130,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
     widget.loteUpdates?.removeListener(_onLoteUpdated);
     widget.actividadUpdates?.removeListener(_onActividadUpdated);
     widget.cosechaUpdates?.removeListener(_onCosechaUpdated);
+    widget.usuarioUpdates?.removeListener(_onUsuarioUpdated);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onUsuarioUpdated() {
+    if (!mounted || widget.module != AppModule.usuarios) return;
+    _load(_page);
   }
 
   void _onLoteUpdated() {
@@ -645,7 +661,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: PressableCard(
-        onTap: _supportsSearch ? () => _openRecord(record) : null,
+        onTap: _supportsDetail ? () => _openRecord(record) : null,
         padding: EdgeInsets.zero,
         borderColor: AppTheme.border,
         child: Column(
@@ -678,7 +694,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
                 ],
               ),
             ),
-            if (_supportsSearch)
+            if (_supportsDetail)
               Container(
                 padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
                 decoration: BoxDecoration(

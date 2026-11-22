@@ -261,8 +261,9 @@ class GestionUsuariosController extends Controller
     {
         $this->authorizeAprobar($usuario);
 
-        $rolNombre = $usuario->rol_solicitado;
-        if (! $rolNombre || ! in_array($rolNombre, CuentaEstado::rolesRegistroPublico(), true)) {
+        $rolNombre = $usuario->rol_solicitado ?: $usuario->role;
+        $rolesPermitidos = array_merge(CuentaEstado::rolesRegistroPublico(), ['agricultor']);
+        if (! $rolNombre || ! in_array($rolNombre, $rolesPermitidos, true)) {
             return back()->withErrors(['rol' => 'La solicitud no tiene un rol válido.']);
         }
 
@@ -279,11 +280,14 @@ class GestionUsuariosController extends Controller
         Role::firstOrCreate(['name' => $rolNombre, 'guard_name' => 'web']);
         PermissionMatrixSync::syncRole($rolNombre);
 
-        $usernameService = app(UsuarioUsernameService::class);
-        $nombreusuario = $usernameService->generarDesdeNombreApellido(
-            (string) $usuario->nombre,
-            (string) $usuario->apellido
-        );
+        $nombreusuario = trim((string) ($usuario->nombreusuario ?? ''));
+        if ($nombreusuario === '') {
+            $usernameService = app(UsuarioUsernameService::class);
+            $nombreusuario = $usernameService->generarDesdeNombreApellido(
+                (string) $usuario->nombre,
+                (string) $usuario->apellido
+            );
+        }
 
         $usuario->update([
             'estado_cuenta' => CuentaEstado::APROBADO,

@@ -14,6 +14,7 @@ import '../models/module_page.dart';
 import '../models/pedido_models.dart';
 import '../models/planta_models.dart';
 import '../models/qr_envio_models.dart';
+import '../models/usuario_admin_models.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
 
@@ -887,6 +888,53 @@ class ModuleService {
     };
     final response = await _api.request('POST', 'incidentes', body: body);
     return IncidenteRecord.fromJson(response);
+  }
+
+  Future<UsuarioAdminRecord> loadUsuarioAdminDetail(
+    AuthUser user,
+    int usuarioId,
+  ) async {
+    if (!user.permissions.contains('usuarios.admin')) {
+      throw const ApiException(
+        'No tienes permiso para consultar el detalle de usuarios.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'usuarios/$usuarioId');
+    return UsuarioAdminRecord.fromJson(response);
+  }
+
+  Future<UsuarioAdminRecord> aprobarUsuarioAdmin(
+    AuthUser user,
+    int usuarioId, {
+    String? ambitoFlota,
+  }) async {
+    if (!user.permissions.contains('usuarios.admin')) {
+      throw const ApiException(
+        'No tienes permiso para aprobar solicitudes de usuario.',
+        statusCode: 403,
+      );
+    }
+    final body = <String, dynamic>{
+      if (ambitoFlota != null && ambitoFlota.isNotEmpty)
+        'ambito_flota': ambitoFlota,
+    };
+    final response = await _api.request(
+      'POST',
+      'usuarios/$usuarioId/aprobar',
+      body: body,
+    );
+    return UsuarioAdminRecord.fromJson(response);
+  }
+
+  Future<void> rechazarUsuarioAdmin(AuthUser user, int usuarioId) async {
+    if (!user.permissions.contains('usuarios.admin')) {
+      throw const ApiException(
+        'No tienes permiso para rechazar solicitudes de usuario.',
+        statusCode: 403,
+      );
+    }
+    await _api.request('POST', 'usuarios/$usuarioId/rechazar');
   }
 
   Future<QrResolucionResult> resolveEnvioQr(

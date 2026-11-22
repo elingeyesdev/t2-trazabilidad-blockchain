@@ -44,6 +44,7 @@ class AuthController extends Controller
         $usuario->informacionadicional = $request->input('informacionadicional');
         $usuario->activo = true;
         $usuario->role = 'agricultor';
+        $usuario->rol_solicitado = 'agricultor';
         // Igual que el registro web: la cuenta queda pendiente hasta que un administrador la apruebe.
         $usuario->estado_cuenta = CuentaEstado::PENDIENTE;
 

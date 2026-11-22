@@ -39,6 +39,7 @@ import 'screens/modules/planta_recepciones_screen.dart';
 import 'screens/modules/planta_tarea_detail_screen.dart';
 import 'screens/modules/planta_tareas_screen.dart';
 import 'screens/modules/qr_scanner_screen.dart';
+import 'screens/modules/usuario_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
 import 'services/api_health_service.dart';
@@ -88,6 +89,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _recepcionUpdates = ValueNotifier(0);
   final ValueNotifier<int> _pedidosUpdates = ValueNotifier(0);
   final ValueNotifier<int> _entregasUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _usuarioUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -113,6 +115,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _recepcionUpdates.dispose();
     _pedidosUpdates.dispose();
     _entregasUpdates.dispose();
+    _usuarioUpdates.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -256,6 +259,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     cosechaUpdates: module == AppModule.producciones
                         ? _cosechaUpdates
                         : null,
+                    usuarioUpdates: module == AppModule.usuarios
+                        ? _usuarioUpdates
+                        : null,
                   ),
             requiresAuthentication: true,
             module: module,
@@ -269,6 +275,25 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['modules', 'usuarios', final rawId]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => UsuarioDetailScreen(
+                key: ValueKey(_auth.user),
+                usuarioId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onUsuarioUpdated: () => _usuarioUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.usuarios,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'incidentes', 'nuevo']) {
           final args = settings.arguments;

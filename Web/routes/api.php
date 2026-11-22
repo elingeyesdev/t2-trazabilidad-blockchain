@@ -116,6 +116,10 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     // Solo administración de usuarios (usuarios.admin): la API no acota por jefe/empleado.
     $recursoProtegido('roles', RolController::class, 'usuarios', 'admin');
     $recursoProtegido('usuarios', UsuarioController::class, 'usuarios', 'admin');
+    Route::post('usuarios/{usuario}/aprobar', [UsuarioController::class, 'aprobar'])
+        ->whereNumber('usuario')->middleware(['auth:sanctum', 'action.permission:usuarios,admin']);
+    Route::post('usuarios/{usuario}/rechazar', [UsuarioController::class, 'rechazar'])
+        ->whereNumber('usuario')->middleware(['auth:sanctum', 'action.permission:usuarios,admin']);
     $recursoProtegido('usuario-roles', UsuarioRolController::class, 'usuarios', 'admin');
 
     // ========================================================
