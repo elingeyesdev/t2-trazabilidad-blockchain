@@ -205,6 +205,123 @@ class QrResolucionResult {
   final EnvioResumen envio;
 }
 
+class RecepcionEnvioComprobanteLinea {
+  const RecepcionEnvioComprobanteLinea({
+    required this.id,
+    required this.producto,
+    required this.cantidadEnviada,
+    required this.cantidadRecibida,
+    required this.unidad,
+    this.motivo,
+  });
+
+  factory RecepcionEnvioComprobanteLinea.fromJson(Map<String, dynamic> map) =>
+      RecepcionEnvioComprobanteLinea(
+        id: _asInt(map['id']) ?? 0,
+        producto: _asText(map['producto']) ?? 'Producto',
+        cantidadEnviada: _asText(map['cantidad_enviada']) ?? '0',
+        cantidadRecibida: _asText(map['cantidad_recibida']) ?? '0',
+        unidad: _asText(map['unidad']) ?? 'unidades',
+        motivo: _asText(map['motivo']),
+      );
+
+  final int id;
+  final String producto;
+  final String cantidadEnviada;
+  final String cantidadRecibida;
+  final String unidad;
+  final String? motivo;
+
+  String get formattedEnviada =>
+      '${_formatDecimalText(cantidadEnviada)} $unidad';
+  String get formattedRecibida =>
+      '${_formatDecimalText(cantidadRecibida)} $unidad';
+}
+
+class RecepcionEnvioComprobante {
+  const RecepcionEnvioComprobante({
+    required this.id,
+    this.firmanteNombre,
+    this.fecha,
+    this.firmaUrl,
+    this.comprobanteUrl,
+    this.lineas = const [],
+  });
+
+  factory RecepcionEnvioComprobante.fromJson(Object? json) {
+    final root =
+        json is Map<String, dynamic> && json['data'] is Map<String, dynamic>
+        ? json['data'] as Map<String, dynamic>
+        : json is Map<String, dynamic>
+        ? json
+        : const <String, dynamic>{};
+    final firmante = root['firmante'];
+    String? firmanteNombre;
+    if (firmante is Map<String, dynamic>) {
+      firmanteNombre = _asText(firmante['nombre']);
+    } else {
+      firmanteNombre = _asText(firmante);
+    }
+    final rawLineas = root['lineas'];
+    final lineas = <RecepcionEnvioComprobanteLinea>[];
+    if (rawLineas is List) {
+      for (final entry in rawLineas) {
+        if (entry is Map<String, dynamic>) {
+          lineas.add(RecepcionEnvioComprobanteLinea.fromJson(entry));
+        }
+      }
+    }
+    return RecepcionEnvioComprobante(
+      id: _asInt(root['id']) ?? 0,
+      firmanteNombre: firmanteNombre,
+      fecha: _asText(root['fecha']),
+      firmaUrl: _asText(root['firma_url']),
+      comprobanteUrl: _asText(root['comprobante_url']),
+      lineas: lineas,
+    );
+  }
+
+  final int id;
+  final String? firmanteNombre;
+  final String? fecha;
+  final String? firmaUrl;
+  final String? comprobanteUrl;
+  final List<RecepcionEnvioComprobanteLinea> lineas;
+}
+
+String? validateEnvioRecepcionQuantity(
+  String? raw, {
+  required EnvioTipo tipo,
+  required double enviada,
+  required String unidad,
+}) {
+  final normalized = (raw ?? '').trim().replaceAll(',', '.');
+  if (normalized.isEmpty) {
+    return 'Indica la cantidad recibida ($unidad).';
+  }
+  final maxDecimals = tipo == EnvioTipo.traslado ? 4 : 6;
+  final pattern = RegExp(
+    '^(?:0|[1-9][0-9]{0,11})(?:\\.[0-9]{1,$maxDecimals})?\$',
+  );
+  if (!pattern.hasMatch(normalized)) {
+    return 'Indica un número válido con hasta $maxDecimals decimales.';
+  }
+  final parsed = double.tryParse(normalized);
+  if (parsed == null) return 'Cantidad inválida.';
+  if (tipo == EnvioTipo.traslado) {
+    if (parsed < 0) return 'La cantidad recibida no puede ser negativa.';
+  } else if (parsed <= 0) {
+    return 'La cantidad recibida debe ser mayor que cero.';
+  }
+  if (parsed > enviada + 1e-9) {
+    return 'No puede superar la cantidad enviada (${_formatDecimalText(enviada.toStringAsFixed(6))} $unidad).';
+  }
+  if (tipo == EnvioTipo.distribucion && (parsed - enviada).abs() > 1e-6) {
+    return 'La recepción de distribución debe coincidir con la cantidad enviada (${_formatDecimalText(enviada.toStringAsFixed(6))} $unidad).';
+  }
+  return null;
+}
+
 String _formatDecimalText(String raw) {
   final trimmed = raw.trim().replaceAll(',', '.');
   if (!RegExp(r'^-?[0-9]+(?:\.[0-9]+)?$').hasMatch(trimmed)) return trimmed;

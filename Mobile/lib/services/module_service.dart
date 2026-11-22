@@ -846,6 +846,54 @@ class ModuleService {
     return EnvioResumen.fromJson(root);
   }
 
+  Future<RecepcionEnvioComprobante> confirmarRecepcionEnvio(
+    AuthUser user, {
+    required EnvioTipo tipo,
+    required int envioId,
+    required String codigo,
+    required String imagenFirma,
+    required List<Map<String, dynamic>> lineas,
+  }) async {
+    final canConfirm =
+        !user.roles.contains('admin') &&
+        (tipo == EnvioTipo.agricola
+            ? user.permissions.contains('recepcion_planta.confirm')
+            : user.permissions.contains('pedidos_distribucion.update'));
+    if (!canConfirm) {
+      throw const ApiException(
+        'No tienes permiso para confirmar la recepción de este envío.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'POST',
+      'envios/${tipo.value}/$envioId/recepcion',
+      body: {
+        'codigo': codigo.trim(),
+        'imagen_firma': imagenFirma,
+        'lineas': lineas,
+      },
+    );
+    return RecepcionEnvioComprobante.fromJson(response);
+  }
+
+  Future<RecepcionEnvioComprobante> loadRecepcionEnvioComprobante(
+    AuthUser user,
+    int recepcionId,
+  ) async {
+    if (!QrPermissions.canUseQr(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar este comprobante de recepción.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'recepciones-envio/$recepcionId',
+    );
+    return RecepcionEnvioComprobante.fromJson(response);
+  }
+
   Future<RutasEntregaPage> loadRutasEntrega(
     AuthUser user, {
     int page = 1,
