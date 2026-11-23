@@ -76,6 +76,12 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
   bool _editingObservations = false;
   bool _savingObservations = false;
   ApiException? _obsError;
+  bool _editingResponsable = false;
+  bool _loadingResponsables = false;
+  bool _savingResponsable = false;
+  List<ResponsableOption> _responsables = const [];
+  int? _selectedResponsableId;
+  String? _responsableError;
 
   bool get _isLote => widget.module == AppModule.lotes;
   bool get _isActividad => widget.module == AppModule.actividades;
@@ -230,6 +236,109 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             'La actividad "${result.record.title}" fue completada con su fotografía.';
         _request = _load();
         _request.ignore();
+      });
+    }
+  }
+
+  Future<void> _startReassignResponsable(ModuleRecord record) async {
+    final currentId = record.actividadData?.responsableId;
+    setState(() {
+      _editingResponsable = true;
+      _loadingResponsables = true;
+      _responsableError = null;
+      _selectedResponsableId = currentId;
+    });
+    try {
+      final list = await widget.service.loadResponsables(widget.user);
+      if (!mounted) return;
+      setState(() {
+        _responsables = list;
+        if (_selectedResponsableId == null ||
+            !list.any((item) => item.id == _selectedResponsableId)) {
+          _selectedResponsableId = list.isNotEmpty ? list.first.id : null;
+        }
+        _loadingResponsables = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingResponsables = false;
+        _responsableError = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingResponsables = false;
+        _responsableError = 'No se pudo cargar el equipo de campo.';
+      });
+    }
+  }
+
+  Future<void> _saveResponsable(ModuleRecord record) async {
+    if (_savingResponsable) return;
+    final targetId = _selectedResponsableId;
+    if (targetId == null) {
+      setState(() => _responsableError = 'Selecciona un responsable.');
+      return;
+    }
+    if (targetId == record.actividadData?.responsableId) {
+      setState(() {
+        _editingResponsable = false;
+        _responsableError = null;
+      });
+      return;
+    }
+    String selectedName = 'Responsable #$targetId';
+    for (final item in _responsables) {
+      if (item.id == targetId) {
+        selectedName = item.displayLabel;
+        break;
+      }
+    }
+    final confirmed = await confirmImportantAction(
+      context,
+      icon: Icons.swap_horiz_rounded,
+      title: '¿Cambiar responsable?',
+      message: 'La actividad pasará a estar asignada al trabajador elegido.',
+      details: [
+        'Actividad: ${record.title}',
+        'Nuevo responsable: $selectedName',
+      ],
+      confirmLabel: 'Confirmar cambio',
+    );
+    if (!mounted || !confirmed) return;
+
+    setState(() {
+      _savingResponsable = true;
+      _responsableError = null;
+    });
+    try {
+      await widget.service.reassignActividad(
+        widget.user,
+        record.id,
+        responsableId: targetId,
+      );
+      if (!mounted) return;
+      widget.onActividadUpdated?.call();
+      setState(() {
+        _savingResponsable = false;
+        _editingResponsable = false;
+        _notice = 'Responsable actualizado a $selectedName.';
+        _request = _load();
+        _request.ignore();
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _savingResponsable = false;
+        _responsableError = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _savingResponsable = false;
+        _responsableError =
+            'No se pudo cambiar el responsable. Revisa tu conexión e intenta de nuevo.';
       });
     }
   }
@@ -557,16 +666,160 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     ],
                   ),
                 ),
-              ] else if (ActividadPermissions.canClose(
-                widget.user,
-                record.actividadData,
-              )) ...[
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () => _closeActivity(record),
-                  icon: const Icon(Icons.task_alt_rounded),
-                  label: const Text('Completar y cerrar actividad'),
-                ),
+              ] else if (_isActividad && actividad != null && !actividad.isCompleted) ...[
+                if (ActividadPermissions.canClose(widget.user, actividad) ||
+                    ActividadPermissions.canReassign(
+                      widget.user,
+                      actividad,
+                    )) ...[
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      if (ActividadPermissions.canClose(widget.user, actividad))
+                        FilledButton.icon(
+                          onPressed: () => _closeActivity(record),
+                          icon: const Icon(Icons.task_alt_rounded),
+                          label: const Text('Completar y cerrar actividad'),
+                        ),
+                      if (ActividadPermissions.canReassign(
+                            widget.user,
+                            actividad,
+                          ) &&
+                          !_editingResponsable)
+                        OutlinedButton.icon(
+                          key: const ValueKey('actividad.cambiar_responsable'),
+                          onPressed: () => _startReassignResponsable(record),
+                          icon: const Icon(Icons.swap_horiz_rounded),
+                          label: const Text('Cambiar responsable'),
+                        ),
+                    ],
+                  ),
+                ],
+                if (ActividadPermissions.canReassign(widget.user, actividad) &&
+                    !ActividadPermissions.canClose(widget.user, actividad) &&
+                    !_editingResponsable) ...[
+                  const SizedBox(height: 12),
+                  const AppNotice(
+                    tone: AppNoticeTone.info,
+                    message:
+                        'Solo el responsable asignado puede cerrar esta actividad con evidencia. Puedes cambiar el responsable arriba si necesitas reasignarla.',
+                  ),
+                ],
+                if (_editingResponsable &&
+                    ActividadPermissions.canReassign(
+                      widget.user,
+                      actividad,
+                    )) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                      border: Border.all(color: AppTheme.border, width: 1),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Cambiar responsable',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_loadingResponsables)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: Text('Cargando equipo disponible...'),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          DropdownButtonFormField<int>(
+                            key: const ValueKey('actividad.responsable_select'),
+                            initialValue: _responsables.any(
+                              (item) => item.id == _selectedResponsableId,
+                            )
+                                ? _selectedResponsableId
+                                : null,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Nuevo responsable',
+                              prefixIcon: Icon(Icons.person_outline_rounded),
+                            ),
+                            items: _responsables
+                                .map(
+                                  (item) => DropdownMenuItem<int>(
+                                    value: item.id,
+                                    child: Text(
+                                      item.displayLabel,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _savingResponsable
+                                ? null
+                                : (value) => setState(() {
+                                    _selectedResponsableId = value;
+                                    _responsableError = null;
+                                  }),
+                          ),
+                        if (_responsableError != null) ...[
+                          const SizedBox(height: 12),
+                          AppNotice(
+                            tone: AppNoticeTone.error,
+                            message: _responsableError!,
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 10,
+                          children: [
+                            FilledButton(
+                              key: const ValueKey(
+                                'actividad.guardar_responsable',
+                              ),
+                              onPressed:
+                                  _loadingResponsables || _savingResponsable
+                                  ? null
+                                  : () => _saveResponsable(record),
+                              child: Text(
+                                _savingResponsable
+                                    ? 'Guardando...'
+                                    : 'Guardar responsable',
+                              ),
+                            ),
+                            OutlinedButton(
+                              onPressed: _savingResponsable
+                                  ? null
+                                  : () => setState(() {
+                                      _editingResponsable = false;
+                                      _responsableError = null;
+                                    }),
+                              child: const Text('Cancelar'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
               const SizedBox(height: 28),
               SectionTitle(
@@ -672,6 +925,37 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 SectionTitle('Fotografía de evidencia', color: look.tone),
                 const SizedBox(height: 14),
                 _buildEvidenceSection(record, actividad),
+              ],
+              if (!_isLote &&
+                  actividad != null &&
+                  !actividad.isCompleted &&
+                  actividad.plannedInsumos.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                SectionTitle('Insumos asignados', color: look.tone),
+                const SizedBox(height: 14),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(AppTheme.radius),
+                    border: Border.all(color: AppTheme.border, width: 1),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < actividad.plannedInsumos.length; i++) ...[
+                        if (i > 0) const Divider(height: 1),
+                        DetailField(
+                          label: actividad.plannedInsumos[i].name,
+                          value: actividad.plannedInsumos[i].formattedQuantity,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
               if (!_isLote &&
                   actividad != null &&

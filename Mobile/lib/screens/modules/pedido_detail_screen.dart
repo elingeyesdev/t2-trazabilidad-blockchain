@@ -7,6 +7,7 @@ import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/incidente_models.dart';
 import '../../models/pedido_models.dart';
+import '../../models/qr_envio_models.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
@@ -406,6 +407,13 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (record.origen?.direccion != null) ...[
+                        DetailField(
+                          label: 'Origen',
+                          value: record.origen!.direccion!,
+                        ),
+                        const Divider(height: 1),
+                      ],
                       DetailField(
                         label: 'Destino',
                         value: record.destino.label,
@@ -415,6 +423,34 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                         DetailField(
                           label: 'Entrega deseada',
                           value: record.fechaEntregaDeseada!,
+                        ),
+                      ],
+                      if (record.horaRecogida != null) ...[
+                        const Divider(height: 1),
+                        DetailField(
+                          label: 'Hora de recogida',
+                          value: record.horaRecogida!,
+                        ),
+                      ],
+                      if (record.horaEntregaEstimada != null) ...[
+                        const Divider(height: 1),
+                        DetailField(
+                          label: 'Hora de entrega estimada',
+                          value: record.horaEntregaEstimada!,
+                        ),
+                      ],
+                      if (record.instruccionesRecogida != null) ...[
+                        const Divider(height: 1),
+                        DetailField(
+                          label: 'Instrucciones de recogida',
+                          value: record.instruccionesRecogida!,
+                        ),
+                      ],
+                      if (record.instruccionesEntrega != null) ...[
+                        const Divider(height: 1),
+                        DetailField(
+                          label: 'Instrucciones de entrega',
+                          value: record.instruccionesEntrega!,
                         ),
                       ],
                       if (record.observaciones != null) ...[
@@ -427,6 +463,79 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                     ],
                   ),
                 ),
+                if (record.envio != null) ...[
+                  const SizedBox(height: 24),
+                  SectionTitle('Transporte y envío', color: look.tone),
+                  const SizedBox(height: 12),
+                  Container(
+                    key: const ValueKey('pedido.transporte'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surface,
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                      border: Border.all(color: AppTheme.ink, width: 2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        DetailField(
+                          label: 'Código de envío',
+                          value:
+                              record.envio!.externoEnvioId ??
+                              'Envío #${record.envio!.id}',
+                        ),
+                        if (record.envio!.transportistaNombre != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Chofer asignado',
+                            value: record.envio!.transportistaNombre!,
+                          ),
+                        ],
+                        if (record.envio!.vehiculoPlaca != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Vehículo',
+                            value: record.envio!.vehiculoPlaca!,
+                          ),
+                        ],
+                        if (record.envio!.costoBs != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Costo del servicio',
+                            value:
+                                'Bs ${record.envio!.costoBs!.toStringAsFixed(0)}',
+                          ),
+                        ],
+                        if (record.envio!.estado != null) ...[
+                          const Divider(height: 1),
+                          DetailField(
+                            label: 'Estado logístico',
+                            value: record.envio!.estado!,
+                          ),
+                        ],
+                        if (QrPermissions.canUseQr(widget.user) &&
+                            record.tipo == PedidoTipo.agricola &&
+                            record.envio!.id > 0) ...[
+                          const Divider(height: 1),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('pedido.ver_envio_qr'),
+                              onPressed: () => Navigator.of(context).pushNamed(
+                                '/modules/envios/agricola/${record.envio!.id}',
+                              ),
+                              icon: const Icon(Icons.local_shipping_outlined),
+                              label: const Text('Ver seguimiento y QR del envío'),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 SectionTitle('Estado e historial del pedido', color: look.tone),
                 const SizedBox(height: 12),

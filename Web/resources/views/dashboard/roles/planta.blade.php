@@ -221,7 +221,7 @@
                 </div>
             </div>
 
-            @if($userRole && \App\Support\UsuarioRol::gestionaPlanta($userRole))
+            @if($userPanel && \App\Support\UsuarioRol::gestionaPlanta($userPanel))
             @can('almacen.movimientos.view')
             <div class="role-acc-grupo">
                 <div class="role-acc-grupo__titulo">Almacén de planta</div>

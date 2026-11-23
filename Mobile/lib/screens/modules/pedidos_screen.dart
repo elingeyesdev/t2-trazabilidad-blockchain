@@ -36,11 +36,12 @@ class PedidosScreen extends StatefulWidget {
 }
 
 class _PedidosScreenState extends State<PedidosScreen> {
-  static const _estadoFilters = <(String?, String)>[
+  List<(String?, String)> get _estadoFilters => [
     (null, 'Todos'),
     ('pendiente', 'Pendiente'),
     ('confirmado', 'Confirmado'),
     ('rechazado', 'Rechazado'),
+    if (_tipo == PedidoTipo.agricola) ('sin asignacion', 'Pendiente agrícola'),
   ];
 
   late PedidoTipo _tipo;
@@ -213,7 +214,11 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                   context,
                                 ).pushNamed('${AppModule.pedidos.route}/nuevo'),
                                 icon: const Icon(Icons.add_rounded, size: 18),
-                                label: const Text('Nuevo pedido'),
+                                label: Text(
+                                  _tipo == PedidoTipo.agricola
+                                      ? 'Nuevo envío'
+                                      : 'Nuevo pedido',
+                                ),
                               ),
                           ],
                         ),
@@ -354,6 +359,13 @@ class _PedidosScreenState extends State<PedidosScreen> {
                 const SizedBox(height: 10),
                 Text(record.numeroSolicitud, style: theme.titleLarge),
                 const SizedBox(height: 6),
+                if (record.origen?.direccion != null) ...[
+                  Text(
+                    'Origen: ${record.origen!.direccion}',
+                    style: theme.bodyMedium,
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 Text(
                   'Destino: ${record.destino.label}',
                   style: theme.bodyMedium?.copyWith(
@@ -365,6 +377,21 @@ class _PedidosScreenState extends State<PedidosScreen> {
                   '${record.detalles.length} ${record.detalles.length == 1 ? 'producto' : 'productos'}',
                   style: theme.bodyMedium,
                 ),
+                if (record.envio?.transportistaNombre != null ||
+                    record.envio?.vehiculoPlaca != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      if (record.envio?.transportistaNombre != null)
+                        'Chofer: ${record.envio!.transportistaNombre}',
+                      if (record.envio?.vehiculoPlaca != null)
+                        'Vehículo: ${record.envio!.vehiculoPlaca}',
+                      if (record.envio?.costoBs != null)
+                        'Bs ${record.envio!.costoBs!.toStringAsFixed(0)}',
+                    ].join(' · '),
+                    style: theme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),

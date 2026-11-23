@@ -189,6 +189,8 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     $recursoProtegido('lote-insumos', LoteInsumoController::class, 'lotes');
 
     // ACTIVIDADES: lectura y escritura protegidas por acción y ownership del controlador.
+    Route::get('actividades/responsables', [ActividadController::class, 'responsables'])
+        ->middleware(['auth:sanctum', 'action.permission:lotes,update']);
     Route::post('actividades/{actividad}/cerrar', [\App\Http\Controllers\Api\ActividadCierreController::class, 'cerrar'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,read'])->name('actividades.cerrar');
     Route::get('actividades/{actividad}/evidencia', [\App\Http\Controllers\Api\ActividadCierreController::class, 'evidencia'])
@@ -214,6 +216,10 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
         Route::prefix($prefijo)->middleware('auth:sanctum')->group(function () use ($tipo, $permiso) {
             $controller = \App\Http\Controllers\Api\PedidoMovilController::class;
             Route::get('', [$controller, 'index'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',read');
+            Route::get('formulario', [$controller, 'formulario'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',create');
+            Route::post('calcular-costo', [$controller, 'calcularCosto'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',create');
+            Route::post('validar-capacidad', [$controller, 'validarCapacidad'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',create');
+            Route::post('calcular-carga', [$controller, 'calcularCarga'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',create');
             Route::post('', [$controller, 'store'])->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',create');
             Route::get('{pedido}', [$controller, 'show'])->whereNumber('pedido')->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',read');
             Route::post('{pedido}/transiciones', [$controller, 'transicion'])->whereNumber('pedido')->defaults('tipo_pedido', $tipo)->middleware('action.permission:'.$permiso.',update');

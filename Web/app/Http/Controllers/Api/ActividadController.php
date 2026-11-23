@@ -141,15 +141,37 @@ class ActividadController extends Controller
     private function relacionesActividad(): array
     {
         return [
-            'lote:loteid,nombre,cultivoid,estadolotetipoid,usuarioid',
+            'lote:loteid,nombre,cultivoid,estadolotetipoid,usuarioid,insumosemillaid,cantidad_semilla_planificada',
             'lote.cultivo:cultivoid,nombre',
             'lote.estadoTipo:estadolotetipoid,nombre',
+            'lote.insumoSemilla:insumoid,almacenid,nombre,unidadmedidaid,stock',
+            'lote.insumoSemilla.unidadMedida:unidadmedidaid,nombre,abreviatura',
             'usuario:usuarioid,nombre,apellido',
             'ejecutor:usuarioid,nombre,apellido',
             'tipoActividad:tipoactividadid,nombre',
             'prioridad:prioridadid,nombre',
             'consumos.insumo.unidadMedida',
         ];
+    }
+
+    public function responsables(Request $request)
+    {
+        $actor = $request->user();
+        abort_unless(
+            UsuarioRol::gestionaCampo($actor) && UsuarioRol::puedeOperar($actor),
+            403,
+            'Solo el jefe agrícola puede consultar el equipo asignable.'
+        );
+
+        $ids = UsuarioRol::idsEmpleadosOperativosDeJefeAgricultor($actor);
+        $usuarios = \App\Models\Usuario::query()
+            ->with('roles:id,name')
+            ->whereIn('usuarioid', $ids)
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get(['usuarioid', 'nombre', 'apellido', 'role', 'activo']);
+
+        return response()->json(['data' => $usuarios]);
     }
 
     public function store(Request $request)
@@ -248,9 +270,20 @@ class ActividadController extends Controller
             app(\App\Support\ActividadSecuenciaService::class)->asegurarEnTurnoParaCompletar($actividad);
         }
 
-        $actividad->update($data);
+        $responsableAnterior = (int) $actividad->usuarioid;
 
-        return new ActividadConsultaResource($actividad->fresh()->load($this->relacionesActividad()));
+        $actividad->update($data);
+        $actualizada = $actividad->fresh();
+
+        if (
+            array_key_exists('usuarioid', $data)
+            && (int) $actualizada->usuarioid !== $responsableAnterior
+            && (int) $actualizada->usuarioid !== (int) $user->usuarioid
+        ) {
+            app(\App\Services\NotificacionUsuarioService::class)->actividadAsignada($actualizada);
+        }
+
+        return new ActividadConsultaResource($actualizada->load($this->relacionesActividad()));
     }
 
     public function destroy(Request $request, $actividad)

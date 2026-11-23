@@ -55,6 +55,17 @@ class ActividadConsultaResource extends JsonResource
                     'estadolotetipoid' => (int) $this->lote->estadoTipo->estadolotetipoid,
                     'nombre' => $this->lote->estadoTipo->nombre,
                 ] : null,
+                'insumosemillaid' => $this->lote->insumosemillaid === null ? null : (int) $this->lote->insumosemillaid,
+                'cantidad_semilla_planificada' => $this->lote->cantidad_semilla_planificada === null
+                    ? null
+                    : (string) $this->lote->getRawOriginal('cantidad_semilla_planificada'),
+                'insumo_semilla' => $this->lote->relationLoaded('insumoSemilla') && $this->lote->insumoSemilla ? [
+                    'insumoid' => (int) $this->lote->insumoSemilla->insumoid,
+                    'almacenid' => $this->lote->insumoSemilla->almacenid === null ? null : (int) $this->lote->insumoSemilla->almacenid,
+                    'nombre' => $this->lote->insumoSemilla->nombre,
+                    'unidadmedidaid' => (int) $this->lote->insumoSemilla->unidadmedidaid,
+                    'unidad' => $this->lote->insumoSemilla->unidadMedida?->abreviatura ?? $this->lote->insumoSemilla->unidadMedida?->nombre,
+                ] : null,
             ] : null),
         ];
     }

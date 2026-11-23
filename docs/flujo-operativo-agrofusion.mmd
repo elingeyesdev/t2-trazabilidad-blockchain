@@ -1,0 +1,34 @@
+flowchart TD
+    A([Inicio operativo]) --> B[/U: ingresar credenciales/]
+    B --> C[S: validar identidad y permisos]
+    C --> D{¿Acceso autorizado?}
+    D -- No --> E[S: informar rechazo de acceso]
+    E --> B
+    D -- Sí --> F[/U: registrar lote, actividades e insumos/]
+    F --> G{S: ¿datos válidos?}
+    G -- No --> H[S: indicar errores para corregir]
+    H --> F
+    G -- Sí --> I[S: guardar historial del lote]
+    I --> J[/U: registrar cosecha y almacenamiento/]
+    J --> K[S: registrar disponibilidad agrícola]
+    K --> L[U: solicitar y coordinar envío a planta]
+    L --> M[S: validar disponibilidad y registrar traslado]
+    M --> N[U: transportar y confirmar pesaje en planta]
+    N --> O[S: registrar recepción y existencias de materia prima]
+    O --> P[U: registrar transformación y evaluación]
+    P --> Q[S: vincular materia prima y producto terminado]
+    Q --> R[U y S: autorizar, trasladar y recibir en mayorista]
+    R --> T[/U minorista: solicitar productos/]
+    T --> V{¿Pedido autorizado y stock suficiente?}
+    V -- No --> W[U: ajustar pedido o esperar abastecimiento]
+    W --> T
+    W -- Cancelar --> Z([Fin de solicitud])
+    V -- Sí --> X[S: confirmar pedido y reservar existencias]
+    X --> Y[U: preparar y transportar al punto de venta]
+    Y --> AA[/U receptor: registrar cantidades y observaciones/]
+    AA --> AB{S: ¿recepción válida?}
+    AB -- No --> AC[U: completar datos y revisar diferencias]
+    AC --> AA
+    AB -- Sí --> AD[S: registrar ingreso e inventario en destino]
+    AD --> AE[/S: disponer código QR e historial consultable/]
+    AE --> AF([Fin del recorrido operativo])

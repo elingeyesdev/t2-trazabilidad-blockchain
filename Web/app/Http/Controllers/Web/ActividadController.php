@@ -493,7 +493,9 @@ class ActividadController extends Controller
 
         $detalleRaw = $this->actividadInsumos->parseDetalleDesdeRequest($request, $tipo->nombre ?? null);
         $detalle = [];
-        if (ActividadDetalleCatalogo::requiereInsumos($tipo->nombre) || ActividadDetalleCatalogo::esRiego($tipo->nombre)) {
+        if (ActividadDetalleCatalogo::esRiego($tipo->nombre)) {
+            $detalle = $this->actividadInsumos->validarDetalle($detalleRaw, $tipo->nombre ?? null, $lote);
+        } elseif (ActividadDetalleCatalogo::requiereInsumos($tipo->nombre) && ! empty($detalleRaw['insumos'])) {
             $detalle = $this->actividadInsumos->validarDetalle($detalleRaw, $tipo->nombre ?? null, $lote);
         }
 
@@ -624,11 +626,106 @@ class ActividadController extends Controller
     public function show(Request $request, Actividad $actividad)
     {
         $this->autorizarActividadAsignada($request, $actividad);
-        $actividad->load(['lote', 'tipoActividad', 'usuario', 'ejecutor', 'prioridad', 'consumos.insumo.unidadMedida']);
+        $actividad->load(['lote.insumoSemilla.unidadMedida', 'tipoActividad', 'usuario', 'ejecutor', 'prioridad', 'consumos.insumo.unidadMedida']);
         abort_unless($actividad->lote && \App\Support\LoteAcceso::puedeVer($request->user(), $actividad->lote), 403);
         $consulta = \App\Support\ActividadConsulta::presentar($actividad);
 
-        return view('actividades.show', compact('actividad', 'consulta'));
+        $user = $request->user();
+        $puedeCerrar = ActividadPermisos::puedeMarcarCompletada($user, $actividad);
+        $puedeReasignar = $actividad->fechafin === null
+            && UsuarioRol::gestionaCampo($user)
+            && \App\Support\LoteAcceso::puedeGestionar($user, $actividad->lote);
+        $responsablesDisponibles = $puedeReasignar
+            ? $this->usuariosResponsablesActividad($request)
+            : collect();
+        $esEnTurno = $actividad->fechafin === null
+            && app(\App\Support\ActividadSecuenciaService::class)->esSiguienteEnCola($actividad, false);
+        $tipoSlugInsumo = \App\Support\ActividadDetalleCatalogo::slugInsumoParaTipoActividad($actividad->tipoActividad?->nombre);
+        $requiereInsumos = $tipoSlugInsumo !== null;
+        $esSiembra = str_contains(mb_strtolower($actividad->tipoActividad?->nombre ?? ''), 'siembra');
+        $semillaFijada = ($esSiembra && $actividad->lote?->insumoSemilla) ? $actividad->lote->insumoSemilla : null;
+        $insumosDisponibles = collect();
+        $almacenLote = null;
+        if ($puedeCerrar && $actividad->lote) {
+            try {
+                $almacenLote = \App\Support\CampoAccess::almacenAgricolaParaLote($actividad->lote);
+            } catch (ValidationException) {
+                $almacenLote = null;
+            }
+            if ($almacenLote && \App\Support\CampoAccess::puedeVerAlmacen($user, $almacenLote)) {
+                $queryInsumos = \App\Models\Insumo::query()
+                    ->with(['unidadMedida', 'tipo'])
+                    ->where('almacenid', $almacenLote->almacenid)
+                    ->where('stock', '>', 0)
+                    ->orderBy('nombre');
+                if ($tipoSlugInsumo !== null) {
+                    $tipoIds = \App\Support\InsumoCatalogo::tiposOrdenados()
+                        ->filter(fn ($t) => \App\Support\InsumoCatalogo::slugFromNombreTipo($t->nombre) === $tipoSlugInsumo)
+                        ->pluck('tipoinsumoid')
+                        ->all();
+                    if ($tipoIds !== []) {
+                        $queryInsumos->whereIn('tipoinsumoid', $tipoIds);
+                    }
+                }
+                $insumosDisponibles = $queryInsumos->get();
+            }
+        }
+
+        return view('actividades.show', compact(
+            'actividad',
+            'consulta',
+            'puedeCerrar',
+            'puedeReasignar',
+            'responsablesDisponibles',
+            'esEnTurno',
+            'requiereInsumos',
+            'semillaFijada',
+            'insumosDisponibles',
+            'almacenLote',
+        ));
+    }
+
+    public function reasignarResponsable(Request $request, Actividad $actividad)
+    {
+        $this->autorizarActividadAsignada($request, $actividad);
+        $actividad->loadMissing(['lote', 'usuario']);
+
+        if ($actividad->fechafin !== null) {
+            return back()->with('error', 'No se puede cambiar el responsable de una actividad ya completada.');
+        }
+
+        $user = $request->user();
+        abort_unless(
+            UsuarioRol::gestionaCampo($user)
+            && $actividad->lote
+            && \App\Support\LoteAcceso::puedeGestionar($user, $actividad->lote),
+            403,
+            'Solo el jefe agrícola autorizado puede cambiar el responsable de esta actividad.'
+        );
+
+        $request->validate([
+            'usuarioid' => 'required|integer|exists:usuario,usuarioid',
+        ], [
+            'usuarioid.required' => 'Seleccione un responsable válido.',
+        ]);
+
+        $responsableAnterior = (int) $actividad->usuarioid;
+        $nuevoUsuarioId = $this->resolverUsuarioidActividad($request, $actividad->lote);
+
+        if ($nuevoUsuarioId === $responsableAnterior) {
+            return back()->with('info', 'La actividad ya está asignada a ese responsable.');
+        }
+
+        $actividad->update(['usuarioid' => $nuevoUsuarioId]);
+        $actividad->refresh()->load('usuario');
+
+        if ($nuevoUsuarioId !== (int) $user->usuarioid) {
+            $this->notificaciones->actividadAsignada($actividad);
+        }
+
+        $nombre = trim(($actividad->usuario?->nombre ?? '').' '.($actividad->usuario?->apellido ?? '')) ?: 'el trabajador seleccionado';
+
+        return back()->with('success', "Responsable actualizado a {$nombre}.");
     }
 
     public function edit(Request $request, Actividad $actividad)

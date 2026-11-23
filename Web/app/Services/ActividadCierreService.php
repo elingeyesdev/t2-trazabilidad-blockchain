@@ -100,6 +100,21 @@ class ActividadCierreService
                 if (ActividadDetalleCatalogo::requiereInsumos($locked->tipoActividad?->nombre) && $filas === []) {
                     throw ValidationException::withMessages(['consumos' => 'Indica los insumos realmente consumidos al realizar esta actividad.']);
                 }
+                if (str_contains(mb_strtolower($locked->tipoActividad?->nombre ?? ''), 'siembra')
+                    && $locked->lote->insumosemillaid
+                    && $filas !== []) {
+                    $semillaPlanId = (int) $locked->lote->insumosemillaid;
+                    $semillaPlanNombre = Insumo::query()->whereKey($semillaPlanId)->value('nombre') ?? 'semilla planificada';
+                    foreach ($filas as $i => $fila) {
+                        if ((int) $fila['insumoid'] !== $semillaPlanId) {
+                            $indice = array_search($fila['insumoid'], array_column($filasEntrada, 'insumoid'));
+                            $indice = $indice === false ? $i : $indice;
+                            throw ValidationException::withMessages([
+                                "consumos.$indice.insumoid" => "Esta siembra corresponde a «{$semillaPlanNombre}» (elegida al crear el lote) y no puede cambiarse por otro insumo.",
+                            ]);
+                        }
+                    }
+                }
                 if ($filas !== []) {
                     $almacen = CampoAccess::almacenAgricolaParaLote($locked->lote);
                     foreach ($filas as $i => &$fila) {

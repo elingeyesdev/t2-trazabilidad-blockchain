@@ -168,6 +168,43 @@ class InventarioMovimientoService
         }, 5);
     }
 
+    public function registrarIngresoInicial(?Usuario $usuario, Insumo $insumo): ?AlmacenMovimiento
+    {
+        if (! $usuario || ! $insumo->almacenid) {
+            return null;
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasTable('almacen_movimiento')
+            || ! \Illuminate\Support\Facades\Schema::hasTable('tipo_movimiento_almacen')) {
+            return null;
+        }
+        $cantidad = Decimal::unidades($insumo->getRawOriginal('stock'));
+        if ($cantidad <= 0) {
+            return null;
+        }
+
+        $tiposIngreso = TipoMovimientoAlmacen::where('naturaleza', 'ingreso')->where('activo', true)->get();
+        $tipo = $tiposIngreso->first(fn ($t) => TipoMovimientoAlmacen::normalizeNombre($t->nombre) === 'compra')
+            ?? $tiposIngreso->first();
+        if (! $tipo) {
+            return null;
+        }
+
+        return AlmacenMovimiento::create([
+            'almacenid' => (int) $insumo->almacenid,
+            'insumoid' => (int) $insumo->insumoid,
+            'tipo_movimiento_almacenid' => (int) $tipo->tipo_movimiento_almacenid,
+            'usuarioid' => (int) $usuario->usuarioid,
+            'fecha' => now()->toDateString(),
+            'cantidad' => Decimal::texto($cantidad),
+            'referencia' => 'Alta inicial de insumo',
+            'destino_motivo' => 'Registro inicial en inventario',
+            'observaciones' => 'Stock inicial registrado al crear «'.$insumo->nombre.'».',
+            'unidadmedidaid' => $insumo->unidadmedidaid,
+            'saldo_anterior' => Decimal::texto(0),
+            'saldo_posterior' => Decimal::texto($cantidad),
+        ]);
+    }
+
     public function configurarMinimo(Usuario $usuario, Almacen $almacen, Insumo $insumo, mixed $valor): void
     {
         AlmacenAcceso::asegurarPuedeGestionar($usuario, $almacen);

@@ -19,7 +19,7 @@ class InsumoController extends Controller
 {
     public function index()
     {
-        InsumoCatalogo::asegurarInsumosCampo();
+        InsumoCatalogo::asegurarCatalogosBase();
 
         $umbral = InsumoCatalogo::UMBRAL_ALERTA_STOCK;
         $user = auth()->user();
@@ -91,6 +91,7 @@ class InsumoController extends Controller
         $data['stockminimo'] = $data['stockminimo'] ?? null;
         $insumo = Insumo::create($data);
         $this->guardarCalibreSiembra($insumo, $calibreData);
+        app(\App\Services\InventarioMovimientoService::class)->registrarIngresoInicial($request->user(), $insumo);
 
         return redirect()->route('insumos.index')->with('success', 'Insumo registrado correctamente.');
     }

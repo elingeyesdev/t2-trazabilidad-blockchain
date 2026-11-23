@@ -138,7 +138,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ..._home(modules)
                     else
                       ..._work(groups),
-                    if (_tab == 0) ...[const SizedBox(height: 32), _account()],
                   ],
                 ),
               ),
@@ -571,13 +570,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  Widget _account() => Align(
-    alignment: Alignment.centerLeft,
-    child: TextButton.icon(
-      onPressed: () => Navigator.of(context).pushNamed(AppRoutes.connection),
-      icon: const Icon(Icons.wifi_rounded),
-      label: const Text('Comprobar conexión'),
-    ),
-  );
 }

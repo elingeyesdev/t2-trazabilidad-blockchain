@@ -108,10 +108,7 @@ class _ProfileEditFormState extends State<ProfileEditForm> {
     String? deniedMessage;
     final photo = await widget.controller.selectProfilePhoto(() async {
       try {
-        final capture = widget.capturePhoto;
-        if (capture == null) {
-          throw const CameraPermissionException();
-        }
+        final capture = widget.capturePhoto ?? captureCameraPhoto;
         return await _readPhoto(await capture());
       } catch (error) {
         if (CameraPermissionException.isPermissionError(error)) {

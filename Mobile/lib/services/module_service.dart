@@ -331,7 +331,17 @@ class ModuleService {
       ),
     };
     try {
-      final response = await _api.request('GET', AppModule.usuarios.endpoint);
+      Object? response;
+      try {
+        response = await _api.request('GET', 'actividades/responsables');
+      } on ApiException catch (error) {
+        if (error.statusCode == 401) rethrow;
+        if (error.statusCode == 404) {
+          response = await _api.request('GET', AppModule.usuarios.endpoint);
+        } else {
+          rethrow;
+        }
+      }
       for (final item in ResponsableOption.listFromUsersJson(response)) {
         if (item.id == user.id) continue;
         byId[item.id] = item;
@@ -426,6 +436,40 @@ class ModuleService {
     return record;
   }
 
+  Future<ModuleRecord> reassignActividad(
+    AuthUser user,
+    int actividadId, {
+    required int responsableId,
+  }) async {
+    if (!ActividadPermissions.canAssign(user)) {
+      throw const ApiException(
+        'Solo el jefe agrícola autorizado puede cambiar el responsable.',
+        statusCode: 403,
+      );
+    }
+    if (actividadId <= 0 || responsableId <= 0) {
+      throw const ApiException('Selecciona un responsable válido.');
+    }
+    final response = await _api.request(
+      'PATCH',
+      '${AppModule.actividades.endpoint}/$actividadId',
+      body: {'usuarioid': responsableId},
+    );
+    final record = ModuleRecord.fromJson(
+      response,
+      idField: AppModule.actividades.idField,
+      titleField: AppModule.actividades.titleField,
+      fallbackTitle: 'Actividad',
+      fields: _actividadDetailFields,
+    );
+    if (record.id != actividadId) {
+      throw const ApiException(
+        'La información recibida no corresponde a la actividad editada.',
+      );
+    }
+    return record;
+  }
+
   Future<ModuleRecord> closeActividad(
     AuthUser user,
     int actividadId, {
@@ -434,8 +478,7 @@ class ModuleService {
     List<Map<String, Object?>> consumos = const [],
   }) async {
     if (!user.permissions.contains(AppModule.actividades.permission) ||
-        user.roles.contains('admin') ||
-        user.roles.contains('jefe_agricultor')) {
+        user.roles.contains('admin')) {
       throw const ApiException(
         'No tienes permiso para cerrar esta actividad.',
         statusCode: 403,
@@ -787,6 +830,75 @@ class ModuleService {
     }
     final response = await _api.request('GET', '${tipo.endpoint}/$id');
     return PedidoRecord.fromJson(response);
+  }
+
+  Future<PedidoAgricolaFormData> loadPedidoAgricolaForm(AuthUser user) async {
+    if (!PedidoPermissions.canCreateAgricola(user)) {
+      throw const ApiException(
+        'No tienes permiso para crear envíos agrícolas.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'pedidos-agricolas/formulario');
+    return PedidoAgricolaFormData.fromJson(response);
+  }
+
+  Future<PedidoDistribucionFormData> loadPedidoDistribucionForm(
+    AuthUser user,
+  ) async {
+    if (!PedidoPermissions.canCreateDistribucion(user)) {
+      throw const ApiException(
+        'No tienes permiso para crear pedidos de distribución.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'pedidos-distribucion/formulario',
+    );
+    return PedidoDistribucionFormData.fromJson(response);
+  }
+
+  Future<PedidoCostoEstimacion> calcularCostoPedidoAgricola(
+    AuthUser user, {
+    required List<Map<String, double>> paradas,
+  }) async {
+    if (!PedidoPermissions.canCreateAgricola(user)) {
+      throw const ApiException(
+        'No tienes permiso para calcular costos de envío.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'POST',
+      'pedidos-agricolas/calcular-costo',
+      body: {'paradas': paradas},
+    );
+    return PedidoCostoEstimacion.fromJson(response);
+  }
+
+  Future<PedidoCapacidadValidacion> validarCapacidadPedidoAgricola(
+    AuthUser user, {
+    required int vehiculoId,
+    required double pesoKg,
+    double? volumenM3,
+  }) async {
+    if (!PedidoPermissions.canCreateAgricola(user)) {
+      throw const ApiException(
+        'No tienes permiso para validar la capacidad del vehículo.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'POST',
+      'pedidos-agricolas/validar-capacidad',
+      body: {
+        'vehiculo_id': vehiculoId,
+        'peso_kg': pesoKg,
+        'volumen_m3': ?volumenM3,
+      },
+    );
+    return PedidoCapacidadValidacion.fromJson(response);
   }
 
   Future<PedidoRecord> createPedidoMovil(

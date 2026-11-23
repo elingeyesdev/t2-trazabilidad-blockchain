@@ -14,7 +14,6 @@ import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
@@ -42,7 +41,6 @@ import 'screens/modules/qr_scanner_screen.dart';
 import 'screens/modules/usuario_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'services/api_client.dart';
-import 'services/api_health_service.dart';
 import 'services/auth_service.dart';
 import 'services/module_service.dart';
 import 'services/session_storage.dart';
@@ -100,7 +98,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _auth.user != null) {
+    if (state == AppLifecycleState.resumed &&
+        _auth.user != null &&
+        !_auth.shouldSuppressResumeRestore) {
       unawaited(_auth.restoreSession());
     }
   }
@@ -207,9 +207,6 @@ class _AgroFusionAppState extends State<AgroFusionApp>
           () => HomeScreen(user: _auth.user!, onLogout: _auth.logout),
           requiresAuthentication: true,
         ),
-        AppRoutes.connection: (_) => _sessionGate(
-          () => ConnectionScreen(healthService: ApiHealthService(_api)),
-        ),
         AppRoutes.register: (_) =>
             _sessionGate(() => RegisterScreen(controller: _auth)),
         AppRoutes.profile: (_) => _sessionGate(
@@ -235,8 +232,11 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     updates: _recepcionUpdates,
                   )
                 : module == AppModule.pedidos &&
-                      !PedidoPermissions.canViewAgricola(_auth.user!) &&
-                      PedidoPermissions.canViewDistribucion(_auth.user!)
+                      (PedidoPermissions.canCreateAgricola(_auth.user!) ||
+                          (!PedidoPermissions.canViewAgricola(_auth.user!) &&
+                              PedidoPermissions.canViewDistribucion(
+                                _auth.user!,
+                              )))
                 ? PedidosScreen(
                     key: ValueKey(_auth.user),
                     user: _auth.user!,
@@ -417,7 +417,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             settings: settings,
             builder: (_) => _sessionGate(
               () => PedidoFormScreen(
-                key: ValueKey(_auth.user),
+                key: ValueKey(
+                  'pedido-form:${_auth.user?.id}:${_auth.user?.roles.join(",")}',
+                ),
                 user: _auth.user!,
                 service: ModuleService(_api),
                 onRefreshPermissions: _auth.restoreSession,
@@ -557,7 +559,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             settings: settings,
             builder: (_) => _sessionGate(
               () => ActividadCloseScreen(
-                key: ValueKey(_auth.user),
+                key: ValueKey(
+                  'close:$id:${_auth.user?.id}:${_auth.user?.roles.join(",")}:${_auth.user?.permissions.join(",")}',
+                ),
                 actividadId: id,
                 user: _auth.user!,
                 service: ModuleService(_api),
@@ -567,6 +571,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     : null,
                 capturePhoto: widget.capturePhoto,
                 selectFile: widget.selectEvidenceFile,
+                onExternalPicker: _auth.runExternalPicker,
               ),
               requiresAuthentication: true,
               module: AppModule.actividades,

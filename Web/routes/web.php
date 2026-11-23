@@ -165,6 +165,7 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
     Route::get('actividades/{actividad}', [ActividadController::class, 'show'])->name('actividades.show')->middleware('action.permission:lotes,read');
     Route::get('actividades/{actividad}/edit', [ActividadController::class, 'edit'])->name('actividades.edit')->middleware('action.permission:lotes,update');
     Route::put('actividades/{actividad}', [ActividadController::class, 'update'])->name('actividades.update')->middleware('action.permission:lotes,update');
+    Route::patch('actividades/{actividad}/responsable', [ActividadController::class, 'reasignarResponsable'])->name('actividades.reasignar-responsable')->middleware('action.permission:lotes,update');
     Route::delete('actividades/{actividad}', [ActividadController::class, 'destroy'])->name('actividades.destroy')->middleware('action.permission:lotes,update');
     Route::get('actividades/{actividad}/resumen-completar', [ActividadController::class, 'resumenCompletar'])->name('actividades.resumen-completar');
     Route::post('actividades/{actividad}/marcar-realizada', [ActividadController::class, 'marcarRealizada'])->name('actividades.marcar-realizada');

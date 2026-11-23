@@ -15,17 +15,22 @@ class LocalDatabaseGuard
     private const DEMO_PASSWORD = '12345';
 
     /** Incrementar al cambiar la política de contraseñas locales. */
-    private const CREDENCIALES_LOCAL_VERSION = 2;
+    private const CREDENCIALES_LOCAL_VERSION = 3;
 
     /** @var list<string> */
     private const DEMO_EMAILS = [
         'admin@agrofusion.com',
+        'jefe.agricola@agrofusion.com',
         'agricultor@agrofusion.com',
+        'agricultor2@agrofusion.com',
+        'jefe.planta@agrofusion.com',
         'planta@agrofusion.com',
-        'transportista@agrofusion.com',
-        'operador@agrofusion.com',
-        'almacen@agrofusion.com',
-        'LuisGuerrero123@gmail.com',
+        'mayorista@agrofusion.com',
+        'minorista@agrofusion.com',
+        'chofer.agricola@agrofusion.com',
+        'chofer.agricola2@agrofusion.com',
+        'chofer.planta@agrofusion.com',
+        'chofer.mayorista@agrofusion.com',
     ];
 
     public static function debeProteger(): bool
@@ -151,16 +156,17 @@ class LocalDatabaseGuard
 
         $hash = Hash::make(self::DEMO_PASSWORD);
 
-        DB::table('usuario')->update([
+        $query = DB::table('usuario');
+        if (Schema::hasColumn('usuario', 'estado_cuenta')) {
+            $query->where(function ($q) {
+                $q->whereNull('estado_cuenta')
+                    ->orWhere('estado_cuenta', '!=', CuentaEstado::PENDIENTE);
+            });
+        }
+        $query->update([
             'passwordhash' => $hash,
             'activo' => 1,
         ]);
-
-        if (Schema::hasColumn('usuario', 'estado_cuenta')) {
-            DB::table('usuario')
-                ->where('estado_cuenta', CuentaEstado::PENDIENTE)
-                ->update(['estado_cuenta' => CuentaEstado::APROBADO]);
-        }
 
         cache()->forever('agrofusion_demo_cred_version', self::CREDENCIALES_LOCAL_VERSION);
     }

@@ -8,9 +8,28 @@ use Spatie\Permission\Models\Role;
 
 class RoleSeeder extends Seeder
 {
-    public const ROLES_CANONICOS = ['admin', 'agricultor', 'planta', 'jefe_planta', 'transportista'];
+    public const ROLES_CANONICOS = [
+        'admin',
+        'jefe_agricultor',
+        'agricultor',
+        'jefe_planta',
+        'planta',
+        'jefe_mayorista',
+        'mayorista',
+        'minorista',
+        'transportista',
+    ];
 
-    public const ROLES_LEGACY = ['operador', 'almacen', 'Operador', 'Almacen', 'Admin', 'Agricultor'];
+    public const ROLES_LEGACY = [
+        'operador',
+        'almacen',
+        'Operador',
+        'Almacen',
+        'Admin',
+        'Agricultor',
+        'admin_agricola',
+        'admin_planta',
+    ];
 
     public function run(): void
     {
@@ -18,61 +37,39 @@ class RoleSeeder extends Seeder
             Role::firstOrCreate(['name' => $nombre, 'guard_name' => 'web']);
         }
 
-        // Slug canónico «admin»: migra usuarios que aún tengan el rol legacy «Admin».
+        // Migrar usuarios con rol legacy «Admin» al slug canónico «admin».
         Usuario::query()
             ->where(function ($q) {
                 $q->where('role', 'Admin')
                     ->orWhereHas('roles', fn ($r) => $r->where('name', 'Admin'));
             })
             ->each(function (Usuario $usuario) {
-                if ($usuario->hasRole('Admin')) {
-                    $usuario->removeRole('Admin');
-                }
-                $usuario->assignRole('admin');
+                $usuario->syncRoles(['admin']);
                 $usuario->role = 'admin';
                 $usuario->fechamodificacion = now();
                 $usuario->save();
             });
 
-        $agricultorRole = Role::findByName('agricultor', 'web');
-
+        // Migrar usuarios con roles legacy «operador» o «almacen» a «agricultor».
         Usuario::query()
             ->where(function ($q) {
                 $q->whereIn('role', ['operador', 'almacen'])
                     ->orWhereHas('roles', fn ($r) => $r->whereIn('name', ['operador', 'almacen']));
             })
-            ->each(function (Usuario $usuario) use ($agricultorRole) {
-                $usuario->syncRoles([$agricultorRole->name]);
+            ->each(function (Usuario $usuario) {
+                $usuario->syncRoles(['agricultor']);
                 $usuario->role = 'agricultor';
                 $usuario->fechamodificacion = now();
                 $usuario->save();
             });
 
-        $adminRole = Role::findByName('admin', 'web');
-        $adminUser = Usuario::where('email', 'admin@agrofusion.com')->first();
-        if ($adminUser) {
-            $adminUser->syncRoles([$adminRole->name]);
-            $adminUser->role = 'admin';
-            $adminUser->fechamodificacion = now();
-            $adminUser->save();
-        }
-
-        $agricultorUser = Usuario::where('email', 'agricultor@agrofusion.com')->first();
-        if ($agricultorUser) {
-            $agricultorUser->syncRoles([$agricultorRole->name]);
-            $agricultorUser->role = 'agricultor';
-            $agricultorUser->fechamodificacion = now();
-            $agricultorUser->save();
-        }
-
-        foreach (['operador@agrofusion.com', 'almacen@agrofusion.com'] as $email) {
-            $legacy = Usuario::where('email', $email)->first();
-            if ($legacy) {
-                $legacy->syncRoles([$agricultorRole->name]);
-                $legacy->role = 'agricultor';
-                $legacy->fechamodificacion = now();
-                $legacy->save();
-            }
-        }
+        // Limpiar roles legacy vacíos para no contaminar el catálogo.
+        Role::query()
+            ->whereIn('name', self::ROLES_LEGACY)
+            ->each(function (Role $role) {
+                if ($role->users()->count() === 0) {
+                    $role->delete();
+                }
+            });
     }
 }
