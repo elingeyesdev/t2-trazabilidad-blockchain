@@ -37,7 +37,3 @@ storage/app/public/
 storage/logs/
 storage/framework/
 *.md
-MEMORY.md
-ORGTRACK-PLAN.md
-check_classes.php
-agronexus/

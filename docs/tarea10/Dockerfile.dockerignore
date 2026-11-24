@@ -9,7 +9,6 @@ Web/.env*
 Web/vendor/
 Web/node_modules/
 Web/.git/
-Web/agrofusion-mobile/
 Web/docs/
 Web/tests/
 Web/scripts/

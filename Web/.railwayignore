@@ -12,5 +12,4 @@ storage/app/public
 *.md
 .env
 .env.*
-agronexus
 tests
