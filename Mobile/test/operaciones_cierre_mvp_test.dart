@@ -399,4 +399,133 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Insumos y existencias de almacén PDV muestran código de trazabilidad y abren la vista pública',
+    (tester) async {
+      await storage.saveToken('1|minorista-token');
+
+      const minoristaUser = {
+        'usuarioid': 33,
+        'nombre': 'Elena',
+        'apellido': 'Paz',
+        'email': 'elena@agrofusion.test',
+        'activo': true,
+        'estado_cuenta': 'aprobado',
+        'roles': [
+          {'id': 6, 'name': 'minorista'},
+        ],
+        'permissions': ['inventario.view'],
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') return jsonResponse(minoristaUser);
+          if (request.url.path == '/api/insumos' && request.method == 'GET') {
+            return jsonResponse({
+              'data': const [
+                {
+                  'insumoid': 90,
+                  'nombre': 'Hojuelas de Papa 500 g',
+                  'stock': 20,
+                  'descripcion': 'Producto terminado en tienda',
+                  'codigo_trazabilidad': 'TRZ-PDV-20261124-PDV90',
+                },
+              ],
+              'current_page': 1,
+              'last_page': 1,
+              'total': 1,
+            });
+          }
+          if (request.url.path == '/api/almacenes' && request.method == 'GET') {
+            return jsonResponse({
+              'data': const [
+                {
+                  'almacenid': 8,
+                  'nombre': 'Punto de Venta Central',
+                  'ubicacion': 'Av. América #123',
+                },
+              ],
+              'current_page': 1,
+              'last_page': 1,
+              'total': 1,
+            });
+          }
+          if (request.url.path == '/api/almacenes/8/existencias' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'almacen': {'almacenid': 8, 'nombre': 'Punto de Venta Central'},
+              'data': const [
+                {
+                  'insumoid': 90,
+                  'nombre': 'Hojuelas de Papa 500 g',
+                  'unidad': 'bolsas',
+                  'cantidad_fisica': '20',
+                  'cantidad_disponible': '20',
+                  'codigo_trazabilidad': 'TRZ-PDV-20261124-PDV90',
+                },
+              ],
+            });
+          }
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-PDV90' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': {
+                'codigo': 'TRZ-PDV-20261124-PDV90',
+                'producto': 'Hojuelas de Papa 500 g',
+                'lote_agricola': 'Parcela Norte',
+                'punto_venta': 'Punto de Venta Central',
+                'total_eventos': 1,
+                'eventos': const [
+                  {
+                    'etapa': 'pdv',
+                    'titulo': 'Disponible en tienda',
+                    'fecha_fmt': '24/11/2026 09:00',
+                  },
+                ],
+              },
+            });
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      // 1) Desde el módulo Insumos
+      await openModule(tester, api, 'Insumos');
+      expect(find.textContaining('TRZ-PDV-20261124-PDV90'), findsOneWidget);
+
+      final insumoBtn = find.byKey(const ValueKey('insumo.trazabilidad.90'));
+      await tester.ensureVisible(insumoBtn);
+      await tester.tap(insumoBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Trazabilidad del producto'), findsOneWidget);
+      expect(find.text('TRZ-PDV-20261124-PDV90'), findsOneWidget);
+
+      // Volver atrás al listado de Insumos y luego a Trabajo -> Almacenes
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Almacenes'));
+      await tester.tap(find.text('Almacenes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Punto de Venta Central'));
+      await tester.pumpAndSettle();
+
+      final almacenBtn = find.byKey(
+        const ValueKey('almacen.existencia.trazabilidad.90'),
+      );
+      await tester.ensureVisible(almacenBtn);
+      await tester.tap(almacenBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Trazabilidad del producto'), findsOneWidget);
+      expect(find.text('Hojuelas de Papa 500 g'), findsOneWidget);
+    },
+  );
 }

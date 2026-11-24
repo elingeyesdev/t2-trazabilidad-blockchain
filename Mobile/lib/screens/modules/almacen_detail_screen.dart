@@ -456,6 +456,19 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
                   .join(' · '),
             ),
           ],
+          if (item.codigoTrazabilidad case final codigo?) ...[
+            const Divider(height: 1),
+            DetailField(label: 'Código de trazabilidad', value: codigo),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              key: ValueKey('almacen.existencia.trazabilidad.${item.insumoId}'),
+              onPressed: () => Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.trazabilidadDetalle(codigo)),
+              icon: const Icon(Icons.qr_code_2_rounded),
+              label: const Text('Ver trazabilidad pública'),
+            ),
+          ],
         ],
       ),
     );

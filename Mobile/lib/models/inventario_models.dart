@@ -152,6 +152,8 @@ class AlmacenExistencia {
     this.minimo,
     this.existenciasBajas = false,
     this.partidas = const [],
+    this.codigoTrazabilidad,
+    this.trazabilidadUrl,
   });
 
   factory AlmacenExistencia.fromJson(Map<String, dynamic> row) {
@@ -179,6 +181,8 @@ class AlmacenExistencia {
       minimo: _asText(row['minimo']),
       existenciasBajas: row['existencias_bajas'] == true,
       partidas: partidas,
+      codigoTrazabilidad: _asText(row['codigo_trazabilidad']),
+      trazabilidadUrl: _asText(row['trazabilidad_url']),
     );
   }
 
@@ -195,6 +199,8 @@ class AlmacenExistencia {
   final String? minimo;
   final bool existenciasBajas;
   final List<ExistenciaPartida> partidas;
+  final String? codigoTrazabilidad;
+  final String? trazabilidadUrl;
 
   double get disponibleValue =>
       double.tryParse(cantidadDisponible.replaceAll(',', '.')) ?? 0;

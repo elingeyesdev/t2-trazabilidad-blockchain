@@ -68,6 +68,7 @@ class ModuleRecord {
     this.loteData,
     this.actividadData,
     this.cosechaData,
+    this.trazabilidadCodigo,
   });
 
   factory ModuleRecord.fromJson(
@@ -117,6 +118,7 @@ class ModuleRecord {
           ? ActividadEditableData.fromJson(row)
           : null,
       cosechaData: cosechaData,
+      trazabilidadCodigo: text('codigo_trazabilidad'),
     );
   }
 
@@ -131,4 +133,5 @@ class ModuleRecord {
   final LoteEditableData? loteData;
   final ActividadEditableData? actividadData;
   final CosechaDetailData? cosechaData;
+  final String? trazabilidadCodigo;
 }

@@ -686,21 +686,43 @@ class _ModuleScreenState extends State<ModuleScreen> {
   Widget _recordCard(ModuleRecord record) {
     final info = record.fieldInfo;
     final cosecha = record.cosechaData;
+    final trazabilidadCodigo = widget.module == AppModule.insumos
+        ? record.trazabilidadCodigo
+        : null;
     final fields = (cosecha?.toSummaryMap() ?? info?.summary ?? record.details)
         .entries
         .where((field) => field.key != 'Identificador')
         .toList();
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: RecordCard(
-        module: widget.module,
-        title: cosecha != null ? 'Cosecha #${record.id}' : record.title,
-        status: info?.status,
-        facts: [
-          if (info != null && info.status == null) ('Estado', 'No disponible'),
-          for (final field in fields) (field.key, field.value),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RecordCard(
+            module: widget.module,
+            title: cosecha != null ? 'Cosecha #${record.id}' : record.title,
+            status: info?.status,
+            facts: [
+              if (info != null && info.status == null)
+                ('Estado', 'No disponible'),
+              for (final field in fields) (field.key, field.value),
+              if (trazabilidadCodigo != null)
+                ('Código de trazabilidad', trazabilidadCodigo),
+            ],
+            onTap: _supportsDetail ? () => _openRecord(record) : null,
+          ),
+          if (trazabilidadCodigo != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: ValueKey('insumo.trazabilidad.${record.id}'),
+              onPressed: () => Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.trazabilidadDetalle(trazabilidadCodigo)),
+              icon: const Icon(Icons.qr_code_2_rounded),
+              label: const Text('Ver trazabilidad pública'),
+            ),
+          ],
         ],
-        onTap: _supportsDetail ? () => _openRecord(record) : null,
       ),
     );
   }
