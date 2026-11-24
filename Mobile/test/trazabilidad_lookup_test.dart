@@ -147,7 +147,35 @@ void main() {
       final api = ApiClient(
         config: ApiConfig(baseUrl: 'https://example.test/api'),
         sessionStorage: storage,
-        client: MockClient((_) async => jsonResponse({}, 404)),
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-ABC123') {
+            return jsonResponse({
+              'codigo': 'TRZ-PDV-20261124-ABC123',
+              'producto': 'Hojuelas de Papa 500 g',
+              'lote_agricola': 'Parcela Norte',
+              'punto_venta': 'Mercado Central',
+              'total_eventos': 6,
+            });
+          }
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-XYZ789') {
+            return jsonResponse({
+              'codigo': 'TRZ-PDV-20261124-XYZ789',
+              'producto': 'Papa Prefrita 1 kg',
+              'lote_agricola': 'Lote Sur',
+              'punto_venta': 'Tienda Norte',
+              'total_eventos': 5,
+            });
+          }
+          if (request.url.path == '/api/trazabilidad/TRZ-2026-LOTE01') {
+            return jsonResponse({
+              'codigo': 'TRZ-2026-LOTE01',
+              'producto': 'Papa Huaycha',
+              'lote_agricola': 'Parcela Norte',
+              'total_eventos': 4,
+            });
+          }
+          return jsonResponse({'message': 'No encontrado'}, 404);
+        }),
       );
       addTearDown(api.close);
 
@@ -260,7 +288,35 @@ void main() {
       final api = ApiClient(
         config: ApiConfig(baseUrl: 'https://example.test/api'),
         sessionStorage: storage,
-        client: MockClient((_) async => jsonResponse({}, 404)),
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-ABC123') {
+            return jsonResponse({
+              'codigo': 'TRZ-PDV-20261124-ABC123',
+              'producto': 'Hojuelas de Papa 500 g',
+              'lote_agricola': 'Parcela Norte',
+              'punto_venta': 'Mercado Central',
+              'total_eventos': 6,
+            });
+          }
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-XYZ789') {
+            return jsonResponse({
+              'codigo': 'TRZ-PDV-20261124-XYZ789',
+              'producto': 'Papa Prefrita 1 kg',
+              'lote_agricola': 'Lote Sur',
+              'punto_venta': 'Tienda Norte',
+              'total_eventos': 5,
+            });
+          }
+          if (request.url.path == '/api/trazabilidad/TRZ-2026-LOTE01') {
+            return jsonResponse({
+              'codigo': 'TRZ-2026-LOTE01',
+              'producto': 'Papa Huaycha',
+              'lote_agricola': 'Parcela Norte',
+              'total_eventos': 4,
+            });
+          }
+          return jsonResponse({'message': 'No encontrado'}, 404);
+        }),
       );
       addTearDown(api.close);
 

@@ -53,3 +53,72 @@ abstract final class TrazabilidadCodigoParser {
     return null;
   }
 }
+
+class TrazabilidadPublicaResumen {
+  const TrazabilidadPublicaResumen({
+    required this.codigo,
+    required this.producto,
+    this.puntoVenta,
+    this.minorista,
+    this.loteAgricola,
+    this.loteCodigo,
+    this.pedido,
+    this.totalEventos = 0,
+    this.rawData = const <String, dynamic>{},
+  });
+
+  factory TrazabilidadPublicaResumen.fromJson(
+    Object? json, {
+    required String fallbackCode,
+  }) {
+    final root =
+        json is Map<String, dynamic> && json['data'] is Map<String, dynamic>
+        ? json['data'] as Map<String, dynamic>
+        : json is Map<String, dynamic>
+        ? json
+        : const <String, dynamic>{};
+
+    final eventos = root['eventos'];
+    final totalFromField = _asInt(root['total_eventos']);
+    final totalEventos =
+        totalFromField ?? (eventos is List ? eventos.length : 0);
+
+    return TrazabilidadPublicaResumen(
+      codigo: _asText(root['codigo']) ?? fallbackCode,
+      producto:
+          _asText(root['producto']) ??
+          _asText(root['lote_agricola']) ??
+          'Producto trazado',
+      puntoVenta: _asText(root['punto_venta']),
+      minorista: _asText(root['minorista']),
+      loteAgricola: _asText(root['lote_agricola']),
+      loteCodigo: _asText(root['lote_codigo']),
+      pedido: _asText(root['pedido']),
+      totalEventos: totalEventos,
+      rawData: Map<String, dynamic>.unmodifiable(root),
+    );
+  }
+
+  final String codigo;
+  final String producto;
+  final String? puntoVenta;
+  final String? minorista;
+  final String? loteAgricola;
+  final String? loteCodigo;
+  final String? pedido;
+  final int totalEventos;
+  final Map<String, dynamic> rawData;
+}
+
+String? _asText(Object? value) {
+  if (value == null) return null;
+  final text = value.toString().trim();
+  return text.isEmpty || text == '—' ? null : text;
+}
+
+int? _asInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.trim());
+  return null;
+}

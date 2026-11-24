@@ -3,19 +3,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../models/api_exception.dart';
 import '../../models/trazabilidad_publica_models.dart';
+import '../../services/trazabilidad_publica_service.dart';
 import '../../theme/app_theme.dart';
 import '../modules/qr_scanner_screen.dart';
 
 class TrazabilidadLookupScreen extends StatefulWidget {
   const TrazabilidadLookupScreen({
     super.key,
+    required this.service,
     this.cameraBuilder,
     this.onCodeSelected,
+    this.onResolved,
   });
 
+  final TrazabilidadPublicaService service;
   final QrCameraBuilder? cameraBuilder;
   final ValueChanged<String>? onCodeSelected;
+  final ValueChanged<TrazabilidadPublicaResumen>? onResolved;
 
   @override
   State<TrazabilidadLookupScreen> createState() =>
@@ -29,8 +35,12 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
 
   bool _manualMode = false;
   QrCameraIssue? _cameraIssue;
-  String? _detectedCode;
+  bool _loading = false;
+  String? _lastCode;
   String? _parseError;
+  bool _notFound = false;
+  String? _connectionError;
+  TrazabilidadPublicaResumen? _result;
 
   @override
   void initState() {
@@ -49,37 +59,98 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
     super.dispose();
   }
 
-  void _handleInput(String raw) {
+  Future<void> _handleInput(String raw, {bool fromCamera = true}) async {
     final trimmed = raw.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty || _loading) return;
 
     final extracted = TrazabilidadCodigoParser.extract(trimmed);
     if (extracted == null) {
       setState(() {
-        _detectedCode = null;
+        _lastCode = null;
+        _result = null;
+        _notFound = false;
+        _connectionError = null;
         _parseError =
             'El código o enlace QR no corresponde a un código de trazabilidad válido.';
       });
       return;
     }
 
-    setState(() {
-      _parseError = null;
-      _detectedCode = extracted;
-    });
+    if (fromCamera &&
+        _lastCode == extracted &&
+        (_result != null || _notFound || _connectionError != null)) {
+      return;
+    }
+
     widget.onCodeSelected?.call(extracted);
+    await _lookupCode(extracted);
   }
 
-  void _submitManual() {
+  Future<void> _lookupCode(String codigo) async {
+    setState(() {
+      _loading = true;
+      _lastCode = codigo;
+      _parseError = null;
+      _notFound = false;
+      _connectionError = null;
+      _result = null;
+    });
+
+    try {
+      final result = await widget.service.consultarPorCodigo(codigo);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _result = result;
+      });
+      widget.onResolved?.call(result);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 404) {
+        setState(() {
+          _loading = false;
+          _notFound = true;
+        });
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _connectionError = error.message.trim().isNotEmpty
+            ? error.message
+            : 'No se pudo consultar la trazabilidad. Intenta nuevamente.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _connectionError =
+            'No se pudo conectar con el servidor. Revisa tu conexión e intenta nuevamente.';
+      });
+    }
+  }
+
+  Future<void> _retryLastCode() async {
+    final codigo = _lastCode;
+    if (codigo == null || _loading) return;
+    await _lookupCode(codigo);
+  }
+
+  Future<void> _submitManual() async {
     if (!(_manualFormKey.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
-    _handleInput(_manualCtrl.text);
+    await _handleInput(_manualCtrl.text, fromCamera: false);
   }
 
-  void _resetLookup() {
+  void _resetLookup({bool clearInput = false}) {
     setState(() {
-      _detectedCode = null;
+      _lastCode = null;
       _parseError = null;
+      _notFound = false;
+      _connectionError = null;
+      _result = null;
+      if (clearInput) {
+        _manualCtrl.clear();
+      }
     });
   }
 
@@ -91,7 +162,7 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
         for (final barcode in capture.barcodes) {
           final value = barcode.rawValue;
           if (value != null && value.trim().isNotEmpty) {
-            _handleInput(value);
+            unawaited(_handleInput(value));
             break;
           }
         }
@@ -108,6 +179,7 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
   Widget _cameraIssueCard(BuildContext context, QrCameraIssue issue) {
     final isDenied = issue == QrCameraIssue.permissionDenied;
     return Container(
+      key: const ValueKey('trazabilidad.error_camara'),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppTheme.maizeSoft,
@@ -229,12 +301,14 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
                             ),
                           ],
                           selected: {_manualMode},
-                          onSelectionChanged: (selection) {
-                            setState(() {
-                              _manualMode = selection.first;
-                              if (!_manualMode) _cameraIssue = null;
-                            });
-                          },
+                          onSelectionChanged: _loading
+                              ? null
+                              : (selection) {
+                                  setState(() {
+                                    _manualMode = selection.first;
+                                    if (!_manualMode) _cameraIssue = null;
+                                  });
+                                },
                         ),
                       ],
                     ),
@@ -244,98 +318,282 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
                     _buildCameraSection(context)
                   else
                     _buildManualSection(context),
+                  if (_loading) ...[
+                    const SizedBox(height: 18),
+                    _buildLoadingCard(context),
+                  ],
                   if (_parseError != null) ...[
                     const SizedBox(height: 18),
-                    Container(
-                      key: const ValueKey('trazabilidad.error_parseo'),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.claySoft,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppTheme.clay),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.error_outline_rounded,
-                            color: AppTheme.clay,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _parseError!,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.clay,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Cerrar aviso',
-                            onPressed: _resetLookup,
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              color: AppTheme.clay,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildParseErrorCard(context),
                   ],
-                  if (_detectedCode != null) ...[
+                  if (_notFound) ...[
                     const SizedBox(height: 18),
-                    Container(
-                      key: const ValueKey('trazabilidad.codigo_detectado'),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.sprout,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppTheme.sproutBorder),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.verified_outlined,
-                            color: AppTheme.fieldDeep,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Código listo para consultar',
-                                  style: theme.textTheme.labelLarge?.copyWith(
-                                    color: AppTheme.fieldDeep,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _detectedCode!,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: AppTheme.ink,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Limpiar',
-                            onPressed: _resetLookup,
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildNotFoundCard(context),
+                  ],
+                  if (_connectionError != null) ...[
+                    const SizedBox(height: 18),
+                    _buildConnectionErrorCard(context),
+                  ],
+                  if (_result != null) ...[
+                    const SizedBox(height: 18),
+                    _buildResultSummaryCard(context, _result!),
                   ],
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('trazabilidad.cargando'),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Consultando trazabilidad...',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (_lastCode != null) ...[
+                  const SizedBox(height: 2),
+                  Text(_lastCode!, style: theme.textTheme.bodySmall),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParseErrorCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('trazabilidad.error_parseo'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.claySoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.clay),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded, color: AppTheme.clay),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _parseError!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppTheme.clay,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Cerrar aviso',
+            onPressed: _resetLookup,
+            icon: const Icon(Icons.close_rounded, color: AppTheme.clay),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotFoundCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('trazabilidad.no_encontrado'),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.maizeSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFC58C1F)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.search_off_rounded,
+                color: Color(0xFF5F4100),
+                size: 28,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Código no encontrado',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: const Color(0xFF5F4100),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No encontramos un producto registrado con el código ${_lastCode ?? ''}. Verifica la etiqueta e intenta con otro código.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF5F4100),
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            key: const ValueKey('trazabilidad.intentar_otro'),
+            onPressed: () => _resetLookup(clearInput: true),
+            icon: const Icon(Icons.qr_code_rounded),
+            label: const Text('Consultar otro código'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionErrorCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('trazabilidad.error_conexion'),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.claySoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.clay),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.wifi_off_rounded,
+                color: AppTheme.clay,
+                size: 26,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Error al consultar trazabilidad',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: AppTheme.clay,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _connectionError!,
+            style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.clay),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                key: const ValueKey('trazabilidad.reintentar'),
+                onPressed: _retryLastCode,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reintentar'),
+              ),
+              OutlinedButton(
+                onPressed: () => _resetLookup(clearInput: false),
+                child: const Text('Cambiar código'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultSummaryCard(
+    BuildContext context,
+    TrazabilidadPublicaResumen result,
+  ) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('trazabilidad.resultado_resumen'),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.sprout,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.sproutBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_outlined,
+                color: AppTheme.fieldDeep,
+                size: 28,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.producto,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: AppTheme.fieldDeep,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      result.codigo,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: AppTheme.inkSoft,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (result.loteAgricola != null)
+            Text('Origen agrícola: ${result.loteAgricola}'),
+          if (result.puntoVenta != null)
+            Text('Punto de venta: ${result.puntoVenta}'),
+          Text(
+            '${result.totalEventos} ${result.totalEventos == 1 ? 'evento registrado' : 'eventos registrados'} en el recorrido',
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            key: const ValueKey('trazabilidad.otro_codigo'),
+            onPressed: () => _resetLookup(clearInput: true),
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            label: const Text('Consultar otro producto'),
+          ),
+        ],
       ),
     );
   }
@@ -348,7 +606,7 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
     final camera = widget.cameraBuilder != null
         ? widget.cameraBuilder!(
             context,
-            _handleInput,
+            (code) => unawaited(_handleInput(code)),
             (issue) => setState(() => _cameraIssue = issue),
           )
         : _defaultCamera(context);
@@ -397,6 +655,7 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
             TextFormField(
               key: const ValueKey('trazabilidad.codigo_input'),
               controller: _manualCtrl,
+              enabled: !_loading,
               textInputAction: TextInputAction.search,
               autocorrect: false,
               textCapitalization: TextCapitalization.characters,
@@ -414,14 +673,14 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
                 }
                 return null;
               },
-              onFieldSubmitted: (_) => _submitManual(),
+              onFieldSubmitted: (_) => unawaited(_submitManual()),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
               key: const ValueKey('trazabilidad.consultar_btn'),
-              onPressed: _submitManual,
+              onPressed: _loading ? null : _submitManual,
               icon: const Icon(Icons.search_rounded),
-              label: const Text('Consultar producto'),
+              label: Text(_loading ? 'Consultando...' : 'Consultar producto'),
             ),
           ],
         ),

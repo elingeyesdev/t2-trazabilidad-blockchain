@@ -48,6 +48,7 @@ import 'services/module_service.dart';
 import 'services/offline_store.dart';
 import 'services/pending_queue.dart';
 import 'services/task_notifier.dart';
+import 'services/trazabilidad_publica_service.dart';
 import 'services/session_storage.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_error_state.dart';
@@ -276,6 +277,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
         AppRoutes.register: (_) =>
             _sessionGate(() => RegisterScreen(controller: _auth)),
         AppRoutes.trazabilidadPublica: (_) => TrazabilidadLookupScreen(
+          service: TrazabilidadPublicaService(_api),
           cameraBuilder: widget.trazabilidadCameraBuilder,
         ),
         AppRoutes.profile: (_) => _sessionGate(
