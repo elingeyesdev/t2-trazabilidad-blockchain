@@ -528,4 +528,169 @@ void main() {
       expect(find.text('Hojuelas de Papa 500 g'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Bloquea acceso directo sin permisos a detalle de incidencias, certificaciones y documentos antes de consultar la API',
+    (tester) async {
+      await storage.saveToken('1|sin-permisos');
+      var apiDataCalls = 0;
+
+      const sinPermisosUser = {
+        'usuarioid': 50,
+        'nombre': 'Raúl',
+        'apellido': 'Mendez',
+        'email': 'raul@agrofusion.test',
+        'activo': true,
+        'estado_cuenta': 'aprobado',
+        'roles': [
+          {'id': 3, 'name': 'agricultor'},
+        ],
+        'permissions': ['lotes.view'],
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') {
+            return jsonResponse(sinPermisosUser);
+          }
+          apiDataCalls++;
+          return jsonResponse({'message': 'Forbidden'}, 403);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(apiClient: api, sessionStorage: storage),
+      );
+      await tester.pumpAndSettle();
+
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      for (final route in const [
+        '/modules/incidentes/42',
+        '/modules/certificaciones/7',
+        '/modules/documentos-entrega/19',
+      ]) {
+        navigator.pushNamed(route).ignore();
+        await tester.pumpAndSettle();
+        expect(find.text('Acceso no autorizado'), findsOneWidget);
+        navigator.pop();
+        await tester.pumpAndSettle();
+      }
+
+      expect(apiDataCalls, 0);
+    },
+  );
+
+  testWidgets(
+    'El administrador supervisa incidencias sin acción de resolver y un 403 del servidor al resolver se informa sin fallar',
+    (tester) async {
+      // 1) Admin: solo supervisión
+      await storage.saveToken('1|admin-token');
+      const adminUser = {
+        'usuarioid': 1,
+        'nombre': 'Admin',
+        'apellido': 'Sistema',
+        'email': 'admin@agrofusion.test',
+        'activo': true,
+        'estado_cuenta': 'aprobado',
+        'roles': [
+          {'id': 1, 'name': 'admin'},
+        ],
+        'permissions': ['incidentes.view', 'incidentes.resolve'],
+      };
+      const incidenteAbierto = {
+        'incidenteenvioid': 44,
+        'tipo': 'Diferencia de peso',
+        'descripcion': 'Faltaron 5 kg al recibir el envío.',
+        'estado': 'abierto',
+        'seguimiento': 'Pendiente de resolución',
+        'puede_resolver': true,
+      };
+
+      final adminApi = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') return jsonResponse(adminUser);
+          if (request.url.path == '/api/incidentes/44') {
+            return jsonResponse(incidenteAbierto);
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(adminApi.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(apiClient: adminApi, sessionStorage: storage),
+      );
+      await tester.pumpAndSettle();
+
+      tester
+          .state<NavigatorState>(find.byType(Navigator))
+          .pushNamed('/modules/incidentes/44')
+          .ignore();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Diferencia de peso'), findsOneWidget);
+      expect(find.byKey(const ValueKey('incidente.resolver')), findsNothing);
+
+      // 2) Mayorista recibe 403 del backend al resolver -> muestra aviso sin romperse
+      await storage.saveToken('1|mayorista-403');
+      final rejectApi = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') {
+            return jsonResponse(mayoristaUser);
+          }
+          if (request.url.path == '/api/incidentes/44' &&
+              request.method == 'GET') {
+            return jsonResponse(incidenteAbierto);
+          }
+          if (request.url.path == '/api/incidentes/44/resolver' &&
+              request.method == 'PATCH') {
+            return jsonResponse({
+              'message':
+                  'No estás asignado como responsable de esta incidencia.',
+            }, 403);
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(rejectApi.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(
+          key: const ValueKey('reject-app'),
+          apiClient: rejectApi,
+          sessionStorage: storage,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      tester
+          .state<NavigatorState>(find.byType(Navigator))
+          .pushNamed('/modules/incidentes/44')
+          .ignore();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('incidente.resolver')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('incidente.nota_resolucion')),
+        'Intento de cierre sin ser responsable.',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('incidente.confirmar_resolucion')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No estás asignado como responsable de esta incidencia.'),
+        findsOneWidget,
+      );
+    },
+  );
 }
