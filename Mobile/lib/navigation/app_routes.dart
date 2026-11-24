@@ -31,4 +31,6 @@ abstract final class AppRoutes {
       '${AppModule.pedidos.route}/${tipo.value}/$id';
   static String loteProduccion(int id) =>
       '/modules/planta/lotes-produccion/$id';
+  static String trazabilidadDetalle(String codigo) =>
+      '$trazabilidadPublica/${Uri.encodeComponent(codigo)}';
 }

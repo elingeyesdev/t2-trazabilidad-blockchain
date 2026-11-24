@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/trazabilidad_publica_models.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/trazabilidad_publica_service.dart';
 import '../../theme/app_theme.dart';
 import '../modules/qr_scanner_screen.dart';
@@ -587,6 +588,18 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
             '${result.totalEventos} ${result.totalEventos == 1 ? 'evento registrado' : 'eventos registrados'} en el recorrido',
           ),
           const SizedBox(height: 14),
+          FilledButton.icon(
+            key: const ValueKey('trazabilidad.ver_completa'),
+            onPressed: () {
+              Navigator.of(context).pushNamed(
+                AppRoutes.trazabilidadDetalle(result.codigo),
+                arguments: result,
+              );
+            },
+            icon: const Icon(Icons.timeline_rounded),
+            label: const Text('Ver trazabilidad completa'),
+          ),
+          const SizedBox(height: 10),
           OutlinedButton.icon(
             key: const ValueKey('trazabilidad.otro_codigo'),
             onPressed: () => _resetLookup(clearInput: true),

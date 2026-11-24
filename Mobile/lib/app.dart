@@ -10,6 +10,7 @@ import 'models/incidente_models.dart';
 import 'models/lote_models.dart';
 import 'models/pedido_models.dart';
 import 'models/qr_envio_models.dart';
+import 'models/trazabilidad_publica_models.dart';
 import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
@@ -42,6 +43,7 @@ import 'screens/modules/qr_scanner_screen.dart';
 import 'screens/modules/usuario_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/public/trazabilidad_lookup_screen.dart';
+import 'screens/public/trazabilidad_publica_screen.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/module_service.dart';
@@ -353,6 +355,19 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['trazabilidad', final rawCodigo]) {
+          final codigo = Uri.decodeComponent(rawCodigo).trim();
+          if (codigo.isEmpty) return null;
+          final args = settings.arguments;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => TrazabilidadPublicaScreen(
+              codigo: codigo,
+              service: TrazabilidadPublicaService(_api),
+              initialReporte: args is TrazabilidadPublicaReporte ? args : null,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'usuarios', final rawId]) {
           final id = int.tryParse(rawId);
