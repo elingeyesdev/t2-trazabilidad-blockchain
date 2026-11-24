@@ -141,7 +141,7 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
         ->middleware(['auth:sanctum', 'action.permission:lotes,delete']);
     $recursoProtegido('estadolotes', EstadoLoteController::class, 'lotes');
     Route::apiResource('producciones', ProduccionController::class)
-        ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read', 'idempotente']);
     Route::get('lotes/{lote}/producciones', [ProduccionController::class, 'index'])
         ->name('lotes.producciones.index')->whereNumber('lote')->middleware(['auth:sanctum', 'action.permission:lotes,read']);
     Route::get('lotes/{lote}/producciones/{produccion}', [ProduccionController::class, 'showEnLote'])
@@ -192,7 +192,7 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
     Route::get('actividades/responsables', [ActividadController::class, 'responsables'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,update']);
     Route::post('actividades/{actividad}/cerrar', [\App\Http\Controllers\Api\ActividadCierreController::class, 'cerrar'])
-        ->middleware(['auth:sanctum', 'action.permission:lotes,read'])->name('actividades.cerrar');
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read', 'idempotente'])->name('actividades.cerrar');
     Route::get('actividades/{actividad}/evidencia', [\App\Http\Controllers\Api\ActividadCierreController::class, 'evidencia'])
         ->middleware(['auth:sanctum', 'action.permission:lotes,read'])->name('actividades.evidencia');
     Route::get('actividades', [ActividadController::class, 'index'])

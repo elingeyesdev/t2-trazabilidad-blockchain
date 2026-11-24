@@ -477,6 +477,7 @@ class ModuleService {
     required String result,
     required EvidencePhoto photo,
     List<Map<String, Object?>> consumos = const [],
+    String? idempotencyKey,
   }) async {
     if (!user.permissions.contains(AppModule.actividades.permission) ||
         user.roles.contains('admin')) {
@@ -500,6 +501,7 @@ class ModuleService {
     final response = await _api.request(
       'POST',
       '${AppModule.actividades.endpoint}/$actividadId/cerrar',
+      headers: _idempotency(idempotencyKey),
       fields: fields,
       files: [
         http.MultipartFile.fromBytes(
@@ -605,6 +607,7 @@ class ModuleService {
     int? catalogoTamanoConteoId,
     String? fechaCosecha,
     String? observaciones,
+    String? idempotencyKey,
   }) async {
     if (!CosechaPermissions.canCreate(user)) {
       throw const ApiException(
@@ -627,6 +630,7 @@ class ModuleService {
     final response = await _api.request(
       'POST',
       AppModule.producciones.endpoint,
+      headers: _idempotency(idempotencyKey),
       body: body,
     );
     return ModuleRecord.fromJson(
@@ -1538,4 +1542,8 @@ class ModuleService {
     );
     return InventarioMovimientoRecord.fromJson(response);
   }
+
+  /// Con la misma clave, Laravel no repite un registro que ya guardó.
+  Map<String, String>? _idempotency(String? key) =>
+      key == null ? null : {'Idempotency-Key': key};
 }

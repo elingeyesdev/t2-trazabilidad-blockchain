@@ -124,6 +124,19 @@ class CosechaRegistroTest extends TestCase
         $this->get(route('producciones.index'))->assertOk()->assertSee('5250.125');
     }
 
+    public function test_reenviar_con_la_misma_clave_no_duplica_la_cosecha(): void
+    {
+        $this->como($this->jefe);
+        $cabeceras = ['Accept' => 'application/json', 'Idempotency-Key' => 'cliente-reintento-1'];
+
+        $primera = $this->post('/api/producciones', $this->datos(), $cabeceras)->assertCreated();
+        $repetida = $this->post('/api/producciones', $this->datos(), $cabeceras)
+            ->assertCreated()->assertHeader('Idempotent-Replayed', 'true');
+
+        $this->assertSame(1, Produccion::count());
+        $this->assertSame($primera->json('produccionid'), $repetida->json('produccionid'));
+    }
+
     public function test_conversiones_factores_decimales_redondeo_y_vista_previa(): void
     {
         $this->como($this->jefe);

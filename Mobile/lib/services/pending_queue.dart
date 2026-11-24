@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -81,6 +82,11 @@ class PendingQueue extends ChangeNotifier {
 
   bool get syncing => _syncing;
 
+  /// Clave única de un envío. El mismo valor viaja al servidor (para no
+  /// duplicar) y se usa como id del registro si queda en cola.
+  static String newKey() =>
+      '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 31)}';
+
   List<PendingItem> forUser(AuthUser user) =>
       _items.where((item) => item.userId == user.id).toList(growable: false);
 
@@ -103,6 +109,7 @@ class PendingQueue extends ChangeNotifier {
 
   Future<void> addCosecha(
     AuthUser user, {
+    required String key,
     required String label,
     required int loteId,
     required String cantidad,
@@ -112,7 +119,7 @@ class PendingQueue extends ChangeNotifier {
     String? observaciones,
   }) => _add(
     PendingItem(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: key,
       userId: user.id,
       kind: PendingKind.cosecha,
       label: label,
@@ -129,6 +136,7 @@ class PendingQueue extends ChangeNotifier {
 
   Future<void> addCierre(
     AuthUser user, {
+    required String key,
     required String label,
     required int actividadId,
     required String result,
@@ -136,7 +144,7 @@ class PendingQueue extends ChangeNotifier {
     required List<Map<String, Object?>> consumos,
   }) => _add(
     PendingItem(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: key,
       userId: user.id,
       kind: PendingKind.cierre,
       label: label,
@@ -198,6 +206,7 @@ class PendingQueue extends ChangeNotifier {
         catalogoTamanoConteoId: p['catalogoTamanoConteoId'] as int?,
         fechaCosecha: p['fechaCosecha'] as String?,
         observaciones: p['observaciones'] as String?,
+        idempotencyKey: item.id,
       ),
       PendingKind.cierre => service.closeActividad(
         user,
@@ -208,6 +217,7 @@ class PendingQueue extends ChangeNotifier {
           name: p['photoName'] as String,
         ),
         consumos: (p['consumos'] as List).cast<Map<String, Object?>>(),
+        idempotencyKey: item.id,
       ),
     };
   }

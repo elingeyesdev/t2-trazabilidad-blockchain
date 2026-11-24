@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/models/api_exception.dart';
 import 'package:agrofusion_mobile/models/auth_user.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/module_service.dart';
@@ -30,6 +31,7 @@ void main() {
   var online = false;
   var status = 201;
   final posted = <Map<String, dynamic>>[];
+  final keys = <String?>[];
 
   ApiClient client() => ApiClient(
     config: ApiConfig(baseUrl: 'http://localhost/api'),
@@ -39,6 +41,7 @@ void main() {
       if (!online) throw http.ClientException('sin señal');
       if (request.method == 'POST') {
         posted.add(jsonDecode(request.body) as Map<String, dynamic>);
+        keys.add(request.headers['Idempotency-Key']);
         return http.Response(
           jsonEncode(
             status == 201
@@ -98,6 +101,7 @@ void main() {
     final service = ModuleService(client());
     await queue.addCosecha(
       user,
+      key: 'clave-1',
       label: 'Cosecha de Norte',
       loteId: 3,
       cantidad: '10',
@@ -123,6 +127,7 @@ void main() {
     final service = ModuleService(client());
     await queue.addCosecha(
       user,
+      key: 'clave-1',
       label: 'Cosecha de Norte',
       loteId: 3,
       cantidad: '10',
@@ -143,5 +148,25 @@ void main() {
     expect(TaskNotifier.fresh(null, [1, 2]), isEmpty);
     expect(TaskNotifier.fresh([1, 2], [1, 2, 3]), [3]);
     expect(TaskNotifier.fresh([1, 2, 3], [1]), isEmpty);
+  });
+
+  test(
+    'El perfil (/me) nunca sale del caché: sin señal no hay sesión vieja',
+    () async {
+      final api = client();
+      online = true;
+      await api.request('GET', 'me', bearerToken: 't');
+      online = false;
+      await expectLater(
+        api.request('GET', 'me', bearerToken: 't'),
+        throwsA(
+          isA<ApiException>().having((e) => e.offline, 'offline', isTrue),
+        ),
+      );
+    },
+  );
+
+  test('Cada envío genera una clave distinta', () {
+    expect(PendingQueue.newKey(), isNot(PendingQueue.newKey()));
   });
 }

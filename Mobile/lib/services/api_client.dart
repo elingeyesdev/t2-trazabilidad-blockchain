@@ -44,6 +44,7 @@ class ApiClient {
     List<http.MultipartFile>? files,
     bool authenticated = true,
     String? bearerToken,
+    Map<String, String>? headers,
   }) async {
     final uri = config.endpoint(path, queryParameters: queryParameters);
     final abort = Completer<void>();
@@ -76,6 +77,7 @@ class ApiClient {
     }
     request.followRedirects = false;
     request.headers['Accept'] = 'application/json';
+    if (headers != null) request.headers.addAll(headers);
 
     try {
       final token = authenticated
@@ -110,7 +112,7 @@ class ApiClient {
       try {
         final json = jsonDecode(utf8.decode(response.bodyBytes));
         servedFromCache.value = false;
-        if (method == 'GET' && authenticated) {
+        if (_cacheable(method, authenticated, uri)) {
           await offlineStore?.putCache(uri.toString(), json);
         }
         return json;
@@ -140,6 +142,13 @@ class ApiClient {
     }
   }
 
+  /// El perfil (`/me`) lleva los permisos vigentes: nunca se sirve de un caché,
+  /// para que sin señal no se reabra una sesión con permisos ya revocados.
+  bool _cacheable(String method, bool authenticated, Uri uri) =>
+      method == 'GET' &&
+      authenticated &&
+      (uri.pathSegments.isEmpty || uri.pathSegments.last != 'me');
+
   /// Sin señal, las lecturas devuelven lo último consultado y las escrituras
   /// fallan marcadas como [ApiException.offline] para poder guardarlas.
   Future<Object?> _offline(
@@ -148,7 +157,7 @@ class ApiClient {
     Uri uri,
     String message,
   ) async {
-    if (method == 'GET' && authenticated) {
+    if (_cacheable(method, authenticated, uri)) {
       final cached = await offlineStore?.getCache(uri.toString());
       if (cached != null) {
         servedFromCache.value = true;
@@ -218,6 +227,7 @@ class ApiClient {
 
   Future<void> _expireSession(String? requestToken) async {
     try {
+      await offlineStore?.clearCache();
       final current = await _sessionStorage.readToken();
       if (current != null && current != requestToken) return;
       if (current != null) await _sessionStorage.clearToken();

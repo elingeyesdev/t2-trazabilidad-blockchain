@@ -303,6 +303,7 @@ class _CosechaFormScreenState extends State<CosechaFormScreen> {
       _submitError = null;
     });
 
+    final key = PendingQueue.newKey();
     try {
       final created = await widget.service.createCosecha(
         widget.user,
@@ -312,6 +313,7 @@ class _CosechaFormScreenState extends State<CosechaFormScreen> {
         catalogoTamanoConteoId: _presentacionId,
         fechaCosecha: fecha.isEmpty ? null : fecha,
         observaciones: obs.isEmpty ? null : obs,
+        idempotencyKey: key,
       );
       if (!mounted) return;
       Navigator.of(context).pop(CosechaFormResult(record: created));
@@ -320,6 +322,7 @@ class _CosechaFormScreenState extends State<CosechaFormScreen> {
       if (error.offline && queue != null) {
         await queue.addCosecha(
           widget.user,
+          key: key,
           label: 'Cosecha de ${lote?.name ?? 'lote #$loteId'}',
           loteId: loteId,
           cantidad: cantidad,

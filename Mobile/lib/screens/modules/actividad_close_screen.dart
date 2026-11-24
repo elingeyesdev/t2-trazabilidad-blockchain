@@ -633,6 +633,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       _photoError = null;
     });
 
+    final key = PendingQueue.newKey();
     try {
       final closed = await widget.service.closeActividad(
         widget.user,
@@ -640,6 +641,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
         result: resultText,
         photo: photo,
         consumos: consumoInputs.map((item) => item.toPayload()).toList(),
+        idempotencyKey: key,
       );
       if (!mounted) return;
       Navigator.of(context).pop(ActividadCloseResult(record: closed));
@@ -648,6 +650,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       if (error.offline && queue != null) {
         await queue.addCierre(
           widget.user,
+          key: key,
           label:
               'Cierre: ${_actividad?.description ?? 'actividad #${widget.actividadId}'}',
           actividadId: widget.actividadId,
