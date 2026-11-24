@@ -20,13 +20,15 @@ class OfflineStore {
     return File('${dir.path}/$name');
   }
 
-  // FNV-1a: nombre de archivo estable y corto para cada ruta consultada.
+  // FNV-1a (dos carriles de 32 bits compatibles con Dart VM y Web/dart2js).
   static String _name(String key) {
-    var hash = 0xcbf29ce484222325;
+    var h1 = 0x811c9dc5;
+    var h2 = 0x9e3779b9;
     for (final unit in key.codeUnits) {
-      hash = ((hash ^ unit) * 0x100000001b3) & 0x7fffffffffffffff;
+      h1 = ((h1 ^ unit) * 0x01000193) & 0xffffffff;
+      h2 = ((h2 ^ (unit + 17)) * 0x01000193) & 0xffffffff;
     }
-    return 'c_${hash.toRadixString(16)}.json';
+    return 'c_${h1.toRadixString(16)}${h2.toRadixString(16)}.json';
   }
 
   Future<void> putCache(String key, Object? json) async {
