@@ -151,4 +151,150 @@ void main() {
       expect(find.text('Verificado en blockchain'), findsNothing);
     },
   );
+
+  testWidgets(
+    'Muestra la línea de tiempo agrupada por etapas expandibles y permite filtrar eventos localmente',
+    (tester) async {
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-FULL01') {
+            return jsonResponse({
+              'data': {
+                'codigo': 'TRZ-PDV-20261124-FULL01',
+                'producto': 'Hojuelas de Papa 500 g',
+                'lote_agricola': 'Parcela Norte',
+                'punto_venta': 'Mercado Central',
+                'total_eventos': 5,
+                'eventos_agrupados': [
+                  {
+                    'key': 'agricola',
+                    'label': 'Producción agrícola',
+                    'eventos': [
+                      {
+                        'paso': 1,
+                        'fecha_fmt': '01/11/2026 08:00',
+                        'titulo': 'Siembra certificada',
+                        'ubicacion': 'Parcela Norte',
+                        'descripcion_lineas': ['Variedad Huaycha orgánica'],
+                      },
+                    ],
+                  },
+                  {
+                    'key': 'planta',
+                    'label': 'Planta procesadora',
+                    'eventos': [
+                      {
+                        'paso': 2,
+                        'fecha_fmt': '10/11/2026 10:00',
+                        'titulo': 'Lavado y deshidratado',
+                        'ubicacion': 'Planta Valle Alto',
+                        'descripcion_lineas': ['Control de humedad aprobado'],
+                      },
+                    ],
+                  },
+                  {
+                    'key': 'mayorista',
+                    'label': 'Centro mayorista',
+                    'eventos': [
+                      {
+                        'paso': 3,
+                        'fecha_fmt': '14/11/2026 15:00',
+                        'titulo': 'Ingreso a almacén mayorista',
+                        'ubicacion': 'Almacén Central',
+                      },
+                    ],
+                  },
+                  {
+                    'key': 'distribucion',
+                    'label': 'Distribución al PDV',
+                    'eventos': [
+                      {
+                        'paso': 4,
+                        'fecha_fmt': '18/11/2026 09:30',
+                        'titulo': 'Despacho en camión refrigerado',
+                        'ubicacion': 'Ruta Zona Sur',
+                      },
+                    ],
+                  },
+                  {
+                    'key': 'pdv',
+                    'label': 'Punto de venta',
+                    'eventos': [
+                      {
+                        'paso': 5,
+                        'fecha_fmt': '18/11/2026 14:15',
+                        'titulo': 'Disponible en tienda',
+                        'ubicacion': 'Mercado Central',
+                      },
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: TrazabilidadPublicaScreen(
+            codigo: 'TRZ-PDV-20261124-FULL01',
+            service: TrazabilidadPublicaService(api),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Todas las etapas presentes
+      expect(find.text('Producción agrícola'), findsOneWidget);
+      expect(find.text('Planta procesadora'), findsOneWidget);
+      expect(find.text('Centro mayorista'), findsOneWidget);
+      expect(find.text('Distribución al PDV'), findsOneWidget);
+      expect(find.text('Punto de venta'), findsWidgets);
+      expect(find.text('Siembra certificada'), findsOneWidget);
+
+      // Contraer y volver a expandir la etapa agrícola
+      final etapaAgricola = find.byKey(
+        const ValueKey('trazabilidad.etapa.agricola'),
+      );
+      await tester.ensureVisible(etapaAgricola);
+      await tester.tap(etapaAgricola);
+      await tester.pumpAndSettle();
+      expect(find.text('Siembra certificada'), findsNothing);
+
+      await tester.tap(etapaAgricola);
+      await tester.pumpAndSettle();
+      expect(find.text('Siembra certificada'), findsOneWidget);
+
+      // Filtrar por término específico
+      final searchField = find.byKey(
+        const ValueKey('trazabilidad.publica.buscar'),
+      );
+      await tester.ensureVisible(searchField);
+      await tester.enterText(searchField, 'deshidratado');
+      await tester.pumpAndSettle();
+      expect(find.text('Lavado y deshidratado'), findsOneWidget);
+      expect(find.text('Siembra certificada'), findsNothing);
+
+      // Término sin coincidencias
+      await tester.enterText(searchField, 'inexistente999');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('trazabilidad.publica.sin_coincidencias')),
+        findsOneWidget,
+      );
+
+      // Limpiar búsqueda restaura todas las etapas
+      await tester.tap(
+        find.byKey(const ValueKey('trazabilidad.publica.buscar_limpiar')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Siembra certificada'), findsOneWidget);
+    },
+  );
 }

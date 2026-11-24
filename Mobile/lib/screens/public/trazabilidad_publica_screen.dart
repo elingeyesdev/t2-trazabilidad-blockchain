@@ -29,10 +29,14 @@ class TrazabilidadPublicaScreen extends StatefulWidget {
 }
 
 class _TrazabilidadPublicaScreenState extends State<TrazabilidadPublicaScreen> {
+  final _searchCtrl = TextEditingController();
+  final Set<String> _collapsedStages = <String>{};
+
   TrazabilidadPublicaReporte? _reporte;
   bool _loading = false;
   bool _notFound = false;
   String? _error;
+  String _query = '';
 
   @override
   void initState() {
@@ -41,6 +45,12 @@ class _TrazabilidadPublicaScreenState extends State<TrazabilidadPublicaScreen> {
     if (_reporte == null) {
       unawaited(_load());
     }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -151,6 +161,8 @@ class _TrazabilidadPublicaScreenState extends State<TrazabilidadPublicaScreen> {
                 _buildMetadataCard(context, reporte),
                 const SizedBox(height: 16),
                 _buildCertificationsCard(context, reporte),
+                const SizedBox(height: 16),
+                _buildTimelineSection(context, reporte),
               ],
             ),
           ),
@@ -511,6 +523,444 @@ class _TrazabilidadPublicaScreenState extends State<TrazabilidadPublicaScreen> {
       ),
     );
   }
+
+  Widget _buildTimelineSection(
+    BuildContext context,
+    TrazabilidadPublicaReporte reporte,
+  ) {
+    final theme = Theme.of(context);
+    final trimmedQuery = _query.trim();
+    final filteredStages = <TrazabilidadEtapaGrupo>[];
+    var matchingCount = 0;
+
+    for (final stage in reporte.etapas) {
+      final matches = trimmedQuery.isEmpty
+          ? stage.eventos
+          : stage.eventos
+                .where((event) => event.matchesQuery(trimmedQuery))
+                .toList();
+      if (matches.isNotEmpty) {
+        matchingCount += matches.length;
+        filteredStages.add(
+          TrazabilidadEtapaGrupo(
+            key: stage.key,
+            label: stage.label,
+            eventos: matches,
+          ),
+        );
+      }
+    }
+
+    return Column(
+      key: const ValueKey('trazabilidad.publica.timeline'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Recorrido del producto',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Campo → Planta → Mayorista → Distribución → Punto de venta',
+                style: theme.textTheme.bodySmall,
+              ),
+              if (reporte.etapas.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                TextField(
+                  key: const ValueKey('trazabilidad.publica.buscar'),
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Buscar en el recorrido',
+                    hintText: 'Ej. siembra, cosecha, planta, recepción...',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: trimmedQuery.isEmpty
+                        ? null
+                        : IconButton(
+                            key: const ValueKey(
+                              'trazabilidad.publica.buscar_limpiar',
+                            ),
+                            tooltip: 'Limpiar búsqueda',
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _query = '');
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                  ),
+                  onChanged: (value) => setState(() => _query = value),
+                ),
+                if (trimmedQuery.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '$matchingCount ${matchingCount == 1 ? 'coincidencia' : 'coincidencias'} para "$trimmedQuery"',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.fieldDeep,
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (reporte.etapas.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Text(
+              'Aún no hay eventos registrados en el recorrido de este producto.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppTheme.inkSoft,
+              ),
+            ),
+          )
+        else if (filteredStages.isEmpty)
+          Container(
+            key: const ValueKey('trazabilidad.publica.sin_coincidencias'),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppTheme.maizeSoft,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFC58C1F)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Sin coincidencias en el recorrido',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF5F4100),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'No encontramos eventos que coincidan con "$trimmedQuery".',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF5F4100),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          for (var i = 0; i < filteredStages.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            _buildStageCard(
+              context,
+              filteredStages[i],
+              forceExpanded: trimmedQuery.isNotEmpty,
+            ),
+          ],
+      ],
+    );
+  }
+
+  Widget _buildStageCard(
+    BuildContext context,
+    TrazabilidadEtapaGrupo stage, {
+    required bool forceExpanded,
+  }) {
+    final theme = Theme.of(context);
+    final style = _stageVisual(stage.key);
+    final isExpanded = forceExpanded || !_collapsedStages.contains(stage.key);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: ValueKey('trazabilidad.etapa.${stage.key}'),
+            onTap: forceExpanded
+                ? null
+                : () {
+                    setState(() {
+                      if (_collapsedStages.contains(stage.key)) {
+                        _collapsedStages.remove(stage.key);
+                      } else {
+                        _collapsedStages.add(stage.key);
+                      }
+                    });
+                  },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: style.headerBg,
+                border: Border(
+                  left: BorderSide(color: style.accent, width: 4),
+                  bottom: isExpanded
+                      ? const BorderSide(color: AppTheme.line)
+                      : BorderSide.none,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: style.chipBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(style.icon, color: style.accent, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      stage.label,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.ink,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: style.chipBg,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${stage.total}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: style.accent,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    isExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: AppTheme.inkSoft,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < stage.eventos.length; i++)
+                    _buildEventItem(
+                      context,
+                      stage.eventos[i],
+                      accent: style.accent,
+                      chipBg: style.chipBg,
+                      isLast: i == stage.eventos.length - 1,
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventItem(
+    BuildContext context,
+    TrazabilidadEvento event, {
+    required Color accent,
+    required Color chipBg,
+    required bool isLast,
+  }) {
+    final theme = Theme.of(context);
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 28,
+            child: Column(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: chipBg,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: accent, width: 1.5),
+                  ),
+                  child: Text(
+                    '${event.paso}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: AppTheme.line,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.titulo,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.ink,
+                    ),
+                  ),
+                  if (event.fechaFmt != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      event.fechaFmt!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppTheme.inkSoft,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if (event.ubicacion != null || event.referencia != null) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (event.ubicacion != null)
+                          _infoPill(
+                            context,
+                            Icons.place_outlined,
+                            event.ubicacion!,
+                          ),
+                        if (event.referencia != null)
+                          _infoPill(
+                            context,
+                            Icons.tag_rounded,
+                            event.referencia!,
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (event.descripcionLineas.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    for (final linea in event.descripcionLineas)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(linea, style: theme.textTheme.bodyMedium),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoPill(BuildContext context, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppTheme.paper,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppTheme.inkSoft),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppTheme.ink,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  ({Color accent, Color chipBg, Color headerBg, IconData icon}) _stageVisual(
+    String key,
+  ) => switch (key.toLowerCase()) {
+    'agricola' => (
+      accent: const Color(0xFF1F6642),
+      chipBg: const Color(0xFFDCEBD3),
+      headerBg: const Color(0xFFF3F8EF),
+      icon: Icons.eco_outlined,
+    ),
+    'planta' => (
+      accent: const Color(0xFF623CEA),
+      chipBg: const Color(0xFFECE6FF),
+      headerBg: const Color(0xFFF7F4FF),
+      icon: Icons.precision_manufacturing_outlined,
+    ),
+    'mayorista' => (
+      accent: const Color(0xFF0F766E),
+      chipBg: const Color(0xFFD7F3EF),
+      headerBg: const Color(0xFFF1FBF9),
+      icon: Icons.warehouse_outlined,
+    ),
+    'distribucion' => (
+      accent: AppTheme.sky,
+      chipBg: AppTheme.skySoft,
+      headerBg: const Color(0xFFF2F7FB),
+      icon: Icons.local_shipping_outlined,
+    ),
+    'pdv' => (
+      accent: const Color(0xFF9A5B00),
+      chipBg: AppTheme.maizeSoft,
+      headerBg: const Color(0xFFFFF8E8),
+      icon: Icons.storefront_outlined,
+    ),
+    _ => (
+      accent: AppTheme.fieldDeep,
+      chipBg: AppTheme.sprout,
+      headerBg: AppTheme.paper,
+      icon: Icons.timeline_rounded,
+    ),
+  };
 
   String _formatQuantity(double value) {
     return value == value.roundToDouble()
