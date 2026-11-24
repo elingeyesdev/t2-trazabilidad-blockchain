@@ -455,4 +455,175 @@ void main() {
       expect(find.text('Abrir trazabilidad'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'TrazabilidadPublicaScreen se renderiza sin desbordes en pantalla pequeña y texto grande',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-SMALL1') {
+            return jsonResponse({
+              'data': {
+                'codigo': 'TRZ-PDV-20261124-SMALL1',
+                'producto':
+                    'Hojuelas Crujientes de Papa Orgánica Premium Selección Especial 500 g',
+                'stock_actual': 42.5,
+                'unidad': 'bolsas',
+                'punto_venta': 'Supermercado Cooperativa Central del Valle',
+                'minorista': 'Comercializadora Agrícola del Sur',
+                'lote_agricola': 'Parcela Comunitaria Alto Valle Sector Norte',
+                'lote_codigo': 'TRZ-LOTE-2026-0099',
+                'pedido': 'PDV-2026-00998',
+                'total_eventos': 2,
+                'certificaciones': [
+                  {
+                    'nombre':
+                        'Certificación de Buenas Prácticas Agrícolas y Trazabilidad',
+                    'entidad': 'SENASAG Cochabamba',
+                    'codigo': 'BPA-2026-008812',
+                    'estado': 'vigente',
+                    'blockchain_status': 'confirmado',
+                    'tx_hash':
+                        '0x9b8e7d6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d',
+                    'red': 'Polygon Amoy',
+                  },
+                ],
+                'eventos_agrupados': [
+                  {
+                    'key': 'agricola',
+                    'label': 'Producción agrícola',
+                    'eventos': [
+                      {
+                        'paso': 1,
+                        'fecha_fmt': '01/11/2026 07:45',
+                        'titulo': 'Siembra y georreferenciación del lote',
+                        'ubicacion': 'Parcela Comunitaria Alto Valle',
+                        'referencia': 'TRZ-LOTE-2026-0099',
+                        'descripcion_lineas': [
+                          'Registro completo con semilla certificada y control de humedad.',
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    'key': 'pdv',
+                    'label': 'Punto de venta',
+                    'eventos': [
+                      {
+                        'paso': 2,
+                        'fecha_fmt': '20/11/2026 16:30',
+                        'titulo': 'Recepción confirmada en tienda',
+                        'ubicacion':
+                            'Supermercado Cooperativa Central del Valle',
+                      },
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: TrazabilidadPublicaScreen(
+              codigo: 'TRZ-PDV-20261124-SMALL1',
+              service: TrazabilidadPublicaService(api),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Verificado en blockchain'), findsOneWidget);
+      expect(find.text('Producción agrícola'), findsOneWidget);
+      expect(find.text('Otro producto'), findsOneWidget);
+      expect(find.text('Versión web'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'TrazabilidadPublicaScreen maneja 404 y error de red con reintento en carga directa',
+    (tester) async {
+      var attempts = 0;
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-404') {
+            return jsonResponse({'message': 'No encontrado'}, 404);
+          }
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-RETRY') {
+            attempts++;
+            if (attempts == 1) {
+              throw http.ClientException('Error temporal');
+            }
+            return jsonResponse({
+              'codigo': 'TRZ-PDV-RETRY',
+              'producto': 'Papa Recuperada',
+              'total_eventos': 1,
+              'eventos': const [
+                {
+                  'etapa': 'pdv',
+                  'titulo': 'Disponible en punto de venta',
+                  'fecha_fmt': '21/11/2026 10:00',
+                },
+              ],
+            });
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      // 1) 404 directo
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: TrazabilidadPublicaScreen(
+            codigo: 'TRZ-PDV-404',
+            service: TrazabilidadPublicaService(api),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Producto no encontrado'), findsOneWidget);
+
+      // 2) Error de red + reintento exitoso
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: TrazabilidadPublicaScreen(
+            key: const ValueKey('retry-screen'),
+            codigo: 'TRZ-PDV-RETRY',
+            service: TrazabilidadPublicaService(api),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(attempts, 1);
+      expect(find.text('Reintentar'), findsOneWidget);
+
+      await tester.tap(find.text('Reintentar'));
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(find.text('Papa Recuperada'), findsOneWidget);
+      expect(find.text('Disponible en punto de venta'), findsOneWidget);
+    },
+  );
 }
