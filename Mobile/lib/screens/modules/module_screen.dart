@@ -38,6 +38,7 @@ class ModuleScreen extends StatefulWidget {
     this.actividadUpdates,
     this.cosechaUpdates,
     this.usuarioUpdates,
+    this.incidenteUpdates,
   });
 
   final AppModule module;
@@ -48,6 +49,7 @@ class ModuleScreen extends StatefulWidget {
   final ValueListenable<int>? actividadUpdates;
   final ValueListenable<int>? cosechaUpdates;
   final ValueListenable<int>? usuarioUpdates;
+  final ValueListenable<int>? incidenteUpdates;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
@@ -72,7 +74,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
       widget.module == AppModule.almacenes;
 
   bool get _supportsDetail =>
-      _supportsSearch || widget.module == AppModule.usuarios;
+      _supportsSearch ||
+      widget.module == AppModule.usuarios ||
+      widget.module == AppModule.incidentes;
 
   bool get _canCreateLote =>
       widget.module == AppModule.lotes &&
@@ -105,6 +109,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     widget.actividadUpdates?.addListener(_onActividadUpdated);
     widget.cosechaUpdates?.addListener(_onCosechaUpdated);
     widget.usuarioUpdates?.addListener(_onUsuarioUpdated);
+    widget.incidenteUpdates?.addListener(_onIncidenteUpdated);
   }
 
   @override
@@ -126,6 +131,10 @@ class _ModuleScreenState extends State<ModuleScreen> {
       oldWidget.usuarioUpdates?.removeListener(_onUsuarioUpdated);
       widget.usuarioUpdates?.addListener(_onUsuarioUpdated);
     }
+    if (oldWidget.incidenteUpdates != widget.incidenteUpdates) {
+      oldWidget.incidenteUpdates?.removeListener(_onIncidenteUpdated);
+      widget.incidenteUpdates?.addListener(_onIncidenteUpdated);
+    }
   }
 
   @override
@@ -134,8 +143,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
     widget.actividadUpdates?.removeListener(_onActividadUpdated);
     widget.cosechaUpdates?.removeListener(_onCosechaUpdated);
     widget.usuarioUpdates?.removeListener(_onUsuarioUpdated);
+    widget.incidenteUpdates?.removeListener(_onIncidenteUpdated);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onIncidenteUpdated() {
+    if (!mounted || widget.module != AppModule.incidentes) return;
+    _load(_page);
   }
 
   void _onUsuarioUpdated() {

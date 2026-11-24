@@ -1,0 +1,227 @@
+import 'dart:convert';
+
+import 'package:agrofusion_mobile/app.dart';
+import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/services/api_client.dart';
+import 'package:agrofusion_mobile/services/session_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+void main() {
+  const storage = SessionStorage();
+
+  const mayoristaUser = {
+    'usuarioid': 15,
+    'nombre': 'Diego',
+    'apellido': 'Rojas',
+    'email': 'diego@agrofusion.test',
+    'activo': true,
+    'estado_cuenta': 'aprobado',
+    'roles': [
+      {'id': 5, 'name': 'mayorista'},
+    ],
+    'permissions': ['incidentes.view', 'incidentes.resolve'],
+  };
+
+  const transportistaUser = {
+    'usuarioid': 20,
+    'nombre': 'Mario',
+    'apellido': 'Vargas',
+    'email': 'mario@agrofusion.test',
+    'activo': true,
+    'estado_cuenta': 'aprobado',
+    'roles': [
+      {'id': 4, 'name': 'transportista'},
+    ],
+    'permissions': ['incidentes.view', 'incidentes.create'],
+  };
+
+  http.Response jsonResponse(Object? value, [int status = 200]) =>
+      http.Response(
+        jsonEncode(value),
+        status,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  Future<void> openModule(
+    WidgetTester tester,
+    ApiClient api,
+    String moduleLabel,
+  ) async {
+    await tester.pumpWidget(
+      AgroFusionApp(apiClient: api, sessionStorage: storage),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Trabajo'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(moduleLabel));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(moduleLabel));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'Un responsable con incidentes.resolve abre el detalle de una incidencia, exige nota y la resuelve',
+    (tester) async {
+      await storage.saveToken('1|mayorista-token');
+      var resolved = false;
+      Map<String, dynamic>? sentBody;
+
+      Map<String, dynamic> incidenteJson() => {
+        'incidenteenvioid': 42,
+        'tipo': 'Empaque dañado',
+        'descripcion': 'Dos cajas llegaron golpeadas en la descarga.',
+        'estado': resolved ? 'resuelto' : 'abierto',
+        'seguimiento': resolved ? 'Resuelta' : 'Pendiente de resolución',
+        'afectado_referencia': 'Pedido de distribución #120',
+        'reportado_por': {'usuarioid': 20, 'nombre': 'Mario Vargas'},
+        'responsable_nombre': 'Diego Rojas',
+        'created_at': '2026-11-23T14:00:00Z',
+        'nota_resolucion': resolved
+            ? 'Se repusieron las dos cajas dañadas sin costo.'
+            : null,
+        'fecha_resolucion': resolved ? '2026-11-24T10:30:00Z' : null,
+        'resuelto_por': resolved
+            ? {'usuarioid': 15, 'nombre': 'Diego Rojas'}
+            : null,
+        'puede_resolver': !resolved,
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') {
+            return jsonResponse(mayoristaUser);
+          }
+          if (request.url.path == '/api/incidentes' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': [incidenteJson()],
+              'current_page': 1,
+              'last_page': 1,
+              'total': 1,
+            });
+          }
+          if (request.url.path == '/api/incidentes/42' &&
+              request.method == 'GET') {
+            return jsonResponse(incidenteJson());
+          }
+          if (request.url.path == '/api/incidentes/42/resolver' &&
+              request.method == 'PATCH') {
+            sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+            resolved = true;
+            return jsonResponse(incidenteJson());
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await openModule(tester, api, 'Incidentes');
+
+      expect(find.text('Empaque dañado'), findsOneWidget);
+      await tester.tap(find.text('Empaque dañado'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detalle de incidencia'), findsOneWidget);
+      expect(
+        find.text('Dos cajas llegaron golpeadas en la descarga.'),
+        findsOneWidget,
+      );
+      expect(find.text('Pedido de distribución #120'), findsOneWidget);
+
+      final resolveBtn = find.byKey(const ValueKey('incidente.resolver'));
+      await tester.ensureVisible(resolveBtn);
+      await tester.tap(resolveBtn);
+      await tester.pumpAndSettle();
+
+      // Exige nota obligatoria antes de enviar
+      await tester.tap(
+        find.byKey(const ValueKey('incidente.confirmar_resolucion')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Ingresa una explicación de la solución aplicada.'),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('incidente.nota_resolucion')),
+        'Se repusieron las dos cajas dañadas sin costo.',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('incidente.confirmar_resolucion')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(sentBody, {
+        'nota_resolucion': 'Se repusieron las dos cajas dañadas sin costo.',
+      });
+      expect(
+        find.byKey(const ValueKey('incidente.solucion_card')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Se repusieron las dos cajas dañadas sin costo.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('incidente.resolver')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Un usuario sin permiso incidentes.resolve ve el detalle pero no puede resolver la incidencia',
+    (tester) async {
+      await storage.saveToken('1|transportista-token');
+
+      const incidenteAbierto = {
+        'incidenteenvioid': 43,
+        'tipo': 'Demora en ruta',
+        'descripcion': 'Bloqueo temporal en carretera.',
+        'estado': 'abierto',
+        'seguimiento': 'Pendiente de resolución',
+        'puede_resolver': false,
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') {
+            return jsonResponse(transportistaUser);
+          }
+          if (request.url.path == '/api/incidentes' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': const [incidenteAbierto],
+              'current_page': 1,
+              'last_page': 1,
+              'total': 1,
+            });
+          }
+          if (request.url.path == '/api/incidentes/43' &&
+              request.method == 'GET') {
+            return jsonResponse(incidenteAbierto);
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await openModule(tester, api, 'Incidentes');
+      await tester.tap(find.text('Demora en ruta'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detalle de incidencia'), findsOneWidget);
+      expect(find.text('Bloqueo temporal en carretera.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('incidente.resolver')), findsNothing);
+    },
+  );
+}

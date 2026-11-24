@@ -23,6 +23,7 @@ import 'screens/modules/cosecha_form_screen.dart';
 import 'screens/modules/entrega_detail_screen.dart';
 import 'screens/modules/entregas_screen.dart';
 import 'screens/modules/envio_qr_detail_screen.dart';
+import 'screens/modules/incidente_detail_screen.dart';
 import 'screens/modules/incidente_form_screen.dart';
 import 'screens/modules/inventario_alertas_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
@@ -109,6 +110,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _pedidosUpdates = ValueNotifier(0);
   final ValueNotifier<int> _entregasUpdates = ValueNotifier(0);
   final ValueNotifier<int> _usuarioUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _incidenteUpdates = ValueNotifier(0);
 
   @override
   void initState() {
@@ -172,6 +174,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _pedidosUpdates.dispose();
     _entregasUpdates.dispose();
     _usuarioUpdates.dispose();
+    _incidenteUpdates.dispose();
     _auth.removeListener(_onAuthChanged);
     _pending?.dispose();
     _auth.dispose();
@@ -342,6 +345,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     usuarioUpdates: module == AppModule.usuarios
                         ? _usuarioUpdates
                         : null,
+                    incidenteUpdates: module == AppModule.incidentes
+                        ? _incidenteUpdates
+                        : null,
                   ),
             requiresAuthentication: true,
             module: module,
@@ -402,6 +408,28 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 onRefreshPermissions: _auth.restoreSession,
               ),
               requiresAuthentication: true,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'incidentes', final rawId]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => IncidenteDetailScreen(
+                key: ValueKey(_auth.user),
+                incidenteId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onIncidenteUpdated: () {
+                  _incidenteUpdates.value++;
+                  _pedidosUpdates.value++;
+                },
+              ),
+              requiresAuthentication: true,
+              module: AppModule.incidentes,
             ),
           );
         }

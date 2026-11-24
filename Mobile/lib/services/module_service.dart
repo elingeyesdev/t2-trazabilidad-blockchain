@@ -1002,6 +1002,52 @@ class ModuleService {
     return IncidenteRecord.fromJson(response);
   }
 
+  Future<IncidenteRecord> loadIncidenteDetail(
+    AuthUser user,
+    int incidenteId,
+  ) async {
+    if (!IncidentePermissions.canView(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta incidencia.',
+        statusCode: 403,
+      );
+    }
+    if (incidenteId <= 0) {
+      throw const ApiException('La incidencia solicitada no es válida.');
+    }
+    final response = await _api.request('GET', 'incidentes/$incidenteId');
+    return IncidenteRecord.fromJson(response);
+  }
+
+  Future<IncidenteRecord> resolveIncidente(
+    AuthUser user,
+    int incidenteId, {
+    required String notaResolucion,
+  }) async {
+    if (!IncidentePermissions.canResolve(user)) {
+      throw const ApiException(
+        'No tienes permiso para resolver incidencias.',
+        statusCode: 403,
+      );
+    }
+    final cleanNota = notaResolucion.trim();
+    if (cleanNota.isEmpty) {
+      throw const ApiException(
+        'Ingresa una explicación de la solución aplicada.',
+        statusCode: 422,
+        validationErrors: {
+          'nota_resolucion': ['La nota de resolución es obligatoria.'],
+        },
+      );
+    }
+    final response = await _api.request(
+      'PATCH',
+      'incidentes/$incidenteId/resolver',
+      body: {'nota_resolucion': cleanNota},
+    );
+    return IncidenteRecord.fromJson(response);
+  }
+
   Future<UsuarioAdminRecord> loadUsuarioAdminDetail(
     AuthUser user,
     int usuarioId,
