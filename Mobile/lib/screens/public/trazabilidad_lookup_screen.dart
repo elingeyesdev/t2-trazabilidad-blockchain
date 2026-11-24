@@ -1,14 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/trazabilidad_publica_models.dart';
 import '../../navigation/app_routes.dart';
 import '../../services/trazabilidad_publica_service.dart';
 import '../../theme/app_theme.dart';
-import '../modules/qr_scanner_screen.dart';
+import '../../widgets/qr_camera.dart';
 
 class TrazabilidadLookupScreen extends StatefulWidget {
   const TrazabilidadLookupScreen({
@@ -32,10 +31,8 @@ class TrazabilidadLookupScreen extends StatefulWidget {
 class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
   final _manualFormKey = GlobalKey<FormState>();
   final _manualCtrl = TextEditingController();
-  MobileScannerController? _scannerController;
 
   bool _manualMode = false;
-  QrCameraIssue? _cameraIssue;
   bool _loading = false;
   String? _lastCode;
   String? _parseError;
@@ -44,19 +41,8 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
   TrazabilidadPublicaResumen? _result;
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.cameraBuilder == null) {
-      _scannerController = MobileScannerController(
-        detectionSpeed: DetectionSpeed.noDuplicates,
-      );
-    }
-  }
-
-  @override
   void dispose() {
     _manualCtrl.dispose();
-    unawaited(_scannerController?.dispose());
     super.dispose();
   }
 
@@ -155,82 +141,6 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
     });
   }
 
-  Widget _defaultCamera(BuildContext context) {
-    final controller = _scannerController!;
-    return MobileScanner(
-      controller: controller,
-      onDetect: (capture) {
-        for (final barcode in capture.barcodes) {
-          final value = barcode.rawValue;
-          if (value != null && value.trim().isNotEmpty) {
-            unawaited(_handleInput(value));
-            break;
-          }
-        }
-      },
-      errorBuilder: (context, error) {
-        final issue = error.errorCode == MobileScannerErrorCode.permissionDenied
-            ? QrCameraIssue.permissionDenied
-            : QrCameraIssue.unavailable;
-        return _cameraIssueCard(context, issue);
-      },
-    );
-  }
-
-  Widget _cameraIssueCard(BuildContext context, QrCameraIssue issue) {
-    final isDenied = issue == QrCameraIssue.permissionDenied;
-    return Container(
-      key: const ValueKey('trazabilidad.error_camara'),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.maizeSoft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFC58C1F)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isDenied
-                ? Icons.no_photography_outlined
-                : Icons.videocam_off_outlined,
-            size: 36,
-            color: const Color(0xFF5F4100),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            isDenied ? 'Permiso de cámara denegado' : 'Cámara no disponible',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF5F4100),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isDenied
-                ? 'Habilita el acceso a la cámara en los ajustes del dispositivo o ingresa el código manualmente.'
-                : 'No se pudo iniciar la cámara en este dispositivo. Puedes escribir el código de trazabilidad.',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5F4100)),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            key: const ValueKey('trazabilidad.cambiar_a_manual'),
-            onPressed: () => setState(() {
-              _manualMode = true;
-              _cameraIssue = null;
-            }),
-            icon: const Icon(Icons.keyboard_rounded),
-            label: const Text('Ingresar código manualmente'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -307,7 +217,6 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
                               : (selection) {
                                   setState(() {
                                     _manualMode = selection.first;
-                                    if (!_manualMode) _cameraIssue = null;
                                   });
                                 },
                         ),
@@ -612,17 +521,14 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
   }
 
   Widget _buildCameraSection(BuildContext context) {
-    if (_cameraIssue != null) {
-      return _cameraIssueCard(context, _cameraIssue!);
-    }
-
-    final camera = widget.cameraBuilder != null
-        ? widget.cameraBuilder!(
-            context,
-            (code) => unawaited(_handleInput(code)),
-            (issue) => setState(() => _cameraIssue = issue),
-          )
-        : _defaultCamera(context);
+    final camera = QrCameraView(
+      cameraBuilder: widget.cameraBuilder,
+      onCode: (code) => unawaited(_handleInput(code)),
+      onManual: () => setState(() => _manualMode = true),
+      subject: 'código',
+      cardKey: const ValueKey('trazabilidad.error_camara'),
+      buttonKey: const ValueKey('trazabilidad.cambiar_a_manual'),
+    );
 
     return Container(
       padding: const EdgeInsets.all(14),
