@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:agrofusion_mobile/app.dart';
 import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/models/trazabilidad_publica_models.dart';
 import 'package:agrofusion_mobile/screens/modules/qr_scanner_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
@@ -46,6 +47,18 @@ void main() {
           key: const ValueKey('fake.camera.detect_pdv'),
           onPressed: () => onCodeDetected('TRZ-PDV-20261124-ABC123'),
           child: const Text('Simular QR PDV'),
+        ),
+        TextButton(
+          key: const ValueKey('fake.camera.detect_url'),
+          onPressed: () => onCodeDetected(
+            'https://agrofusion.up.railway.app/trazabilidad/trz-pdv-20261124-xyz789/?origen=etiqueta',
+          ),
+          child: const Text('Simular QR URL'),
+        ),
+        TextButton(
+          key: const ValueKey('fake.camera.detect_invalid'),
+          onPressed: () => onCodeDetected('https://agrofusion.test/login'),
+          child: const Text('Simular QR inválido'),
         ),
         TextButton(
           key: const ValueKey('fake.camera.deny'),
@@ -190,6 +203,102 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('TRZ-2026-LOTE01'), findsWidgets);
+    },
+  );
+
+  test(
+    'TrazabilidadCodigoParser extrae y normaliza códigos desde URLs completas o códigos directos',
+    () {
+      expect(
+        TrazabilidadCodigoParser.extract(
+          'https://agrofusion.up.railway.app/trazabilidad/TRZ-PDV-20261124-ABC123',
+        ),
+        'TRZ-PDV-20261124-ABC123',
+      );
+      expect(
+        TrazabilidadCodigoParser.extract(
+          'http://localhost:8000/api/trazabilidad/trz-2026-lote09/?src=qr',
+        ),
+        'TRZ-2026-LOTE09',
+      );
+      expect(
+        TrazabilidadCodigoParser.extract(
+          'https://agrofusion.test/trazabilidad?codigo=trz-pdv-20261124-q99999',
+        ),
+        'TRZ-PDV-20261124-Q99999',
+      );
+      expect(
+        TrazabilidadCodigoParser.extract(
+          '/trazabilidad/TRZ-PDV-20261124-REL123',
+        ),
+        'TRZ-PDV-20261124-REL123',
+      );
+      expect(
+        TrazabilidadCodigoParser.extract('  trz-pdv-20261124-abc123  '),
+        'TRZ-PDV-20261124-ABC123',
+      );
+
+      expect(TrazabilidadCodigoParser.extract(''), isNull);
+      expect(TrazabilidadCodigoParser.extract('   '), isNull);
+      expect(TrazabilidadCodigoParser.extract('texto con espacios'), isNull);
+      expect(
+        TrazabilidadCodigoParser.extract('https://agrofusion.test/login'),
+        isNull,
+      );
+      expect(
+        TrazabilidadCodigoParser.extract(
+          'https://agrofusion.test/recepcion/token123',
+        ),
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'Al escanear una URL completa extrae el código normalizado y rechaza enlaces ajenos a trazabilidad',
+    (tester) async {
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((_) async => jsonResponse({}, 404)),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(
+          apiClient: api,
+          sessionStorage: storage,
+          trazabilidadCameraBuilder: fakeCamera,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.pumpAndSettle();
+
+      // URL inválida (ajena a trazabilidad)
+      await tester.tap(
+        find.byKey(const ValueKey('fake.camera.detect_invalid')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('trazabilidad.error_parseo')),
+        findsOneWidget,
+      );
+
+      // URL pública de trazabilidad -> extrae código normalizado en mayúsculas
+      await tester.tap(find.byKey(const ValueKey('fake.camera.detect_url')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('trazabilidad.error_parseo')),
+        findsNothing,
+      );
+      expect(find.text('TRZ-PDV-20261124-XYZ789'), findsOneWidget);
     },
   );
 }

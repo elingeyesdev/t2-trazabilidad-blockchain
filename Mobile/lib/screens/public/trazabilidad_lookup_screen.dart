@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../models/trazabilidad_publica_models.dart';
 import '../../theme/app_theme.dart';
 import '../modules/qr_scanner_screen.dart';
 
@@ -29,6 +30,7 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
   bool _manualMode = false;
   QrCameraIssue? _cameraIssue;
   String? _detectedCode;
+  String? _parseError;
 
   @override
   void initState() {
@@ -50,10 +52,22 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
   void _handleInput(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return;
+
+    final extracted = TrazabilidadCodigoParser.extract(trimmed);
+    if (extracted == null) {
+      setState(() {
+        _detectedCode = null;
+        _parseError =
+            'El código o enlace QR no corresponde a un código de trazabilidad válido.';
+      });
+      return;
+    }
+
     setState(() {
-      _detectedCode = trimmed;
+      _parseError = null;
+      _detectedCode = extracted;
     });
-    widget.onCodeSelected?.call(trimmed);
+    widget.onCodeSelected?.call(extracted);
   }
 
   void _submitManual() {
@@ -65,6 +79,7 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
   void _resetLookup() {
     setState(() {
       _detectedCode = null;
+      _parseError = null;
     });
   }
 
@@ -229,6 +244,45 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
                     _buildCameraSection(context)
                   else
                     _buildManualSection(context),
+                  if (_parseError != null) ...[
+                    const SizedBox(height: 18),
+                    Container(
+                      key: const ValueKey('trazabilidad.error_parseo'),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.claySoft,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppTheme.clay),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            color: AppTheme.clay,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _parseError!,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.clay,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Cerrar aviso',
+                            onPressed: _resetLookup,
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: AppTheme.clay,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_detectedCode != null) ...[
                     const SizedBox(height: 18),
                     Container(
@@ -354,6 +408,9 @@ class _TrazabilidadLookupScreenState extends State<TrazabilidadLookupScreen> {
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'Ingresa un código de trazabilidad o pega el enlace del QR.';
+                }
+                if (TrazabilidadCodigoParser.extract(value) == null) {
+                  return 'El código o enlace QR no corresponde a un código de trazabilidad válido.';
                 }
                 return null;
               },
