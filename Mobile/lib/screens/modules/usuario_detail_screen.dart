@@ -220,7 +220,10 @@ class _UsuarioDetailScreenState extends State<UsuarioDetailScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando usuario...')
+            ? const AppLoading(
+                message: 'Cargando usuario...',
+                shape: LoadingShape.detail,
+              )
             : _errorStatus == 404
             ? const AppEmptyState(
                 icon: Icons.person_off_outlined,

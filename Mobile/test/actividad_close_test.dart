@@ -381,15 +381,21 @@ void main() {
       expect(find.text('Completar y cerrar actividad'), findsNothing);
       expect(find.text('Cambiar responsable'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('actividad.cambiar_responsable')));
+      await tester.tap(
+        find.byKey(const ValueKey('actividad.cambiar_responsable')),
+      );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('actividad.responsable_select')));
+      await tester.tap(
+        find.byKey(const ValueKey('actividad.responsable_select')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Carlos Jefe · Yo (Jefe agrícola)').last);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('actividad.guardar_responsable')));
+      await tester.tap(
+        find.byKey(const ValueKey('actividad.guardar_responsable')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Confirmar cambio'));
       await tester.pumpAndSettle();
@@ -404,24 +410,19 @@ void main() {
     (tester) async {
       final cameraCompleter = Completer<XFile?>();
 
-      await startApp(
-        tester,
-        (request) async {
-          if (request.url.path == '/api/me') {
-            return jsonResponse(workerProfile);
-          }
-          if (request.url.path == '/api/actividades' &&
-              request.method == 'GET') {
-            return jsonResponse([pendingActivity]);
-          }
-          if (request.url.path == '/api/actividades/11' &&
-              request.method == 'GET') {
-            return jsonResponse({'data': pendingActivity});
-          }
-          return jsonResponse({}, 404);
-        },
-        capturePhoto: () => cameraCompleter.future,
-      );
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(workerProfile);
+        }
+        if (request.url.path == '/api/actividades' && request.method == 'GET') {
+          return jsonResponse([pendingActivity]);
+        }
+        if (request.url.path == '/api/actividades/11' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': pendingActivity});
+        }
+        return jsonResponse({}, 404);
+      }, capturePhoto: () => cameraCompleter.future);
 
       await openActivityDetail(tester);
       await tester.tap(find.text('Completar y cerrar actividad'));

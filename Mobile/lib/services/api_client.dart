@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/api_exception.dart';
+import 'offline_store.dart';
 import 'session_storage.dart';
 
 class ApiClient {
@@ -13,12 +15,19 @@ class ApiClient {
     required this.config,
     required this._sessionStorage,
     http.Client? client,
+    this.offlineStore,
   }) : _client = client ?? http.Client();
 
   final ApiConfig config;
   final SessionStorage _sessionStorage;
   final http.Client _client;
   final _sessionExpired = StreamController<bool>.broadcast(sync: true);
+
+  /// Si es nulo (pruebas), no hay caché de lectura.
+  final OfflineStore? offlineStore;
+
+  /// Verdadero cuando la última lectura se resolvió con datos guardados.
+  final servedFromCache = ValueNotifier<bool>(false);
 
   Stream<bool> get sessionExpired => _sessionExpired.stream;
 
@@ -99,18 +108,29 @@ class ApiClient {
       }
 
       try {
-        return jsonDecode(utf8.decode(response.bodyBytes));
+        final json = jsonDecode(utf8.decode(response.bodyBytes));
+        servedFromCache.value = false;
+        if (method == 'GET' && authenticated) {
+          await offlineStore?.putCache(uri.toString(), json);
+        }
+        return json;
       } on FormatException {
         throw const ApiException(
           'La API devolvió una respuesta JSON inválida.',
         );
       }
     } on TimeoutException {
-      throw const ApiException(
+      return _offline(
+        method,
+        authenticated,
+        uri,
         'La solicitud tardó demasiado. Intenta de nuevo.',
       );
     } on http.ClientException {
-      throw const ApiException(
+      return _offline(
+        method,
+        authenticated,
+        uri,
         'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.',
       );
     } on PlatformException {
@@ -118,6 +138,24 @@ class ApiClient {
         'No se pudo acceder al almacenamiento de sesión.',
       );
     }
+  }
+
+  /// Sin señal, las lecturas devuelven lo último consultado y las escrituras
+  /// fallan marcadas como [ApiException.offline] para poder guardarlas.
+  Future<Object?> _offline(
+    String method,
+    bool authenticated,
+    Uri uri,
+    String message,
+  ) async {
+    if (method == 'GET' && authenticated) {
+      final cached = await offlineStore?.getCache(uri.toString());
+      if (cached != null) {
+        servedFromCache.value = true;
+        return cached;
+      }
+    }
+    throw ApiException(message, offline: true);
   }
 
   Future<Uint8List> getBytes(

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -410,7 +411,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           onPressed: _processing
               ? null
               : () => Navigator.of(context).pushNamed(
-                  '/modules/envios/${result.envio.tipo.value}/${result.envio.id}',
+                  AppRoutes.envio(result.envio.tipo, result.envio.id),
                   arguments: result,
                 ),
           icon: Icon(

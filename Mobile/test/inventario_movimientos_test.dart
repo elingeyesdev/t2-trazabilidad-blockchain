@@ -213,7 +213,7 @@ void main() {
       expect(lastIngresoBody!.containsKey('stock'), isFalse);
 
       expect(find.text('25.5 kg'), findsAtLeastNWidgets(1));
-      expect(find.text('Compra · Fertilizante NPK'), findsOneWidget);
+      expect(find.text('Entrada · Compra'), findsOneWidget);
       expect(find.text('+5.5 kg'), findsOneWidget);
 
       // 2. Intenta salida mayor al disponible (40 kg > 25.5 kg) -> bloquea y avisa.
@@ -260,7 +260,7 @@ void main() {
 
       expect(salidaCalls, 1);
       expect(find.text('15.5 kg'), findsAtLeastNWidgets(1));
-      expect(find.text('Envío · Fertilizante NPK'), findsOneWidget);
+      expect(find.text('Salida · Envío'), findsOneWidget);
       expect(find.text('-10 kg'), findsOneWidget);
     },
   );

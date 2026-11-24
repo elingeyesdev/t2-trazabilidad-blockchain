@@ -6,6 +6,7 @@ import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/inventario_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
@@ -14,6 +15,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
+import '../../widgets/movimiento_tile.dart';
 import 'inventario_movimiento_form_screen.dart';
 import 'module_access_denied.dart';
 
@@ -198,7 +200,10 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando existencias...')
+            ? const AppLoading(
+                message: 'Cargando existencias...',
+                shape: LoadingShape.detail,
+              )
             : _loadErrorStatus == 404
             ? const AppEmptyState(
                 icon: Icons.search_off_rounded,
@@ -247,7 +252,7 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
                 decoration: BoxDecoration(
                   color: look.tone,
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: AppTheme.ink, width: 2),
+                  border: Border.all(color: AppTheme.border),
                   boxShadow: AppTheme.stamp(5),
                 ),
                 child: Column(
@@ -314,7 +319,7 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
                     OutlinedButton.icon(
                       key: const ValueKey('almacen.ver_alertas'),
                       onPressed: () => Navigator.of(context).pushNamed(
-                        '${AppModule.almacenes.route}/alertas',
+                        AppRoutes.inventarioAlertas,
                         arguments: widget.almacenId,
                       ),
                       icon: const Icon(Icons.notifications_active_outlined),
@@ -353,9 +358,9 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
                       ChoiceChip(
                         label: Text(entry.value),
                         selected: _naturalezaFilter == entry.key,
-                        selectedColor: AppTheme.maize,
+                        selectedColor: AppTheme.sprout,
                         backgroundColor: AppTheme.surface,
-                        side: const BorderSide(color: AppTheme.ink, width: 1.5),
+                        side: const BorderSide(color: AppTheme.border),
                         onSelected: (_) {
                           setState(() => _naturalezaFilter = entry.key);
                           unawaited(_loadMovimientos());
@@ -382,8 +387,8 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radius),
         border: Border.all(
-          color: item.existenciasBajas ? AppTheme.clay : AppTheme.ink,
-          width: 2,
+          color: item.existenciasBajas ? AppTheme.clay : AppTheme.border,
+          width: item.existenciasBajas ? 2 : 1,
         ),
       ),
       child: Column(
@@ -497,63 +502,9 @@ class _AlmacenDetailScreenState extends State<AlmacenDetailScreen> {
         message: 'No hay movimientos registrados para este almacén.',
       );
     }
-    final theme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final mov in items) ...[
-          Container(
-            key: ValueKey('movimiento.${mov.id}'),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(AppTheme.radius),
-              border: Border.all(color: AppTheme.ink, width: 1.8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${mov.tipoNombre} · ${mov.insumoNombre}',
-                        style: theme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      mov.formattedQuantity,
-                      style: theme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: mov.isSalida ? AppTheme.clay : AppTheme.forest,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text('Fecha: ${mov.fecha}', style: theme.bodyMedium),
-                if (mov.saldoAnterior != null && mov.saldoPosterior != null)
-                  Text(
-                    'Saldo: ${formatInventarioDecimal(mov.saldoAnterior!)} → ${formatInventarioDecimal(mov.saldoPosterior!)}${mov.unidad != null ? ' ${mov.unidad}' : ''}',
-                    style: theme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                if (mov.destinoMotivo != null)
-                  Text('Motivo: ${mov.destinoMotivo}', style: theme.bodyMedium),
-                if (mov.usuarioNombre != null)
-                  Text(
-                    'Responsable: ${mov.usuarioNombre}',
-                    style: theme.bodySmall,
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-      ],
+      children: movimientoGroups(context, items),
     );
   }
 }

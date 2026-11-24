@@ -6,6 +6,7 @@ import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/inventario_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
@@ -141,7 +142,10 @@ class _InventarioAlertasScreenState extends State<InventarioAlertasScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Consultando alertas de inventario...')
+            ? const AppLoading(
+                message: 'Consultando alertas de inventario...',
+                shape: LoadingShape.list,
+              )
             : _error != null
             ? AppErrorState(message: _error!, onRetry: _load)
             : _content(context),
@@ -301,7 +305,7 @@ class _InventarioAlertasScreenState extends State<InventarioAlertasScreen> {
 
     return PressableCard(
       onTap: () => Navigator.of(context).pushNamed(
-        '${AppModule.almacenes.route}/${alert.almacenId}',
+        AppRoutes.detalle(AppModule.almacenes, alert.almacenId),
         arguments: alert.almacenNombre,
       ),
       color: AppTheme.surface,

@@ -7,6 +7,7 @@ import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/pedido_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
@@ -259,10 +260,7 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
     return data.productos.where((p) => p.almacenId == almacenId).toList();
   }
 
-  PedidoAlmacenOption? _findAlmacen(
-    List<PedidoAlmacenOption> list,
-    int? id,
-  ) {
+  PedidoAlmacenOption? _findAlmacen(List<PedidoAlmacenOption> list, int? id) {
     if (id == null) return null;
     for (final item in list) {
       if (item.id == id) return item;
@@ -365,7 +363,9 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
   }
 
   double _computedLineKg(_AgricolaLineDraft line) {
-    final raw = double.tryParse(line.cantidadCtrl.text.trim().replaceAll(',', '.'));
+    final raw = double.tryParse(
+      line.cantidadCtrl.text.trim().replaceAll(',', '.'),
+    );
     if (raw == null || raw <= 0) return 0;
     final product = _findProduct(line.productoRef);
     final calibre = _findCalibre(product, line.calibreId);
@@ -382,7 +382,9 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
   }
 
   int _computedLineEmpaques(_AgricolaLineDraft line, double kg) {
-    final raw = double.tryParse(line.cantidadCtrl.text.trim().replaceAll(',', '.'));
+    final raw = double.tryParse(
+      line.cantidadCtrl.text.trim().replaceAll(',', '.'),
+    );
     if (raw == null || raw <= 0) return 0;
     if (line.forma == _FormaPedidoAgricola.empaques) return raw.ceil();
     final product = _findProduct(line.productoRef);
@@ -393,7 +395,9 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
   }
 
   int _computedLineUnidades(_AgricolaLineDraft line, double kg) {
-    final raw = double.tryParse(line.cantidadCtrl.text.trim().replaceAll(',', '.'));
+    final raw = double.tryParse(
+      line.cantidadCtrl.text.trim().replaceAll(',', '.'),
+    );
     if (raw == null || raw <= 0) return 0;
     if (line.forma == _FormaPedidoAgricola.unidades) return raw.round();
     final product = _findProduct(line.productoRef);
@@ -570,7 +574,8 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
       for (final line in _distLines) {
         final partida = int.tryParse(line.partida.text.trim());
         detalles.add({
-          'insumoid': line.selectedProductoId ?? int.parse(line.producto.text.trim()),
+          'insumoid':
+              line.selectedProductoId ?? int.parse(line.producto.text.trim()),
           'insumo_presentacionid':
               line.selectedPresentacionId ??
               int.parse(line.presentacion.text.trim()),
@@ -580,9 +585,11 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
         });
       }
       final almacenOrigen =
-          _distAlmacenMayoristaId ?? int.tryParse(_origenAlmacenCtrl.text.trim());
+          _distAlmacenMayoristaId ??
+          int.tryParse(_origenAlmacenCtrl.text.trim());
       return {
-        'puntoventaid': _distPuntoVentaId ?? int.parse(_destinoCtrl.text.trim()),
+        'puntoventaid':
+            _distPuntoVentaId ?? int.parse(_destinoCtrl.text.trim()),
         'fecha_entrega_deseada': _fechaEntregaCtrl.text.trim(),
         if (almacenOrigen != null && almacenOrigen > 0)
           'almacen_mayorista_origenid': almacenOrigen,
@@ -748,9 +755,9 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
       );
       if (!mounted) return;
       widget.onPedidoCreated?.call();
-      Navigator.of(context).pushReplacementNamed(
-        '${AppModule.pedidos.route}/${created.tipo.value}/${created.id}',
-      );
+      Navigator.of(
+        context,
+      ).pushReplacementNamed(AppRoutes.pedido(created.tipo, created.id));
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -769,6 +776,42 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
     }
   }
 
+  /// Quita un elemento de una lista del formulario y deja 5 s para deshacer.
+  /// El borrador solo se libera cuando ya no se puede recuperar.
+  void _removeUndoable<T>(
+    List<T> list,
+    int index,
+    String message, {
+    void Function(T item)? dispose,
+    VoidCallback? after,
+  }) {
+    final removed = list[index];
+    setState(() => list.removeAt(index));
+    after?.call();
+    var undone = false;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+          SnackBar(
+            content: Text(message),
+            action: SnackBarAction(
+              label: 'Deshacer',
+              onPressed: () {
+                if (!mounted || undone) return;
+                undone = true;
+                setState(
+                  () => list.insert(index.clamp(0, list.length), removed),
+                );
+                after?.call();
+              },
+            ),
+          ),
+        )
+        .closed
+        .then((_) {
+          if (!undone) dispose?.call(removed);
+        });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!PedidoPermissions.canCreateAny(widget.user)) {
@@ -781,9 +824,7 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
     final isAgricola = _tipo == PedidoTipo.agricola;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isAgricola ? 'Nuevo envío' : 'Nuevo pedido'),
-      ),
+      appBar: AppBar(title: Text(isAgricola ? 'Nuevo envío' : 'Nuevo pedido')),
       body: SafeArea(
         child: isAgricola
             ? _buildAgricolaBody(context)
@@ -994,12 +1035,12 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                           tooltip: 'Quitar recogida',
                           onPressed: _submitting
                               ? null
-                              : () {
-                                  setState(() {
-                                    _extraRecogidaAlmacenIds.removeAt(r);
-                                  });
-                                  unawaited(_recalculateCosto());
-                                },
+                              : () => _removeUndoable(
+                                  _extraRecogidaAlmacenIds,
+                                  r,
+                                  'Recogida quitada',
+                                  after: () => unawaited(_recalculateCosto()),
+                                ),
                           icon: const Icon(Icons.delete_outline_rounded),
                         ),
                       ],
@@ -1319,7 +1360,8 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
     final computedEmpaques = _computedLineEmpaques(line, computedKg);
     final computedUnidades = _computedLineUnidades(line, computedKg);
     final excedeStock =
-        selectedProduct != null && computedKg > selectedProduct.stockKg + 0.0001;
+        selectedProduct != null &&
+        computedKg > selectedProduct.stockKg + 0.0001;
     final hasCalibre = selectedProduct?.calibres.isNotEmpty == true;
     final selectedCalibre = _findCalibre(selectedProduct, line.calibreId);
 
@@ -1349,12 +1391,13 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                   tooltip: 'Quitar producto',
                   onPressed: _submitting
                       ? null
-                      : () {
-                          final removed = _agricolaLines.removeAt(index);
-                          removed.dispose();
-                          setState(() {});
-                          unawaited(_recalculateCapacidad());
-                        },
+                      : () => _removeUndoable(
+                          _agricolaLines,
+                          index,
+                          'Producto quitado',
+                          dispose: (line) => line.dispose(),
+                          after: () => unawaited(_recalculateCapacidad()),
+                        ),
                   icon: const Icon(Icons.delete_outline_rounded),
                 ),
             ],
@@ -1494,7 +1537,8 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                   : null,
               isExpanded: true,
               decoration: InputDecoration(
-                labelText: selectedProduct.tipo == 'cosecha' &&
+                labelText:
+                    selectedProduct.tipo == 'cosecha' &&
                         selectedProduct.calibreDefaultId != null
                     ? 'Calibre / presentación (definido en cosecha)'
                     : 'Calibre / tamaño',
@@ -1621,7 +1665,8 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
             : 0);
     final ok =
         (_capacidadValidacion?.ok ?? true) &&
-        (vehiculo.capacidadKg <= 0 || totalKg <= vehiculo.capacidadKg + 0.0001) &&
+        (vehiculo.capacidadKg <= 0 ||
+            totalKg <= vehiculo.capacidadKg + 0.0001) &&
         (vehiculo.capacidadM3 <= 0 ||
             totalVolM3 <= vehiculo.capacidadM3 + 0.0001);
 
@@ -1862,8 +1907,9 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                             });
                             _clearError(field: 'puntoventaid');
                           },
-                    validator: (val) =>
-                        val == null ? 'Indica el punto de venta destino.' : null,
+                    validator: (val) => val == null
+                        ? 'Indica el punto de venta destino.'
+                        : null,
                   )
                 else
                   TextFormField(
@@ -1915,8 +1961,7 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                     }
                     return null;
                   },
-                  onChanged: (_) =>
-                      _clearError(field: 'fecha_entrega_deseada'),
+                  onChanged: (_) => _clearError(field: 'fecha_entrega_deseada'),
                 ),
                 const SizedBox(height: 12),
                 if (useSelectors && distData.almacenesMayoristas.isNotEmpty)
@@ -1932,7 +1977,10 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                       for (final a in distData.almacenesMayoristas)
                         DropdownMenuItem<int>(
                           value: a.id,
-                          child: Text(a.nombre, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            a.nombre,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                     ],
                     onChanged: _submitting
@@ -1940,8 +1988,9 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                         : (val) {
                             setState(() {
                               _distAlmacenMayoristaId = val;
-                              _origenAlmacenCtrl.text =
-                                  val == null ? '' : '$val';
+                              _origenAlmacenCtrl.text = val == null
+                                  ? ''
+                                  : '$val';
                             });
                             _clearError(field: 'almacen_mayorista_origenid');
                           },
@@ -1998,16 +2047,10 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                 ),
                 if (detallesError != null) ...[
                   const SizedBox(height: 14),
-                  AppNotice(
-                    tone: AppNoticeTone.error,
-                    message: detallesError,
-                  ),
+                  AppNotice(tone: AppNoticeTone.error, message: detallesError),
                 ] else if (generalError != null) ...[
                   const SizedBox(height: 14),
-                  AppNotice(
-                    tone: AppNoticeTone.error,
-                    message: generalError,
-                  ),
+                  AppNotice(tone: AppNoticeTone.error, message: generalError),
                 ],
                 const SizedBox(height: 20),
                 FilledButton.icon(
@@ -2072,11 +2115,12 @@ class _PedidoFormScreenState extends State<PedidoFormScreen> {
                   tooltip: 'Quitar producto',
                   onPressed: _submitting
                       ? null
-                      : () {
-                          final removed = _distLines.removeAt(index);
-                          removed.dispose();
-                          setState(() {});
-                        },
+                      : () => _removeUndoable(
+                          _distLines,
+                          index,
+                          'Producto quitado',
+                          dispose: (line) => line.dispose(),
+                        ),
                   icon: const Icon(Icons.delete_outline_rounded),
                 ),
             ],

@@ -1299,6 +1299,33 @@ class ModuleService {
     return InventarioMovimientosPage.fromJson(response);
   }
 
+  /// Movimientos de todos los almacenes visibles para el usuario.
+  Future<InventarioMovimientosPage> loadMovimientos(
+    AuthUser user, {
+    String? naturaleza,
+    int page = 1,
+  }) async {
+    if (!InventarioPermissions.canViewMovimientos(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los movimientos.',
+        statusCode: 403,
+      );
+    }
+    if (page < 1) {
+      throw const ApiException('La página solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      AppModule.movimientos.endpoint,
+      queryParameters: {
+        'page': '$page',
+        if (naturaleza != null && naturaleza.isNotEmpty)
+          'naturaleza': naturaleza,
+      },
+    );
+    return InventarioMovimientosPage.fromJson(response);
+  }
+
   Future<InventarioMovimientoRecord> registerAlmacenMovimiento(
     AuthUser user, {
     required String naturaleza,

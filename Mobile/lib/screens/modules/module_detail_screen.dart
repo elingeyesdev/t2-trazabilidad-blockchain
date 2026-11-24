@@ -9,7 +9,9 @@ import '../../models/cosecha_models.dart';
 import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
+import '../../services/pending_queue.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
 import '../../widgets/action_confirmation.dart';
@@ -181,10 +183,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
       );
 
   Future<void> _editLote(ModuleRecord record) async {
-    final result = await Navigator.of(context).pushNamed(
-      '${AppModule.lotes.route}/${record.id}/editar',
-      arguments: record.loteData,
-    );
+    final result = await Navigator.of(
+      context,
+    ).pushNamed(AppRoutes.loteEditar(record.id), arguments: record.loteData);
     if (!mounted) return;
     if (result is LoteFormResult) {
       widget.onLoteUpdated?.call();
@@ -199,7 +200,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
   Future<void> _assignActivity(ModuleRecord record) async {
     final result = await Navigator.of(context).pushNamed(
-      '${AppModule.actividades.route}/nueva',
+      AppRoutes.nueva(AppModule.actividades),
       arguments: LoteOption(
         id: record.id,
         name: record.title,
@@ -221,10 +222,15 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
   Future<void> _closeActivity(ModuleRecord record) async {
     final result = await Navigator.of(context).pushNamed(
-      '${AppModule.actividades.route}/${record.id}/cerrar',
+      AppRoutes.actividadCerrar(record.id),
       arguments: record.actividadData,
     );
     if (!mounted) return;
+    if (result is QueuedResult) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+    }
     if (result is ActividadCloseResult) {
       widget.onActividadUpdated?.call();
       widget.onLoteUpdated?.call();
@@ -407,7 +413,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
 
   void _openLoteHistory(int loteId, String? loteName) {
     final navigator = Navigator.of(context);
-    final historyRoute = '${AppModule.lotes.route}/$loteId/historial';
+    final historyRoute = AppRoutes.loteHistorial(loteId);
     if (widget.returnToLoteId == loteId) {
       var foundHistory = false;
       navigator.popUntil((route) {
@@ -474,7 +480,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
         ),
         body: SafeArea(
           child: loading
-              ? const AppLoading(message: 'Cargando detalle...')
+              ? const AppLoading(
+                  message: 'Cargando detalle...',
+                  shape: LoadingShape.detail,
+                )
               : error is ApiException && error.statusCode == 404
               ? const AppEmptyState(
                   icon: Icons.search_off_rounded,
@@ -627,7 +636,7 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                 const SizedBox(height: 20),
                 PressableCard(
                   onTap: () => Navigator.of(context).pushNamed(
-                    '${AppModule.lotes.route}/${record.id}/historial',
+                    AppRoutes.loteHistorial(record.id),
                     arguments: record.title,
                   ),
                   color: AppTheme.maizeSoft,
@@ -666,7 +675,9 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                     ],
                   ),
                 ),
-              ] else if (_isActividad && actividad != null && !actividad.isCompleted) ...[
+              ] else if (_isActividad &&
+                  actividad != null &&
+                  !actividad.isCompleted) ...[
                 if (ActividadPermissions.canClose(widget.user, actividad) ||
                     ActividadPermissions.canReassign(
                       widget.user,
@@ -751,9 +762,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                         else
                           DropdownButtonFormField<int>(
                             key: const ValueKey('actividad.responsable_select'),
-                            initialValue: _responsables.any(
-                              (item) => item.id == _selectedResponsableId,
-                            )
+                            initialValue:
+                                _responsables.any(
+                                  (item) => item.id == _selectedResponsableId,
+                                )
                                 ? _selectedResponsableId
                                 : null,
                             isExpanded: true,
@@ -946,7 +958,11 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (var i = 0; i < actividad.plannedInsumos.length; i++) ...[
+                      for (
+                        var i = 0;
+                        i < actividad.plannedInsumos.length;
+                        i++
+                      ) ...[
                         if (i > 0) const Divider(height: 1),
                         DetailField(
                           label: actividad.plannedInsumos[i].name,

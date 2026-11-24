@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../theme/app_glyphs.dart';
 
 import '../navigation/app_module.dart';
 import '../theme/app_theme.dart';
 import '../theme/module_palette.dart';
+import 'motion.dart';
 
 /// Tarjeta tocable con borde firme y sombra de sello que "se hunde" al
 /// presionarla, para que se entienda sin dudas que es un botón.
@@ -68,17 +70,57 @@ class _PressableCardState extends State<PressableCard> {
         ),
       ),
     );
+    final pressed = AnimatedScale(
+      scale: _down && !MediaQuery.disableAnimationsOf(context) ? .975 : 1,
+      duration: const Duration(milliseconds: 110),
+      curve: Curves.easeOut,
+      child: card,
+    );
     if (widget.semanticLabel == null) {
-      return enabled ? MergeSemantics(child: card) : card;
+      return enabled ? MergeSemantics(child: pressed) : pressed;
     }
     return Semantics(
       button: enabled,
       label: widget.semanticLabel,
       excludeSemantics: true,
       onTap: widget.onTap,
-      child: card,
+      child: pressed,
     );
   }
+}
+
+/// Pictograma de dos capas: el trazo en [color] y, debajo, la mancha suave.
+class GlyphIcon extends StatelessWidget {
+  const GlyphIcon(
+    this.glyph, {
+    super.key,
+    required this.size,
+    required this.color,
+    this.fillOpacity = .28,
+  });
+
+  final Glyph glyph;
+  final double size;
+  final Color color;
+  final double fillOpacity;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: SizedBox.square(
+      dimension: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            glyph.fill,
+            size: size,
+            color: color.withValues(alpha: fillOpacity),
+          ),
+          Icon(glyph.line, size: size, color: color),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Cuadro de color con el ícono del módulo.
@@ -105,16 +147,13 @@ class ModuleMark extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           color: solid ? look.ink : look.tone,
-          borderRadius: BorderRadius.circular(size * .3),
-          border: Border.all(
-            color: look.ink.withValues(alpha: solid ? .45 : .25),
-            width: 1,
-          ),
+          borderRadius: BorderRadius.circular(size * .32),
         ),
-        child: Icon(
+        child: GlyphIcon(
           module.icon,
           color: solid ? look.tone : look.ink,
-          size: size * .54,
+          fillOpacity: solid ? .5 : .32,
+          size: size * .58,
         ),
       ),
     );
@@ -138,16 +177,18 @@ class IconMedallion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
-    child: Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: tone,
-        shape: BoxShape.circle,
-        border: Border.all(color: ink.withValues(alpha: .35), width: 1),
-        boxShadow: AppTheme.stamp(4, ink),
+    child: PopIn(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: tone,
+          shape: BoxShape.circle,
+          border: Border.all(color: ink.withValues(alpha: .35), width: 1),
+          boxShadow: AppTheme.stamp(4, ink),
+        ),
+        child: Icon(icon, size: size * .46, color: ink),
       ),
-      child: Icon(icon, size: size * .46, color: ink),
     ),
   );
 }
@@ -421,7 +462,7 @@ class FurrowPainter extends CustomPainter {
       oldDelegate.rows != rows;
 }
 
-/// Marca de la app: hoja dentro de un sello.
+/// Marca de la app: sol naciente sobre surcos, el mismo motivo de las cabeceras.
 class BrandMark extends StatelessWidget {
   const BrandMark({super.key, this.size = 40});
 
@@ -429,15 +470,57 @@ class BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
-    child: Container(
+    child: SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: AppTheme.maize,
-        borderRadius: BorderRadius.circular(size * .32),
-        border: Border.all(color: const Color(0xFFC58C1F), width: 1),
-      ),
-      child: Icon(Icons.eco_rounded, color: AppTheme.ink, size: size * .6),
+      child: CustomPaint(painter: _BrandMarkPainter()),
     ),
   );
+}
+
+class _BrandMarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final shape = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(w * .3),
+    );
+    canvas.drawRRect(shape, Paint()..color = AppTheme.fieldDeep);
+    canvas.save();
+    canvas.clipRRect(shape);
+    // Sol: asoma por detrás de la tierra, no la atraviesa.
+    canvas.drawCircle(
+      Offset(w * .5, w * .5),
+      w * .22,
+      Paint()..color = AppTheme.maize,
+    );
+    final horizon = w * .6;
+    final ground = Path()
+      ..moveTo(0, horizon + w * .06)
+      ..quadraticBezierTo(w * .5, horizon - w * .1, w, horizon + w * .06)
+      ..lineTo(w, w)
+      ..lineTo(0, w)
+      ..close();
+    canvas.drawPath(ground, Paint()..color = AppTheme.field);
+    // Surcos que acompañan la curva de la tierra.
+    final furrow = Paint()
+      ..color = const Color(0xFF9CC184)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * .06
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 2; i++) {
+      final y = horizon + w * (.17 + i * .15);
+      canvas.drawPath(
+        Path()
+          ..moveTo(-w * .05, y + w * .05)
+          ..quadraticBezierTo(w * .5, y - w * .09, w * 1.05, y + w * .05),
+        furrow,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BrandMarkPainter oldDelegate) => false;
 }

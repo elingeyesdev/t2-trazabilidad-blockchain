@@ -45,6 +45,23 @@ abstract final class AppTheme {
 
   static const radius = 18.0;
 
+  /// Títulos: Bricolage Grotesque, de ancho variable. Da carácter sin perder
+  /// legibilidad; el cuerpo usa Atkinson Hyperlegible, pensada para leer con
+  /// poca vista o a pleno sol.
+  static TextStyle display(
+    double size,
+    double height,
+    double weight,
+    double spacing,
+  ) => TextStyle(
+    fontFamily: 'Bricolage',
+    fontSize: size,
+    height: height,
+    letterSpacing: spacing,
+    color: ink,
+    fontVariations: [FontVariation.weight(weight)],
+  );
+
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(seedColor: field).copyWith(
       primary: field,
@@ -71,36 +88,12 @@ abstract final class AppTheme {
       outlineVariant: line,
     );
 
-    const font = 'Roboto';
-    const text = TextTheme(
-      displaySmall: TextStyle(
-        fontSize: 34,
-        height: 1.12,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -.8,
-        color: ink,
-      ),
-      headlineMedium: TextStyle(
-        fontSize: 30,
-        height: 1.15,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -.6,
-        color: ink,
-      ),
-      headlineSmall: TextStyle(
-        fontSize: 27,
-        height: 1.18,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -.5,
-        color: ink,
-      ),
-      titleLarge: TextStyle(
-        fontSize: 21,
-        height: 1.25,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -.3,
-        color: ink,
-      ),
+    const font = 'Atkinson';
+    final text = TextTheme(
+      displaySmall: display(34, 1.12, 800, -0.8),
+      headlineMedium: display(30, 1.15, 800, -0.6),
+      headlineSmall: display(27, 1.18, 800, -0.5),
+      titleLarge: display(21, 1.25, 800, -0.3),
       titleMedium: TextStyle(
         fontSize: 18,
         height: 1.3,
@@ -135,7 +128,7 @@ abstract final class AppTheme {
       splashFactory: InkSparkle.splashFactory,
       dividerTheme: const DividerThemeData(color: line, thickness: 1),
       iconTheme: const IconThemeData(color: ink, size: 26),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: paper,
         foregroundColor: ink,
         surfaceTintColor: Colors.transparent,
@@ -145,13 +138,7 @@ abstract final class AppTheme {
         toolbarHeight: 64,
         iconTheme: IconThemeData(color: ink, size: 28),
         actionsIconTheme: IconThemeData(color: ink, size: 28),
-        titleTextStyle: TextStyle(
-          fontFamily: font,
-          color: ink,
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -.4,
-        ),
+        titleTextStyle: display(22, 1.2, 800, -.4),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

@@ -9,6 +9,7 @@ import '../../models/incidente_models.dart';
 import '../../models/pedido_models.dart';
 import '../../models/qr_envio_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
@@ -148,7 +149,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
 
   Future<void> _reportarIncidencia(PedidoRecord record) async {
     final created = await Navigator.of(context).pushNamed<IncidenteRecord?>(
-      '/modules/incidentes/nuevo',
+      AppRoutes.incidenteNuevo,
       arguments: IncidenteFormArgs(
         afectadoTipo: _afectadoTipo,
         afectadoId: record.id,
@@ -244,7 +245,7 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
 
   void _backToList() {
     final navigator = Navigator.of(context);
-    final gestionRoute = '${AppModule.pedidos.route}/gestion';
+    final gestionRoute = AppRoutes.pedidosGestion;
     final listRoute = AppModule.pedidos.route;
     var found = false;
     navigator.popUntil((route) {
@@ -287,7 +288,10 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando pedido...')
+            ? const AppLoading(
+                message: 'Cargando pedido...',
+                shape: LoadingShape.detail,
+              )
             : _errorStatus == 404
             ? const AppEmptyState(
                 icon: Icons.search_off_rounded,
@@ -525,10 +529,15 @@ class _PedidoDetailScreenState extends State<PedidoDetailScreen> {
                             child: OutlinedButton.icon(
                               key: const ValueKey('pedido.ver_envio_qr'),
                               onPressed: () => Navigator.of(context).pushNamed(
-                                '/modules/envios/agricola/${record.envio!.id}',
+                                AppRoutes.envio(
+                                  EnvioTipo.agricola,
+                                  record.envio!.id,
+                                ),
                               ),
                               icon: const Icon(Icons.local_shipping_outlined),
-                              label: const Text('Ver seguimiento y QR del envío'),
+                              label: const Text(
+                                'Ver seguimiento y QR del envío',
+                              ),
                             ),
                           ),
                         ],

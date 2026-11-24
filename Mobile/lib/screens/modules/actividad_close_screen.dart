@@ -10,6 +10,7 @@ import '../../models/auth_user.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
+import '../../services/pending_queue.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_empty_state.dart';
@@ -36,6 +37,7 @@ class ActividadCloseScreen extends StatefulWidget {
     this.capturePhoto,
     this.selectFile,
     this.onExternalPicker,
+    this.pending,
   });
 
   final int actividadId;
@@ -47,6 +49,7 @@ class ActividadCloseScreen extends StatefulWidget {
   final Future<XFile?> Function()? selectFile;
   final Future<XFile?> Function(Future<XFile?> Function() action)?
   onExternalPicker;
+  final PendingQueue? pending;
 
   @override
   State<ActividadCloseScreen> createState() => _ActividadCloseScreenState();
@@ -221,8 +224,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
     final tipoIns = (item.tipoNombre ?? '').toLowerCase();
     if (tipoAct.isEmpty || tipoIns.isEmpty) return true;
 
-    final isSeed =
-        tipoIns.contains('siembra') || tipoIns.contains('semilla');
+    final isSeed = tipoIns.contains('siembra') || tipoIns.contains('semilla');
     final isPest =
         tipoIns.contains('plaga') ||
         tipoIns.contains('pesticid') ||
@@ -295,7 +297,10 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       final alreadyPopulated =
           _consumos.length == act.plannedInsumos.length &&
           _consumos.every(
-            (c) => c.locked && c.insumoId != null && expectedIds.contains(c.insumoId),
+            (c) =>
+                c.locked &&
+                c.insumoId != null &&
+                expectedIds.contains(c.insumoId),
           );
       if (alreadyPopulated) {
         for (final draft in _consumos) {
@@ -349,11 +354,35 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
 
   void _removeConsumo(int index) {
     if (_submitting || index < 0 || index >= _consumos.length) return;
-    setState(() {
-      final removed = _consumos.removeAt(index);
-      removed.dispose();
-    });
+    final removed = _consumos[index];
+    setState(() => _consumos.removeAt(index));
     _clearError();
+    var undone = false;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+          SnackBar(
+            content: const Text('Insumo quitado'),
+            action: SnackBarAction(
+              label: 'Deshacer',
+              onPressed: () {
+                if (!mounted || undone || _consumos.length >= _maxConsumos) {
+                  return;
+                }
+                undone = true;
+                setState(
+                  () => _consumos.insert(
+                    index.clamp(0, _consumos.length),
+                    removed,
+                  ),
+                );
+              },
+            ),
+          ),
+        )
+        .closed
+        .then((_) {
+          if (!undone) removed.dispose();
+        });
   }
 
   Future<void> _loadActivity() async {
@@ -615,6 +644,25 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       if (!mounted) return;
       Navigator.of(context).pop(ActividadCloseResult(record: closed));
     } on ApiException catch (error) {
+      final queue = widget.pending;
+      if (error.offline && queue != null) {
+        await queue.addCierre(
+          widget.user,
+          label:
+              'Cierre: ${_actividad?.description ?? 'actividad #${widget.actividadId}'}',
+          actividadId: widget.actividadId,
+          result: resultText,
+          photo: photo,
+          consumos: consumoInputs.map((item) => item.toPayload()).toList(),
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop(
+          const QueuedResult(
+            'Sin señal: el cierre quedó guardado en el teléfono con su foto y se enviará solo al volver la conexión.',
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _submitting = false;

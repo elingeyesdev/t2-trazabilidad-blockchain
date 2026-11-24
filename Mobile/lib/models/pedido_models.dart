@@ -417,7 +417,9 @@ String? _asText(Object? value) {
 
 double? _asDouble(Object? value) {
   if (value is num) return value.toDouble();
-  if (value is String) return double.tryParse(value.trim().replaceAll(',', '.'));
+  if (value is String) {
+    return double.tryParse(value.trim().replaceAll(',', '.'));
+  }
   return null;
 }
 
@@ -483,8 +485,7 @@ class PedidoCalibreOption {
   final int? tipoEmpaqueId;
   final String? tipoEmpaqueNombre;
 
-  double get pesoPorEmpaqueKg =>
-      conteoPorEmpaque > 0 && pesoPromedioKg > 0
+  double get pesoPorEmpaqueKg => conteoPorEmpaque > 0 && pesoPromedioKg > 0
       ? conteoPorEmpaque * pesoPromedioKg
       : 0;
 }
@@ -681,10 +682,7 @@ class PedidoAgricolaFormData {
         ? json
         : const <String, dynamic>{};
 
-    List<T> parseList<T>(
-      String key,
-      T Function(Map<String, dynamic>) builder,
-    ) {
+    List<T> parseList<T>(String key, T Function(Map<String, dynamic>) builder) {
       final raw = root[key];
       if (raw is! List) return <T>[];
       return [
@@ -897,10 +895,7 @@ class PedidoDistribucionFormData {
         ? json
         : const <String, dynamic>{};
 
-    List<T> parseList<T>(
-      String key,
-      T Function(Map<String, dynamic>) builder,
-    ) {
+    List<T> parseList<T>(String key, T Function(Map<String, dynamic>) builder) {
       final raw = root[key];
       if (raw is! List) return <T>[];
       return [

@@ -1,17 +1,36 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/auth_user.dart';
 import '../../navigation/app_module.dart';
 import '../../navigation/app_routes.dart';
+import '../../theme/app_glyphs.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/field_kit.dart';
+import '../../widgets/motion.dart';
+import '../../widgets/pending_banner.dart';
+import '../../widgets/today_tasks.dart';
+import '../../services/module_service.dart';
+import '../../services/pending_queue.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.user, required this.onLogout});
+  const HomeScreen({
+    super.key,
+    required this.user,
+    required this.onLogout,
+    this.pending,
+    this.offlineData,
+    this.onSync,
+    this.service,
+  });
   final AuthUser user;
   final VoidCallback onLogout;
+  final PendingQueue? pending;
+  final ValueListenable<bool>? offlineData;
+  final VoidCallback? onSync;
+  final ModuleService? service;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -118,6 +137,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _topBar(),
                     const SizedBox(height: 22),
+                    if (widget.pending != null &&
+                        widget.offlineData != null &&
+                        widget.onSync != null)
+                      PendingBanner(
+                        user: widget.user,
+                        pending: widget.pending!,
+                        offlineData: widget.offlineData!,
+                        onSync: widget.onSync!,
+                      ),
                     if (_tab == 0 || modules.isEmpty) ...[
                       _greeting(),
                       const SizedBox(height: 24),
@@ -178,44 +206,72 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _topBar() => Row(
-    children: [
-      const BrandMark(size: 40),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          'AgroFusion',
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-      ),
-      const SizedBox(width: 8),
-      Tooltip(
-        message: 'Cerrar sesión',
-        excludeFromSemantics: true,
-        child: Semantics(
-          button: true,
-          label: 'Cerrar sesión',
-          excludeSemantics: true,
-          child: OutlinedButton.icon(
-            onPressed: widget.onLogout,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(48, 48),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              textStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
+  /// "jefe_agricultor" -> "Jefe agricultor".
+  String get _roleLabel {
+    if (widget.user.roles.isEmpty) return 'Trazabilidad agrícola';
+    final raw = widget.user.roles.first.replaceAll('_', ' ');
+    return raw[0].toUpperCase() + raw.substring(1);
+  }
+
+  Widget _topBar() {
+    final theme = Theme.of(context).textTheme;
+    return Column(
+      children: [
+        Row(
+          children: [
+            const BrandMark(size: 42),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AgroFusion',
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTheme.display(23, 1.1, 800, -.5),
+                  ),
+                  Text(
+                    _roleLabel,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.bodySmall,
+                  ),
+                ],
               ),
             ),
-            icon: const Icon(Icons.logout_rounded, size: 22),
-            label: const Text('Salir'),
-          ),
+            const SizedBox(width: 8),
+            IconButton(
+              key: const ValueKey('home.trazabilidad_publica'),
+              tooltip: 'Consultar trazabilidad (QR o código)',
+              onPressed: () {
+                FocusScope.of(context).unfocus();
+                Navigator.of(context).pushNamed(AppRoutes.trazabilidadPublica);
+              },
+              style: IconButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                backgroundColor: AppTheme.sprout,
+                foregroundColor: AppTheme.fieldDeep,
+                side: const BorderSide(color: AppTheme.sproutBorder),
+              ),
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Cerrar sesión',
+              onPressed: widget.onLogout,
+              style: IconButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                backgroundColor: AppTheme.surface,
+                side: const BorderSide(color: AppTheme.border),
+              ),
+              icon: const Icon(AppIcons.signOut, size: 22),
+            ),
+          ],
         ),
-      ),
-    ],
-  );
+        const SizedBox(height: 14),
+        const Divider(height: 1),
+      ],
+    );
+  }
 
   Widget _greeting() {
     final today = DateTime.now();
@@ -223,23 +279,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.wb_sunny_rounded,
-              size: 20,
-              color: Color(0xFF9A6A00),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '${_days[today.weekday - 1]}, ${today.day} de ${_months[today.month - 1]}',
-                style: theme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
+        Text(
+          '${_days[today.weekday - 1]}, ${today.day} de ${_months[today.month - 1]}',
+          style: theme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Semantics(
           header: true,
           child: Text('Hola, ${widget.user.name}', style: theme.displaySmall),
@@ -252,7 +296,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final primary = modules.first;
     final shortcuts = modules.skip(1).take(4).toList();
     return [
-      _featured(primary),
+      if (widget.service != null)
+        TodayTasks(
+          user: widget.user,
+          service: widget.service!,
+          onOpen: (module, id) =>
+              Navigator.of(context).pushNamed(AppRoutes.detalle(module, id)),
+        ),
+      FadeSlideIn(child: _featured(primary)),
       if (shortcuts.isNotEmpty) ...[
         const SizedBox(height: 32),
         const SectionTitle('Accesos rápidos'),
@@ -267,8 +318,11 @@ class _HomeScreenState extends State<HomeScreen> {
               spacing: 14,
               runSpacing: 14,
               children: [
-                for (final module in shortcuts)
-                  SizedBox(width: width, child: _shortcut(module)),
+                for (final (i, module) in shortcuts.indexed)
+                  SizedBox(
+                    width: width,
+                    child: FadeSlideIn(index: i + 1, child: _shortcut(module)),
+                  ),
               ],
             );
           },
@@ -396,50 +450,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final look = module.look;
     return PressableCard(
       onTap: () => _open(module),
-      color: AppTheme.sprout,
-      borderColor: AppTheme.sproutBorder,
-      padding: const EdgeInsets.all(16),
+      color: look.tone,
+      borderColor: look.ink.withValues(alpha: .28),
+      padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ExcludeSemantics(
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: AppTheme.field,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: AppTheme.fieldDeep, width: 1),
-                  ),
-                  child: Icon(module.icon, color: Colors.white, size: 28),
-                ),
-              ),
-              const Spacer(),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                size: 24,
-                color: AppTheme.fieldDeep,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          GlyphIcon(module.icon, size: 40, color: look.ink, fillOpacity: .3),
+          const SizedBox(height: 18),
           Text(
             module.label,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: look.ink,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             look.hint,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.35,
-              color: AppTheme.fieldDeep,
-            ),
+            style: TextStyle(fontSize: 14, height: 1.35, color: look.ink),
           ),
         ],
       ),
@@ -509,64 +538,76 @@ class _HomeScreenState extends State<HomeScreen> {
         for (final group in visible.entries) ...[
           SectionTitle(group.key, color: AppTheme.field),
           const SizedBox(height: 14),
-          for (final module in group.value) ...[
-            _workRow(module),
-            const SizedBox(height: 12),
-          ],
-          const SizedBox(height: 18),
+          FadeSlideIn(child: _workGroup(group.value)),
+          const SizedBox(height: 26),
         ],
     ];
   }
 
-  Widget _workRow(AppModule module) {
-    final badgeSize = _largeText ? 44.0 : 56.0;
-    return PressableCard(
-      onTap: () => _open(module),
-      padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-      child: Row(
-        children: [
-          ExcludeSemantics(
-            child: Container(
-              width: badgeSize,
-              height: badgeSize,
-              decoration: BoxDecoration(
-                color: AppTheme.field,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: AppTheme.fieldDeep, width: 1),
-              ),
-              child: Icon(
-                module.icon,
-                color: Colors.white,
-                size: badgeSize * 0.54,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  module.label,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  module.description,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+  /// Un bloque por sección, con las filas separadas por una línea fina.
+  Widget _workGroup(List<AppModule> modules) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.stamp(3),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(19),
+        child: Material(
+          color: Colors.transparent,
+          child: Column(
+            children: [
+              for (final (i, module) in modules.indexed) ...[
+                if (i > 0)
+                  const Divider(height: 1, indent: 76, color: AppTheme.line),
+                _workRow(module),
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          const Icon(
-            Icons.chevron_right_rounded,
-            size: 32,
-            color: AppTheme.ink,
+        ),
+      ),
+    );
+  }
+
+  Widget _workRow(AppModule module) {
+    final markSize = _largeText ? 44.0 : 48.0;
+    return MergeSemantics(
+      child: InkWell(
+        onTap: () => _open(module),
+        splashColor: AppTheme.field.withValues(alpha: .08),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          child: Row(
+            children: [
+              ModuleMark(module, size: markSize),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      module.label,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      module.description,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                AppIcons.caretRight,
+                size: 18,
+                color: AppTheme.inkSoft,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

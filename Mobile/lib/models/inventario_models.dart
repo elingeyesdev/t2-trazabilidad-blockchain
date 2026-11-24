@@ -436,6 +436,7 @@ class InventarioMovimientoRecord {
     this.observaciones,
     this.usuarioNombre,
     this.partida,
+    this.almacenNombre,
   });
 
   factory InventarioMovimientoRecord.fromJson(Object? json) {
@@ -459,6 +460,9 @@ class InventarioMovimientoRecord {
     final firstName = _asText(userMap?['nombre']);
     final lastName = _asText(userMap?['apellido']);
     final userParts = [?firstName, ?lastName];
+    final almacenMap = row['almacen'] is Map<String, dynamic>
+        ? row['almacen'] as Map<String, dynamic>
+        : null;
     return InventarioMovimientoRecord(
       id: id,
       almacenId: _asInt(row['almacenid']) ?? 0,
@@ -479,6 +483,7 @@ class InventarioMovimientoRecord {
       observaciones: _asText(row['observaciones']),
       usuarioNombre: userParts.isEmpty ? null : userParts.join(' '),
       partida: _asText(row['partida']),
+      almacenNombre: _asText(almacenMap?['nombre']),
     );
   }
 
@@ -498,6 +503,7 @@ class InventarioMovimientoRecord {
   final String? observaciones;
   final String? usuarioNombre;
   final String? partida;
+  final String? almacenNombre;
 
   bool get isIngreso => naturaleza == 'ingreso';
   bool get isSalida => naturaleza == 'salida';

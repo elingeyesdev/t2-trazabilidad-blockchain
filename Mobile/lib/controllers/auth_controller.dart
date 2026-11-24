@@ -59,6 +59,7 @@ class AuthController extends ChangeNotifier {
     final until = _suppressResumeRestoreUntil;
     return until != null && DateTime.now().isBefore(until);
   }
+
   ApiException? get sessionError => _sessionError;
   LogoutResult? get logoutResult => _logoutResult;
   bool get requiresLogoutRetry => _logoutResult?.localCleared == false;

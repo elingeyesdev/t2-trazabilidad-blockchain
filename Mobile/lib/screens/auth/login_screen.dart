@@ -34,6 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _openPublicTraceability() async {
+    FocusScope.of(context).unfocus();
+    await Navigator.of(context).pushNamed(AppRoutes.trazabilidadPublica);
+  }
+
   @override
   void dispose() {
     _email.dispose();
@@ -292,6 +297,24 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: busy ? null : _openRegistration,
                             icon: const Icon(Icons.person_add_alt_1_rounded),
                             label: const Text('Crear cuenta'),
+                          ),
+                          SizedBox(height: shortScreen ? 10 : 14),
+                          FilledButton.tonalIcon(
+                            key: const ValueKey('login.trazabilidad_publica'),
+                            onPressed: busy ? null : _openPublicTraceability,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppTheme.sprout,
+                              foregroundColor: AppTheme.fieldDeep,
+                              side: const BorderSide(
+                                color: AppTheme.sproutBorder,
+                                width: 1,
+                              ),
+                            ),
+                            icon: const Icon(Icons.qr_code_scanner_rounded),
+                            label: const Text(
+                              'Consultar trazabilidad (QR o código)',
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ],
                       ),

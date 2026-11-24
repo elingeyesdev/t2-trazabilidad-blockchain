@@ -160,11 +160,12 @@ void main() {
     ],
   };
 
-  http.Response jsonResponse(Object? value, [int status = 200]) => http.Response(
-    jsonEncode(value),
-    status,
-    headers: {'content-type': 'application/json; charset=utf-8'},
-  );
+  http.Response jsonResponse(Object? value, [int status = 200]) =>
+      http.Response(
+        jsonEncode(value),
+        status,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
 
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
@@ -251,7 +252,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Almacén origen, destino, producto único, chofer único, vehículo y costo se preseleccionan automáticamente.
-      expect(find.text('Almacen Norte · Calle Río Cuchi, Norte Interno'), findsOneWidget);
+      expect(
+        find.text('Almacen Norte · Calle Río Cuchi, Norte Interno'),
+        findsOneWidget,
+      );
       expect(find.text('Planta Industrial Norte'), findsAtLeastNWidgets(1));
       expect(find.text('Base Bs 24 (6 km, 2 paradas)'), findsOneWidget);
 
@@ -263,7 +267,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(capacidadCalls, greaterThan(0));
-      expect(find.byKey(const ValueKey('pedido.capacidad_preview')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('pedido.capacidad_preview')),
+        findsOneWidget,
+      );
       expect(find.text('Ocupación del vehículo SCZ-MOD-01'), findsOneWidget);
 
       // Confirma y crea el envío.
@@ -294,7 +301,10 @@ void main() {
       expect(find.text('Carlos Mamani'), findsOneWidget);
       expect(find.text('SCZ-MOD-01'), findsOneWidget);
       expect(find.text('Bs 24'), findsOneWidget);
-      expect(find.byKey(const ValueKey('pedido.accion.aceptar')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('pedido.accion.aceptar')),
+        findsOneWidget,
+      );
     },
   );
 }

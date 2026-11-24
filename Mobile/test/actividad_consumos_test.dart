@@ -610,7 +610,10 @@ void main() {
       await tester.tap(find.text('Completar y cerrar actividad'));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('consumo.0.insumo_locked')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('consumo.0.insumo_locked')),
+        findsOneWidget,
+      );
       expect(find.textContaining('Semilla de Papa'), findsWidgets);
       expect(find.text('Insumo Legacy Global'), findsNothing);
       expect(find.text('Semilla de Tomate'), findsNothing);
@@ -713,7 +716,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Al cerrar viene preseleccionado y bloqueado, con la cantidad precargada.
-      expect(find.byKey(const ValueKey('consumo.0.insumo_locked')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('consumo.0.insumo_locked')),
+        findsOneWidget,
+      );
       expect(find.text('Pesticida Deltox'), findsOneWidget);
       expect(find.text('5'), findsOneWidget);
       expect(find.byKey(const ValueKey('consumos.add')), findsNothing);

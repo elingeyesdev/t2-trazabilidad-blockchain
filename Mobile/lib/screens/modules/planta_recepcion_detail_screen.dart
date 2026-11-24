@@ -250,7 +250,10 @@ class _PlantaRecepcionDetailScreenState
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando recepción...')
+            ? const AppLoading(
+                message: 'Cargando recepción...',
+                shape: LoadingShape.detail,
+              )
             : _loadErrorStatus == 404
             ? const AppEmptyState(
                 icon: Icons.search_off_rounded,
