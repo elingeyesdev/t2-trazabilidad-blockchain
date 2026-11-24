@@ -299,10 +299,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: const Text('Crear cuenta'),
                           ),
                           SizedBox(height: shortScreen ? 10 : 14),
-                          FilledButton.tonalIcon(
+                          OutlinedButton.icon(
                             key: const ValueKey('login.trazabilidad_publica'),
                             onPressed: busy ? null : _openPublicTraceability,
-                            style: FilledButton.styleFrom(
+                            style: OutlinedButton.styleFrom(
                               backgroundColor: AppTheme.sprout,
                               foregroundColor: AppTheme.fieldDeep,
                               side: const BorderSide(

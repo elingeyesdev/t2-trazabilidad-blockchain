@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:agrofusion_mobile/app.dart';
@@ -355,6 +356,209 @@ void main() {
         findsNothing,
       );
       expect(find.text('TRZ-PDV-20261124-XYZ789'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Muestra estado de carga sin enviar Authorization y presenta el resultado público',
+    (tester) async {
+      final completer = Completer<http.Response>();
+      String? capturedAuthHeader;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-ABC123') {
+            capturedAuthHeader = request.headers['Authorization'];
+            return completer.future;
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(
+          apiClient: api,
+          sessionStorage: storage,
+          trazabilidadCameraBuilder: fakeCamera,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('fake.camera.detect_pdv')));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('trazabilidad.cargando')),
+        findsOneWidget,
+      );
+      expect(find.text('Consultando trazabilidad...'), findsOneWidget);
+
+      completer.complete(
+        jsonResponse({
+          'data': {
+            'codigo': 'TRZ-PDV-20261124-ABC123',
+            'producto': 'Hojuelas de Papa 500 g',
+            'lote_agricola': 'Parcela Norte',
+            'punto_venta': 'Mercado Central',
+            'total_eventos': 6,
+          },
+        }),
+      );
+      await tester.pumpAndSettle();
+
+      expect(capturedAuthHeader, isNull);
+      expect(
+        find.byKey(const ValueKey('trazabilidad.resultado_resumen')),
+        findsOneWidget,
+      );
+      expect(find.text('Hojuelas de Papa 500 g'), findsOneWidget);
+      expect(find.text('Origen agrícola: Parcela Norte'), findsOneWidget);
+      expect(find.text('Punto de venta: Mercado Central'), findsOneWidget);
+      expect(
+        find.text('6 eventos registrados en el recorrido'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Muestra código no encontrado ante 404 y permite consultar otro código',
+    (tester) async {
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient(
+          (_) async => jsonResponse({'message': 'Producto no encontrado'}, 404),
+        ),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(
+          apiClient: api,
+          sessionStorage: storage,
+          trazabilidadCameraBuilder: fakeCamera,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Ingresar código'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('trazabilidad.codigo_input')),
+        'TRZ-PDV-00000000-NOEXIS',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('trazabilidad.consultar_btn')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('trazabilidad.no_encontrado')),
+        findsOneWidget,
+      );
+      expect(find.text('Código no encontrado'), findsOneWidget);
+
+      final retryOther = find.byKey(
+        const ValueKey('trazabilidad.intentar_otro'),
+      );
+      await tester.ensureVisible(retryOther);
+      await tester.tap(retryOther);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('trazabilidad.no_encontrado')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'Muestra error de conexión y permite reintentar con éxito sin perder el código',
+    (tester) async {
+      var attempts = 0;
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-ABC123') {
+            attempts++;
+            if (attempts == 1) {
+              throw http.ClientException('Sin conexión');
+            }
+            return jsonResponse({
+              'codigo': 'TRZ-PDV-20261124-ABC123',
+              'producto': 'Hojuelas de Papa 500 g',
+              'lote_agricola': 'Parcela Norte',
+              'total_eventos': 6,
+            });
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(
+          apiClient: api,
+          sessionStorage: storage,
+          trazabilidadCameraBuilder: fakeCamera,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('fake.camera.detect_pdv')));
+      await tester.pumpAndSettle();
+
+      expect(attempts, 1);
+      expect(
+        find.byKey(const ValueKey('trazabilidad.error_conexion')),
+        findsOneWidget,
+      );
+
+      final retryBtn = find.byKey(const ValueKey('trazabilidad.reintentar'));
+      await tester.ensureVisible(retryBtn);
+      await tester.tap(retryBtn);
+      await tester.pumpAndSettle();
+
+      expect(attempts, 2);
+      expect(
+        find.byKey(const ValueKey('trazabilidad.error_conexion')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('trazabilidad.resultado_resumen')),
+        findsOneWidget,
+      );
+      expect(find.text('Hojuelas de Papa 500 g'), findsOneWidget);
     },
   );
 }
