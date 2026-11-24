@@ -282,9 +282,10 @@ class _IncidenteDetailScreenState extends State<IncidenteDetailScreen> {
                               ],
                             ),
                           ),
-                          RecordStatusBadge(status: record.seguimiento),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      RecordStatusBadge(status: record.seguimiento),
                       const SizedBox(height: 16),
                       Text(
                         'Descripción',

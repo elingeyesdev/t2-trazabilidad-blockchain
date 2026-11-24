@@ -227,9 +227,10 @@ class _CertificacionDetailScreenState extends State<CertificacionDetailScreen> {
                               ],
                             ),
                           ),
-                          RecordStatusBadge(status: record.resultado),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      RecordStatusBadge(status: record.resultado),
                       const Divider(height: 24),
                       if (record.loteNombre != null)
                         _metaRow(
