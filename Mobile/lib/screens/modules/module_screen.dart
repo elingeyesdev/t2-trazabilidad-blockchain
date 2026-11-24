@@ -76,7 +76,9 @@ class _ModuleScreenState extends State<ModuleScreen> {
   bool get _supportsDetail =>
       _supportsSearch ||
       widget.module == AppModule.usuarios ||
-      widget.module == AppModule.incidentes;
+      widget.module == AppModule.incidentes ||
+      widget.module == AppModule.certificaciones ||
+      widget.module == AppModule.documentos;
 
   bool get _canCreateLote =>
       widget.module == AppModule.lotes &&

@@ -19,7 +19,9 @@ import 'screens/home/home_screen.dart';
 import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
 import 'screens/modules/almacen_detail_screen.dart';
+import 'screens/modules/certificacion_detail_screen.dart';
 import 'screens/modules/cosecha_form_screen.dart';
+import 'screens/modules/documento_detail_screen.dart';
 import 'screens/modules/entrega_detail_screen.dart';
 import 'screens/modules/entregas_screen.dart';
 import 'screens/modules/envio_qr_detail_screen.dart';
@@ -372,6 +374,46 @@ class _AgroFusionAppState extends State<AgroFusionApp>
               codigo: codigo,
               service: TrazabilidadPublicaService(_api),
               initialReporte: args is TrazabilidadPublicaReporte ? args : null,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'certificaciones', final rawId]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => CertificacionDetailScreen(
+                key: ValueKey(_auth.user),
+                certificacionId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.certificaciones,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'documentos-entrega',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => DocumentoDetailScreen(
+                key: ValueKey(_auth.user),
+                documentoId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.documentos,
             ),
           );
         }

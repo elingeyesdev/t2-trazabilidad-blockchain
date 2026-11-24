@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
+import '../models/certificacion_documento_models.dart';
 import '../models/cosecha_models.dart';
 import '../models/entrega_models.dart';
 import '../models/incidente_models.dart';
@@ -1046,6 +1047,121 @@ class ModuleService {
       body: {'nota_resolucion': cleanNota},
     );
     return IncidenteRecord.fromJson(response);
+  }
+
+  Future<CertificacionDetailRecord> loadCertificacionDetail(
+    AuthUser user,
+    int certificacionId,
+  ) async {
+    if (!user.permissions.contains('certificaciones.view')) {
+      throw const ApiException(
+        'No tienes permiso para consultar certificaciones.',
+        statusCode: 403,
+      );
+    }
+    if (certificacionId <= 0) {
+      throw const ApiException('La certificación solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      'certificaciones/$certificacionId',
+    );
+    return CertificacionDetailRecord.fromJson(response);
+  }
+
+  Future<Uint8List> downloadCertificacionArchivo(
+    AuthUser user,
+    int certificacionId,
+  ) async {
+    if (!user.permissions.contains('certificaciones.view')) {
+      throw const ApiException(
+        'No tienes permiso para descargar este certificado.',
+        statusCode: 403,
+      );
+    }
+    return _api.getBytes('certificaciones/$certificacionId/archivo');
+  }
+
+  Future<DocumentoEntregaDetailRecord> loadDocumentoEntregaDetail(
+    AuthUser user,
+    int documentoId,
+  ) async {
+    if (!user.permissions.contains('documentos.view')) {
+      throw const ApiException(
+        'No tienes permiso para consultar documentos de entrega.',
+        statusCode: 403,
+      );
+    }
+    if (documentoId <= 0) {
+      throw const ApiException('El documento solicitado no es válido.');
+    }
+    var page = 1;
+    while (page <= 5) {
+      final response = await _api.request(
+        'GET',
+        'documentos-entrega',
+        queryParameters: {'page': '$page'},
+      );
+      final rows = response is List
+          ? response
+          : response is Map<String, dynamic> && response['data'] is List
+          ? response['data'] as List
+          : const [];
+      for (final item in rows) {
+        if (item is Map<String, dynamic>) {
+          final parsed = DocumentoEntregaDetailRecord.fromJson(item);
+          if (parsed.id == documentoId) return parsed;
+        }
+      }
+      final lastPage = response is Map<String, dynamic>
+          ? (response['last_page'] as int? ?? 1)
+          : 1;
+      if (page >= lastPage) break;
+      page++;
+    }
+    throw const ApiException(
+      'No encontramos el documento de entrega solicitado.',
+      statusCode: 404,
+    );
+  }
+
+  Future<Uint8List> downloadDocumentoEntregaArchivo(
+    AuthUser user,
+    int documentoId,
+  ) async {
+    if (!user.permissions.contains('documentos.view')) {
+      throw const ApiException(
+        'No tienes permiso para descargar este documento.',
+        statusCode: 403,
+      );
+    }
+    return _api.getBytes('documentos-entrega/$documentoId/download');
+  }
+
+  Uri? resolvePublicStorageUri(String? archivoPath) {
+    if (archivoPath == null || archivoPath.trim().isEmpty) return null;
+    final clean = archivoPath.trim();
+    final parsed = Uri.tryParse(clean);
+    if (parsed != null && parsed.hasScheme && parsed.hasAuthority) {
+      return parsed;
+    }
+    final apiUri = _api.config.baseUri;
+    final segments = apiUri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (segments.isNotEmpty && segments.last.toLowerCase() == 'api') {
+      segments.removeLast();
+    }
+    final origin = Uri(
+      scheme: apiUri.scheme,
+      host: apiUri.host,
+      port: apiUri.hasPort ? apiUri.port : null,
+      pathSegments: segments,
+    );
+    final normalizedPath = clean.startsWith('/')
+        ? clean
+        : (clean.startsWith('storage/') ? '/$clean' : '/storage/$clean');
+    return origin.resolve(normalizedPath);
   }
 
   Future<UsuarioAdminRecord> loadUsuarioAdminDetail(

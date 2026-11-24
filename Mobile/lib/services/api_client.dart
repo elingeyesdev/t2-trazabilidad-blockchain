@@ -168,7 +168,8 @@ class ApiClient {
     final request =
         http.AbortableRequest('GET', uri, abortTrigger: abort.future)
           ..followRedirects = false
-          ..headers['Accept'] = 'image/*, application/octet-stream';
+          ..headers['Accept'] =
+              'application/pdf, image/*, application/octet-stream';
 
     try {
       final token = authenticated

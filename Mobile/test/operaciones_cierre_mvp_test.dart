@@ -224,4 +224,179 @@ void main() {
       expect(find.byKey(const ValueKey('incidente.resolver')), findsNothing);
     },
   );
+
+  testWidgets(
+    'Certificaciones abre su detalle, muestra estado/hash blockchain y descarga el PDF',
+    (tester) async {
+      await storage.saveToken('1|jefe-token');
+      var pdfDownloads = 0;
+
+      const jefeUser = {
+        'usuarioid': 5,
+        'nombre': 'Carlos',
+        'apellido': 'Vega',
+        'email': 'jefe@agrofusion.test',
+        'activo': true,
+        'estado_cuenta': 'aprobado',
+        'roles': [
+          {'id': 2, 'name': 'jefe_agricultor'},
+        ],
+        'permissions': ['certificaciones.view'],
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') return jsonResponse(jefeUser);
+          if (request.url.path == '/api/certificaciones' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': const [
+                {
+                  'certificacionid': 7,
+                  'codigo_certificado': 'CERT-2026-007',
+                  'resultado': 'Aprobado',
+                },
+              ],
+              'current_page': 1,
+              'last_page': 1,
+              'total': 1,
+            });
+          }
+          if (request.url.path == '/api/certificaciones/7' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'certificacionid': 7,
+              'loteid': 25,
+              'codigo_certificado': 'CERT-2026-007',
+              'resultado': 'Aprobado',
+              'observaciones': 'Sin residuos detectados.',
+              'fecha_certificacion': '2026-11-18T10:00:00Z',
+              'archivo_disponible': true,
+              'lote': {'loteid': 25, 'nombre': 'Parcela Norte'},
+              'usuario': {'usuarioid': 9, 'nombre': 'Ana', 'apellido': 'Mora'},
+              'blockchain_estado': 'confirmado',
+              'blockchain_tx_hash': '0xdeadbeef123456',
+              'blockchain_network': 'Polygon Amoy',
+            });
+          }
+          if (request.url.path == '/api/certificaciones/7/archivo' &&
+              request.method == 'GET') {
+            pdfDownloads++;
+            return http.Response.bytes(
+              utf8.encode('%PDF-1.4 fake certificate bytes'),
+              200,
+              headers: {'content-type': 'application/pdf'},
+            );
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await openModule(tester, api, 'Certificaciones');
+      await tester.tap(find.text('CERT-2026-007'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detalle de certificación'), findsOneWidget);
+      expect(find.text('Parcela Norte'), findsOneWidget);
+      expect(find.text('Confirmado en blockchain'), findsOneWidget);
+      expect(find.text('0xdeadbeef123456'), findsOneWidget);
+
+      final pdfBtn = find.byKey(const ValueKey('certificacion.abrir_archivo'));
+      await tester.ensureVisible(pdfBtn);
+      await tester.tap(pdfBtn);
+      await tester.pumpAndSettle();
+
+      expect(pdfDownloads, 1);
+      expect(
+        find.byKey(const ValueKey('certificacion.descarga_confirmada')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Documentos de entrega abre su detalle y descarga el respaldo adjunto',
+    (tester) async {
+      await storage.saveToken('1|doc-token');
+      var docDownloads = 0;
+
+      const docUser = {
+        'usuarioid': 20,
+        'nombre': 'Mario',
+        'apellido': 'Vargas',
+        'email': 'mario@agrofusion.test',
+        'activo': true,
+        'estado_cuenta': 'aprobado',
+        'roles': [
+          {'id': 4, 'name': 'transportista'},
+        ],
+        'permissions': ['documentos.view'],
+      };
+
+      const docJson = {
+        'documentoentregaid': 19,
+        'titulo': 'Acta de entrega #19',
+        'tipo_documento': 'acta_entrega',
+        'pedidoid': 120,
+        'archivo_path': 'documentos_entrega/acta19.pdf',
+        'usuario': {'usuarioid': 20, 'nombre': 'Mario', 'apellido': 'Vargas'},
+        'metadata': {
+          'original_name': 'acta19.pdf',
+          'mime': 'application/pdf',
+          'size': 4096,
+        },
+        'created_at': '2026-11-22T15:00:00Z',
+      };
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/me') return jsonResponse(docUser);
+          if (request.url.path == '/api/documentos-entrega' &&
+              request.method == 'GET') {
+            return jsonResponse({
+              'data': const [docJson],
+              'current_page': 1,
+              'last_page': 1,
+              'total': 1,
+            });
+          }
+          if (request.url.path == '/api/documentos-entrega/19/download' &&
+              request.method == 'GET') {
+            docDownloads++;
+            return http.Response.bytes(
+              utf8.encode('%PDF-1.4 acta de entrega'),
+              200,
+              headers: {'content-type': 'application/pdf'},
+            );
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await openModule(tester, api, 'Documentos de entrega');
+      await tester.tap(find.text('Acta de entrega #19'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detalle de documento'), findsOneWidget);
+      expect(find.text('acta19.pdf'), findsOneWidget);
+      expect(find.text('4.0 KB'), findsOneWidget);
+
+      final downloadBtn = find.byKey(const ValueKey('documento.abrir_archivo'));
+      await tester.ensureVisible(downloadBtn);
+      await tester.tap(downloadBtn);
+      await tester.pumpAndSettle();
+
+      expect(docDownloads, 1);
+      expect(
+        find.byKey(const ValueKey('documento.descarga_confirmada')),
+        findsOneWidget,
+      );
+    },
+  );
 }
