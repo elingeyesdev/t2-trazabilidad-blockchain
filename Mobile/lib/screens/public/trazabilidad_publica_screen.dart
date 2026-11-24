@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/trazabilidad_publica_models.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/trazabilidad_publica_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
@@ -11,17 +13,25 @@ import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
 
+typedef TrazabilidadExternalLauncher = Future<bool> Function(Uri uri);
+typedef TrazabilidadEvidenceImageBuilder =
+    Widget Function(BuildContext context, Uri imageUri);
+
 class TrazabilidadPublicaScreen extends StatefulWidget {
   const TrazabilidadPublicaScreen({
     super.key,
     required this.codigo,
     required this.service,
     this.initialReporte,
+    this.externalLauncher,
+    this.evidenceImageBuilder,
   });
 
   final String codigo;
   final TrazabilidadPublicaService service;
   final TrazabilidadPublicaReporte? initialReporte;
+  final TrazabilidadExternalLauncher? externalLauncher;
+  final TrazabilidadEvidenceImageBuilder? evidenceImageBuilder;
 
   @override
   State<TrazabilidadPublicaScreen> createState() =>
@@ -119,6 +129,179 @@ class _TrazabilidadPublicaScreenState extends State<TrazabilidadPublicaScreen> {
             : _error != null && _reporte == null
             ? AppErrorState(message: _error!, onRetry: _load)
             : _buildContent(context, _reporte!),
+      ),
+      bottomNavigationBar: _reporte == null
+          ? null
+          : BottomActionBar(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('trazabilidad.publica.otro_producto'),
+                      onPressed: _consultAnotherProduct,
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      label: const Text('Otro producto'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      key: const ValueKey('trazabilidad.publica.abrir_web'),
+                      onPressed: () => unawaited(_openPublicWeb(_reporte!)),
+                      icon: const Icon(Icons.open_in_new_rounded),
+                      label: const Text('Versión web'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Future<void> _openExternalUri(Uri uri) async {
+    try {
+      final launched = widget.externalLauncher != null
+          ? await widget.externalLauncher!(uri)
+          : await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!mounted) return;
+      if (!launched) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo abrir el enlace externo en este dispositivo.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo abrir el enlace externo en este dispositivo.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openPublicWeb(TrazabilidadPublicaReporte reporte) async {
+    final uri = widget.service.buildPublicWebUrl(
+      reporte.codigo,
+      serverUrl: reporte.urlPublica,
+    );
+    await _openExternalUri(uri);
+  }
+
+  void _consultAnotherProduct() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      navigator.pushReplacementNamed(AppRoutes.trazabilidadPublica);
+    }
+  }
+
+  Uri _buildRouteMapUri(List<TrazabilidadMapaPunto> points) {
+    if (points.length == 1) {
+      final point = points.first;
+      return Uri.https('www.google.com', '/maps/search/', {
+        'api': '1',
+        'query': '${point.lat},${point.lng}',
+      });
+    }
+    final origin = points.first;
+    final destination = points.last;
+    final params = <String, String>{
+      'api': '1',
+      'origin': '${origin.lat},${origin.lng}',
+      'destination': '${destination.lat},${destination.lng}',
+    };
+    if (points.length > 2) {
+      params['waypoints'] = points
+          .sublist(1, points.length - 1)
+          .map((p) => '${p.lat},${p.lng}')
+          .join('|');
+    }
+    return Uri.https('www.google.com', '/maps/dir/', params);
+  }
+
+  Future<void> _showEvidenceDialog(
+    BuildContext context,
+    TrazabilidadEvento event,
+    Uri photoUri,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        key: const ValueKey('trazabilidad.evidencia.dialog'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.titulo,
+                          style: Theme.of(dialogContext).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        if (event.fechaFmt != null)
+                          Text(
+                            event.fechaFmt!,
+                            style: Theme.of(dialogContext).textTheme.bodySmall,
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar evidencia',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: widget.evidenceImageBuilder != null
+                      ? widget.evidenceImageBuilder!(dialogContext, photoUri)
+                      : Image.network(
+                          photoUri.toString(),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => Container(
+                            padding: const EdgeInsets.all(20),
+                            color: AppTheme.paper,
+                            child: const Text(
+                              'No se pudo cargar la imagen de evidencia.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const ValueKey('trazabilidad.evidencia.abrir_externo'),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(_openExternalUri(photoUri));
+                },
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('Abrir imagen en navegador'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -885,6 +1068,7 @@ class _TrazabilidadPublicaScreenState extends State<TrazabilidadPublicaScreen> {
                         child: Text(linea, style: theme.textTheme.bodyMedium),
                       ),
                   ],
+                  ..._buildEventActions(context, event),
                 ],
               ),
             ),
@@ -892,6 +1076,61 @@ class _TrazabilidadPublicaScreenState extends State<TrazabilidadPublicaScreen> {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildEventActions(
+    BuildContext context,
+    TrazabilidadEvento event,
+  ) {
+    final photoUri = widget.service.resolvePublicAssetUrl(
+      event.primaryPhotoUrl,
+    );
+    final fileUri = photoUri == null
+        ? widget.service.resolvePublicAssetUrl(event.evidenciaUrl)
+        : null;
+    final hasMap = event.hasRouteMap;
+
+    if (photoUri == null && fileUri == null && !hasMap) {
+      return const [];
+    }
+
+    return [
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (photoUri != null)
+            OutlinedButton.icon(
+              key: ValueKey('trazabilidad.evento.evidencia.${event.paso}'),
+              onPressed: () =>
+                  unawaited(_showEvidenceDialog(context, event, photoUri)),
+              icon: const Icon(Icons.photo_outlined, size: 18),
+              label: const Text('Ver evidencia'),
+            ),
+          if (fileUri != null)
+            OutlinedButton.icon(
+              key: ValueKey('trazabilidad.evento.archivo.${event.paso}'),
+              onPressed: () => unawaited(_openExternalUri(fileUri)),
+              icon: const Icon(Icons.description_outlined, size: 18),
+              label: const Text('Ver respaldo'),
+            ),
+          if (hasMap)
+            OutlinedButton.icon(
+              key: ValueKey('trazabilidad.evento.mapa.${event.paso}'),
+              onPressed: () => unawaited(
+                _openExternalUri(_buildRouteMapUri(event.mapaRuta)),
+              ),
+              icon: const Icon(Icons.map_outlined, size: 18),
+              label: Text(
+                event.mapaRuta.length >= 2
+                    ? 'Abrir ruta en mapa'
+                    : 'Ver ubicación en mapa',
+              ),
+            ),
+        ],
+      ),
+    ];
   }
 
   Widget _infoPill(BuildContext context, IconData icon, String label) {

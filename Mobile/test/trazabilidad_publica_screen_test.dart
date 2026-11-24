@@ -297,4 +297,162 @@ void main() {
       expect(find.text('Siembra certificada'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Permite visualizar evidencias fotográficas, abrir ruta en mapa externo, ir a versión web y consultar otro producto',
+    (tester) async {
+      final launchedUris = <Uri>[];
+      Uri? renderedPhotoUri;
+
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://agrofusion.test/api'),
+        sessionStorage: storage,
+        client: MockClient((request) async {
+          if (request.url.path == '/api/trazabilidad/TRZ-PDV-20261124-MEDIA1') {
+            return jsonResponse({
+              'data': {
+                'codigo': 'TRZ-PDV-20261124-MEDIA1',
+                'producto': 'Hojuelas de Papa 500 g',
+                'lote_agricola': 'Parcela Norte',
+                'punto_venta': 'Mercado Central',
+                'total_eventos': 2,
+                'eventos_agrupados': [
+                  {
+                    'key': 'agricola',
+                    'label': 'Producción agrícola',
+                    'eventos': [
+                      {
+                        'paso': 1,
+                        'fecha_fmt': '05/11/2026 09:00',
+                        'titulo': 'Cosecha documentada',
+                        'evidencia_foto_url': '/storage/evidencias/cosecha.jpg',
+                      },
+                    ],
+                  },
+                  {
+                    'key': 'distribucion',
+                    'label': 'Distribución al PDV',
+                    'eventos': [
+                      {
+                        'paso': 2,
+                        'fecha_fmt': '19/11/2026 11:30',
+                        'titulo': 'Traslado al punto de venta',
+                        'mapa_ruta': [
+                          {
+                            'lat': -17.3935,
+                            'lng': -66.1570,
+                            'orden': 1,
+                            'label': 'Planta',
+                          },
+                          {
+                            'lat': -17.3895,
+                            'lng': -66.1568,
+                            'orden': 2,
+                            'label': 'Mercado Central',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          return jsonResponse({'message': 'Not found'}, 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TrazabilidadPublicaScreen(
+                        codigo: 'TRZ-PDV-20261124-MEDIA1',
+                        service: TrazabilidadPublicaService(api),
+                        externalLauncher: (uri) async {
+                          launchedUris.add(uri);
+                          return true;
+                        },
+                        evidenceImageBuilder: (_, uri) {
+                          renderedPhotoUri = uri;
+                          return const SizedBox(
+                            key: ValueKey('fake.evidencia.img'),
+                            height: 120,
+                            child: Center(child: Text('Foto cargada')),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  child: const Text('Abrir trazabilidad'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir trazabilidad'));
+      await tester.pumpAndSettle();
+
+      // 1) Evidencia fotográfica
+      final evidenceBtn = find.byKey(
+        const ValueKey('trazabilidad.evento.evidencia.1'),
+      );
+      await tester.ensureVisible(evidenceBtn);
+      await tester.tap(evidenceBtn);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('trazabilidad.evidencia.dialog')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('fake.evidencia.img')), findsOneWidget);
+      expect(
+        renderedPhotoUri.toString(),
+        'https://agrofusion.test/storage/evidencias/cosecha.jpg',
+      );
+      await tester.tap(find.byTooltip('Cerrar evidencia'));
+      await tester.pumpAndSettle();
+
+      // 2) Mapa externo con ruta
+      final mapBtn = find.byKey(const ValueKey('trazabilidad.evento.mapa.2'));
+      await tester.ensureVisible(mapBtn);
+      await tester.tap(mapBtn);
+      await tester.pumpAndSettle();
+
+      expect(launchedUris, hasLength(1));
+      expect(launchedUris.first.host, 'www.google.com');
+      expect(launchedUris.first.path, '/maps/dir/');
+      expect(launchedUris.first.queryParameters['origin'], '-17.3935,-66.157');
+      expect(
+        launchedUris.first.queryParameters['destination'],
+        '-17.3895,-66.1568',
+      );
+
+      // 3) Abrir versión web pública
+      await tester.tap(
+        find.byKey(const ValueKey('trazabilidad.publica.abrir_web')),
+      );
+      await tester.pumpAndSettle();
+      expect(launchedUris, hasLength(2));
+      expect(
+        launchedUris.last.toString(),
+        'https://agrofusion.test/trazabilidad/TRZ-PDV-20261124-MEDIA1',
+      );
+
+      // 4) Volver para consultar otro producto
+      await tester.tap(
+        find.byKey(const ValueKey('trazabilidad.publica.otro_producto')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Abrir trazabilidad'), findsOneWidget);
+    },
+  );
 }
