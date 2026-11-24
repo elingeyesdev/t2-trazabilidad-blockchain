@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:agrofusion_mobile/app.dart';
 import 'package:agrofusion_mobile/config/api_config.dart';
+import 'package:agrofusion_mobile/screens/modules/qr_scanner_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,28 @@ void main() {
         headers: {'content-type': 'application/json; charset=utf-8'},
       );
 
+  Widget fakeCamera(
+    BuildContext context,
+    ValueChanged<String> onCodeDetected,
+    ValueChanged<QrCameraIssue> onCameraIssue,
+  ) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton(
+          key: const ValueKey('fake.camera.detect_pdv'),
+          onPressed: () => onCodeDetected('TRZ-PDV-20261124-ABC123'),
+          child: const Text('Simular QR PDV'),
+        ),
+        TextButton(
+          key: const ValueKey('fake.camera.deny'),
+          onPressed: () => onCameraIssue(QrCameraIssue.permissionDenied),
+          child: const Text('Simular permiso denegado'),
+        ),
+      ],
+    ),
+  );
+
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   testWidgets(
@@ -50,7 +73,11 @@ void main() {
       addTearDown(api.close);
 
       await tester.pumpWidget(
-        AgroFusionApp(apiClient: api, sessionStorage: storage),
+        AgroFusionApp(
+          apiClient: api,
+          sessionStorage: storage,
+          trazabilidadCameraBuilder: fakeCamera,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -61,6 +88,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Consultar trazabilidad'), findsOneWidget);
+      expect(find.text('Escanear QR'), findsOneWidget);
+      expect(find.text('Ingresar código'), findsOneWidget);
       expect(authCalls, 0);
     },
   );
@@ -82,7 +111,11 @@ void main() {
       addTearDown(api.close);
 
       await tester.pumpWidget(
-        AgroFusionApp(apiClient: api, sessionStorage: storage),
+        AgroFusionApp(
+          apiClient: api,
+          sessionStorage: storage,
+          trazabilidadCameraBuilder: fakeCamera,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -92,6 +125,71 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Consultar trazabilidad'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'TrazabilidadLookupScreen permite escanear por cámara, manejar permiso denegado e ingresar código manual',
+    (tester) async {
+      final api = ApiClient(
+        config: ApiConfig(baseUrl: 'https://example.test/api'),
+        sessionStorage: storage,
+        client: MockClient((_) async => jsonResponse({}, 404)),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        AgroFusionApp(
+          apiClient: api,
+          sessionStorage: storage,
+          trazabilidadCameraBuilder: fakeCamera,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('login.trazabilidad_publica')),
+      );
+      await tester.pumpAndSettle();
+
+      // 1) Escaneo de cámara
+      await tester.tap(find.byKey(const ValueKey('fake.camera.detect_pdv')));
+      await tester.pumpAndSettle();
+      expect(find.text('TRZ-PDV-20261124-ABC123'), findsOneWidget);
+
+      // 2) Permiso de cámara denegado -> pasar a ingreso manual
+      await tester.tap(find.byKey(const ValueKey('fake.camera.deny')));
+      await tester.pumpAndSettle();
+      expect(find.text('Permiso de cámara denegado'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('trazabilidad.cambiar_a_manual')),
+      );
+      await tester.pumpAndSettle();
+
+      // 3) Validación de campo vacío en modo manual
+      await tester.tap(
+        find.byKey(const ValueKey('trazabilidad.consultar_btn')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Ingresa un código de trazabilidad o pega el enlace del QR.'),
+        findsOneWidget,
+      );
+
+      // 4) Ingreso manual de código válido
+      await tester.enterText(
+        find.byKey(const ValueKey('trazabilidad.codigo_input')),
+        'TRZ-2026-LOTE01',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('trazabilidad.consultar_btn')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('TRZ-2026-LOTE01'), findsWidgets);
     },
   );
 }

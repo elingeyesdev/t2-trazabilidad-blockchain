@@ -63,6 +63,7 @@ class AgroFusionApp extends StatefulWidget {
     this.capturePhoto,
     this.selectEvidenceFile,
     this.offlineStore,
+    this.trazabilidadCameraBuilder,
   });
 
   final ApiClient? apiClient;
@@ -73,6 +74,7 @@ class AgroFusionApp extends StatefulWidget {
 
   /// Si es nulo (pruebas), no se guarda nada para trabajar sin conexión.
   final OfflineStore? offlineStore;
+  final QrCameraBuilder? trazabilidadCameraBuilder;
 
   @override
   State<AgroFusionApp> createState() => _AgroFusionAppState();
@@ -273,7 +275,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
         ),
         AppRoutes.register: (_) =>
             _sessionGate(() => RegisterScreen(controller: _auth)),
-        AppRoutes.trazabilidadPublica: (_) => const TrazabilidadLookupScreen(),
+        AppRoutes.trazabilidadPublica: (_) => TrazabilidadLookupScreen(
+          cameraBuilder: widget.trazabilidadCameraBuilder,
+        ),
         AppRoutes.profile: (_) => _sessionGate(
           () => ProfileScreen(controller: _auth),
           requiresAuthentication: true,
