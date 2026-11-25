@@ -51,7 +51,7 @@ class SeguridadBaseRbacTest extends TestCase
     /** Lecturas web públicas por diseño (portada, login/registro, QR de recepción y trazabilidad pública). */
     private const WEB_LECTURA_PUBLICAS = [
         '/', 'up', 'login', 'register', 'registro-enviado', 'logout',
-        'recepcion/{token}', 'trazabilidad/{codigo}', 'storage/{path}', 'sanctum/csrf-cookie',
+        'recepcion/{token}', 'trazabilidad', 'trazabilidad/{codigo}', 'storage/{path}', 'sanctum/csrf-cookie',
     ];
 
     /** Operaciones de negocio que el barrido debe cubrir explícitamente (ADM-02/03/04). */

@@ -43,6 +43,11 @@ class TrazabilidadPublicaWebTest extends TestCase
 
     public function test_login_y_buscador_son_publicos_y_formulario_get(): void
     {
+        foreach (['trazabilidad.buscar', 'trazabilidad.publica'] as $nombre) {
+            $ruta = app('router')->getRoutes()->getByName($nombre);
+            $this->assertContains('throttle:trazabilidad-publica', $ruta->gatherMiddleware());
+            $this->assertNotContains('auth', $ruta->gatherMiddleware());
+        }
         $this->get('/login')->assertOk()->assertSee('Consultar trazabilidad')->assertSee(route('trazabilidad.buscar'));
         $this->get('/trazabilidad')->assertOk()->assertSee('Código de trazabilidad')
             ->assertSee('method="GET"', false)->assertSee('name="codigo"', false)->assertSee('Consultar');
