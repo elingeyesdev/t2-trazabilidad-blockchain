@@ -11,6 +11,10 @@ class CampoApiJson
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->is('api/trazabilidad/*', 'api/evidencias-publicacion*')) {
+            $request->headers->set('Accept', 'application/json');
+        }
+
         if ($request->is('api/lotes', 'api/lotes/*', 'api/actividades', 'api/actividades/*', 'api/producciones', 'api/producciones/*', 'api/almacenes/*', 'api/almacen-movimientos*', 'api/insumos*', 'api/planta/*', 'api/pedidos*', 'api/certificaciones*', 'api/envios*', 'api/recepciones-envio*')) {
             $request->headers->set('Accept', 'application/json');
         }

@@ -93,7 +93,8 @@ Route::get('/registro-enviado', [AuthController::class, 'registroEnviado'])->nam
 
 Route::match(['get', 'post'], '/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::get('/trazabilidad/{codigo}', [TrazabilidadPublicaController::class, 'show'])->name('trazabilidad.publica');
+Route::get('/trazabilidad', [TrazabilidadPublicaController::class, 'index'])->name('trazabilidad.buscar')->middleware('throttle:trazabilidad-publica');
+Route::get('/trazabilidad/{codigo}', [TrazabilidadPublicaController::class, 'show'])->name('trazabilidad.publica')->middleware('throttle:trazabilidad-publica');
 
 // El QR abre la pantalla sin sesión; firmar exige la cuenta del receptor (CROSS-A).
 Route::get('/recepcion/{token}', [RecepcionQrPublicaController::class, 'show'])->name('recepcion.publica');

@@ -43,7 +43,7 @@ class SeguridadBaseRbacTest extends TestCase
     use RefreshDatabase;
 
     /** Rutas API públicas por diseño (registro queda pendiente de aprobación; login; ping). */
-    private const API_PUBLICAS = ['api/login', 'api/register', 'api/test-api'];
+    private const API_PUBLICAS = ['api/login', 'api/register', 'api/test-api', 'api/trazabilidad/{codigo}', 'api/trazabilidad/evidencias/{token}'];
 
     /** Escrituras web públicas por diseño (sesión). La firma QR exige la cuenta del receptor (Frente 3, CROSS-A). */
     private const WEB_ESCRITURA_PUBLICAS = ['login.post', 'register.post', 'logout'];
@@ -51,7 +51,7 @@ class SeguridadBaseRbacTest extends TestCase
     /** Lecturas web públicas por diseño (portada, login/registro, QR de recepción y trazabilidad pública). */
     private const WEB_LECTURA_PUBLICAS = [
         '/', 'up', 'login', 'register', 'registro-enviado', 'logout',
-        'recepcion/{token}', 'trazabilidad/{codigo}', 'storage/{path}', 'sanctum/csrf-cookie',
+        'recepcion/{token}', 'trazabilidad', 'trazabilidad/{codigo}', 'storage/{path}', 'sanctum/csrf-cookie',
     ];
 
     /** Operaciones de negocio que el barrido debe cubrir explícitamente (ADM-02/03/04). */
@@ -228,7 +228,7 @@ class SeguridadBaseRbacTest extends TestCase
             $modulo = explode('.', $permiso)[0];
             $esLectura = str_ends_with($permiso, '.view');
             $this->assertTrue(
-                $esLectura || in_array($modulo, $modulosAdministracion, true),
+                $esLectura || in_array($modulo, $modulosAdministracion, true) || $permiso === 'evidencias.publicar',
                 "El admin no debería tener el permiso operativo {$permiso}."
             );
         }

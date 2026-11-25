@@ -5,47 +5,38 @@
     <title>@yield('title', 'Trazabilidad | AgroFusion')</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            min-height: 100vh;
-            background: #ffffff;
-            color: #1e293b;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .trz-public-page {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            padding: 1.5rem 1rem 2rem;
-        }
-
-        .trz-public-inner {
-            width: 100%;
-            max-width: 640px;
-        }
-
-        @stack('styles')
-    </style>
     @vite('resources/css/agrofusion-ui.css')
+    <style>
+        .trz-public-page { max-width: 1040px; margin: auto; padding: 24px 20px 48px; }
+        .trz-brand { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 20px; margin-bottom: 28px; border-bottom: 1px solid var(--tblr-border-color); }
+        .trz-brand > a:first-child { font-size: 20px; font-weight: 600; color: var(--tblr-body-color); }
+        .trz-search { max-width: 640px; margin: 40px auto; }
+        .trz-search-row { display: flex; gap: 12px; align-items: start; }
+        .trz-search-row input { min-width: 0; flex: 1; }
+        .trz-wrap, .trz-fields dd, .trz-fields dt { overflow-wrap: anywhere; min-width: 0; }
+        .trz-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; margin: 0; }
+        .trz-fields dt { font-size: 12px; font-weight: 500; color: var(--tblr-secondary-color, #526071); }
+        .trz-fields dd { margin: 3px 0 0; }
+        .trz-event + .trz-event { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--tblr-border-color); }
+        .trz-evidence { width: 100%; height: auto; max-height: 400px; object-fit: contain; background: var(--tblr-body-bg); }
+        .trz-back { display: inline-block; margin-top: 20px; }
+        .ag-public :focus-visible { outline: 3px solid #23754b; outline-offset: 3px; }
+        @media (max-width: 575px) {
+            .trz-public-page { padding: 20px 16px 32px; }
+            .trz-search { margin-top: 24px; }
+            .trz-search-row { flex-direction: column; }
+            .trz-search-row input, .trz-search-row button { width: 100%; }
+            .trz-fields { grid-template-columns: minmax(0, 1fr); }
+        }
+    </style>
 </head>
 <body class="ag-ui ag-public">
     <main class="trz-public-page">
-        <div class="trz-public-inner">
-            @yield('content')
-        </div>
+        <nav class="trz-brand" aria-label="Navegación pública">
+            <a href="{{ route('trazabilidad.buscar') }}">AgroFusion</a>
+            <a href="{{ route('trazabilidad.buscar') }}">Consultar trazabilidad</a>
+        </nav>
+        @yield('content')
     </main>
-
-    @stack('scripts')
 </body>
 </html>
