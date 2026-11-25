@@ -72,6 +72,9 @@
         <p>¿No tienes cuenta? <a href="{{ route('register') }}">Regístrate aquí</a></p>
     </div>
 </form>
+<div class="form-footer">
+    <a href="{{ route('trazabilidad.buscar') }}">Consultar trazabilidad</a>
+</div>
 @endsection
 
 @push('scripts')
