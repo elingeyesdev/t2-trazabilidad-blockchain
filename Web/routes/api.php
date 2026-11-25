@@ -62,6 +62,23 @@ $recursoProtegido = function (string $uri, string $controller, string $modulo, ?
 };
 
 Route::name('api.')->group(function () use ($recursoProtegido) {
+    Route::get('trazabilidad/evidencias/{token}', function (string $token, \App\Services\EvidenciaPublicacionService $service) {
+        return $service->archivoPublico($token);
+    })->middleware('throttle:trazabilidad-publica')->name('trazabilidad.evidencia');
+
+    Route::get('trazabilidad/{codigo}', [\App\Http\Controllers\Api\TrazabilidadPublicaController::class, 'show'])
+        ->middleware('throttle:trazabilidad-publica')->name('trazabilidad.publica');
+
+    Route::prefix('evidencias-publicacion')->middleware('auth:sanctum')->group(function () {
+        $controller = \App\Http\Controllers\Api\EvidenciaPublicacionController::class;
+        Route::get('/', [$controller, 'index'])->name('evidencias-publicacion.index');
+        Route::post('actividades/{actividad}/solicitar', [$controller, 'solicitar'])->whereNumber('actividad')->name('evidencias-publicacion.solicitar');
+        Route::get('{publicacion}/archivo', [$controller, 'archivo'])->whereNumber('publicacion')->name('evidencias-publicacion.archivo');
+        Route::post('{publicacion}/aprobar', [$controller, 'aprobar'])->whereNumber('publicacion')->name('evidencias-publicacion.aprobar');
+        Route::post('{publicacion}/solicitar-retiro', [$controller, 'solicitarRetiro'])->whereNumber('publicacion')->name('evidencias-publicacion.solicitar-retiro');
+        Route::post('{publicacion}/retirar', [$controller, 'retirar'])->whereNumber('publicacion')->name('evidencias-publicacion.retirar');
+    });
+
     Route::get('consulta-recorrido', [\App\Http\Controllers\RecorridoConsultaController::class, 'index'])
         ->middleware('auth:sanctum')->name('consulta-recorrido');
 

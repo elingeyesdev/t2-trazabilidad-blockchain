@@ -41,6 +41,17 @@ class AppServiceProvider extends ServiceProvider
         App::setLocale('es');
         Paginator::useBootstrapFour();
 
+        \Illuminate\Support\Facades\RateLimiter::for('trazabilidad-publica', function (\Illuminate\Http\Request $request) {
+            // This app trusts proxy headers globally. Use the socket peer, never arbitrary forwarded headers.
+            $ip = (string) $request->server('REMOTE_ADDR', 'sin-direccion');
+
+            return \Illuminate\Cache\RateLimiting\Limit::perMinute(60)
+                ->by('trazabilidad-publica:'.hash('sha256', $ip))
+                ->response(fn ($request, $headers) => response()->json([
+                    'message' => 'Demasiadas consultas de trazabilidad. Inténtelo de nuevo en un minuto.',
+                ], 429, $headers));
+        });
+
         Blade::directive('superficie', function (string $expression) {
             return "<?php echo \\App\\Support\\SuperficieFormato::etiqueta($expression); ?>";
         });

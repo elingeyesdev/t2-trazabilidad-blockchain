@@ -6,6 +6,10 @@ return [
 
     'modules' => [
 
+        'evidencias_publicas' => [
+            'admin' => 'evidencias.publicar',
+        ],
+
         'envios' => [
 
             'create' => 'envios.create',
@@ -348,6 +352,8 @@ return [
         // Admin = supervisión: consulta todos los módulos y administra usuarios, solicitudes,
         // catálogos y reportes. No ejecuta flujos de negocio (sin create/update/delete operativos).
         'admin' => [
+
+            'evidencias.publicar',
 
             // Administración de la plataforma
             'usuarios.view',
