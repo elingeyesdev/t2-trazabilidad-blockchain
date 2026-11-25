@@ -178,6 +178,9 @@
                 <p class="text-center small text-secondary mb-3">
                     <i class="ti ti-hourglass me-1"></i>
                     Siembra asignada a <strong>{{ $actividad_siembra_pendiente['responsable'] ?? '—' }}</strong> — pendiente de realizar.
+                    @if(!empty($actividad_siembra_pendiente['actividadid']))
+                        <a href="{{ route('actividades.show', $actividad_siembra_pendiente['actividadid']) }}" class="ms-2">Ver / cambiar responsable</a>
+                    @endif
                 </p>
             @elseif($puede_enviar_almacen ?? false)
                 @include('lotes.tabler.panel-enviar-almacen-campo')
@@ -303,6 +306,12 @@
                                     <span class="badge bg-secondary-lt ms-1">En espera</span>
                                 @endif
                             </span>
+                            <span class="d-inline-flex align-items-center gap-1">
+                            @if(!empty($actPend['actividadid']))
+                                <a href="{{ route('actividades.show', $actPend['actividadid']) }}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="ti ti-user-edit me-1"></i> Detalle
+                                </a>
+                            @endif
                             @if(!empty($actPend['actividadid']) && in_array((int) $actPend['actividadid'], $actividades_marcables_ids ?? [], true) && !empty($actPend['es_siembra']) && ($puede_completar_siembra ?? false))
                                 <button type="button" class="btn btn-primary btn-sm"
                                         data-bs-toggle="modal" data-bs-target="#modalCompletarSiembra">
@@ -318,6 +327,7 @@
                                     <i class="ti ti-camera me-1"></i> Completar
                                 </button>
                             @endif
+                            </span>
                         </li>
                         @endforeach
                     </ul>

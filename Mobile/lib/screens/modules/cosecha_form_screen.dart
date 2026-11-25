@@ -8,6 +8,7 @@ import '../../models/auth_user.dart';
 import '../../models/cosecha_models.dart';
 import '../../models/module_page.dart';
 import '../../services/module_service.dart';
+import '../../services/pending_queue.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_error_state.dart';
@@ -29,6 +30,7 @@ class CosechaFormScreen extends StatefulWidget {
     required this.onRefreshPermissions,
     this.initialLoteId,
     this.initialLoteName,
+    this.pending,
   });
 
   final AuthUser user;
@@ -36,6 +38,7 @@ class CosechaFormScreen extends StatefulWidget {
   final VoidCallback onRefreshPermissions;
   final int? initialLoteId;
   final String? initialLoteName;
+  final PendingQueue? pending;
 
   @override
   State<CosechaFormScreen> createState() => _CosechaFormScreenState();
@@ -300,6 +303,7 @@ class _CosechaFormScreenState extends State<CosechaFormScreen> {
       _submitError = null;
     });
 
+    final key = PendingQueue.newKey();
     try {
       final created = await widget.service.createCosecha(
         widget.user,
@@ -309,10 +313,32 @@ class _CosechaFormScreenState extends State<CosechaFormScreen> {
         catalogoTamanoConteoId: _presentacionId,
         fechaCosecha: fecha.isEmpty ? null : fecha,
         observaciones: obs.isEmpty ? null : obs,
+        idempotencyKey: key,
       );
       if (!mounted) return;
       Navigator.of(context).pop(CosechaFormResult(record: created));
     } on ApiException catch (error) {
+      final queue = widget.pending;
+      if (error.offline && queue != null) {
+        await queue.addCosecha(
+          widget.user,
+          key: key,
+          label: 'Cosecha de ${lote?.name ?? 'lote #$loteId'}',
+          loteId: loteId,
+          cantidad: cantidad,
+          unidadMedidaId: unidadId,
+          catalogoTamanoConteoId: _presentacionId,
+          fechaCosecha: fecha.isEmpty ? null : fecha,
+          observaciones: obs.isEmpty ? null : obs,
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop(
+          const QueuedResult(
+            'Sin señal: la cosecha quedó guardada en el teléfono y se enviará sola al volver la conexión.',
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _submitting = false;

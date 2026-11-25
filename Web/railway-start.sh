@@ -75,7 +75,7 @@ run_seed_once \
   "RUN_FLUJO_SEED" \
   "${RUN_FLUJO_SEED:-false}" \
   "$SEED_LOCK_DIR/.seed_flujo_completo.done" \
-  "php artisan db:seed --class=FlujoCompletoTrazabilidadQrSeeder --force --no-interaction"
+  "php artisan db:seed --class=AgroFusionDemoSeeder --force --no-interaction"
 
 if [ "${RUN_FLUJO_SEED:-false}" != "true" ]; then
   run_seed_once \

@@ -8,7 +8,7 @@ import '../../models/incidente_models.dart';
 import '../../models/inventario_models.dart';
 import '../../models/pedido_models.dart';
 import '../../models/qr_envio_models.dart';
-import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
@@ -122,7 +122,7 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
 
   Future<void> _reportarIncidencia(EnvioResumen envio) async {
     final created = await Navigator.of(context).pushNamed<IncidenteRecord?>(
-      '/modules/incidentes/nuevo',
+      AppRoutes.incidenteNuevo,
       arguments: IncidenteFormArgs(
         afectadoTipo: _incidenteAfectadoTipo,
         afectadoId: envio.id,
@@ -420,7 +420,10 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando envío...')
+            ? const AppLoading(
+                message: 'Cargando envío...',
+                shape: LoadingShape.detail,
+              )
             : _errorStatus == 404
             ? const AppEmptyState(
                 icon: Icons.search_off_rounded,
@@ -926,9 +929,9 @@ class _EnvioQrDetailScreenState extends State<EnvioQrDetailScreen> {
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
               key: ValueKey('recepcion_envio.ver_pedido.${pedido.id}'),
-              onPressed: () => Navigator.of(context).pushNamed(
-                '${AppModule.pedidos.route}/${pedido.tipo.value}/${pedido.id}',
-              ),
+              onPressed: () => Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.pedido(pedido.tipo, pedido.id)),
               icon: const Icon(Icons.history_rounded),
               label: const Text('Ver historial del pedido'),
             ),

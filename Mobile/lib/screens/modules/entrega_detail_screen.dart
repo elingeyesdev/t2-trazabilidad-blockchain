@@ -187,7 +187,10 @@ class _EntregaDetailScreenState extends State<EntregaDetailScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando detalle de la entrega...')
+            ? const AppLoading(
+                message: 'Cargando detalle de la entrega...',
+                shape: LoadingShape.detail,
+              )
             : _errorStatus == 404
             ? const AppEmptyState(
                 icon: Icons.search_off_rounded,

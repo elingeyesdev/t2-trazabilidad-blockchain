@@ -1,0 +1,26 @@
+# El contexto es la raíz del repositorio. Solo entran la web y el vhost.
+**
+!Web/
+!Web/**
+!docs/
+!docs/tarea10/
+!docs/tarea10/apache.conf
+Web/.env*
+Web/vendor/
+Web/node_modules/
+Web/.git/
+Web/docs/
+Web/tests/
+Web/scripts/
+Web/storage/
+Web/bootstrap/cache/*.php
+Web/public/hot
+Web/public/storage
+Web/public/build/
+Web/database/*.sqlite*
+**/*.backup
+**/*.dump
+**/*.sql
+**/*.pptx
+**/*.pdf
+**/*.zip

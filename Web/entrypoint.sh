@@ -30,8 +30,8 @@ if [ "${RUN_FLUJO_SEED:-false}" = "true" ]; then
     if [ -f "$SEED_LOCK_DIR/.seed_flujo_completo.done" ]; then
         echo "⏭️ FlujoCompleto ya sembrado (lock). Datos preservados."
     else
-        echo "🌱 Ejecutando FlujoCompletoTrazabilidadQrSeeder (una vez)..."
-        if php artisan db:seed --class=FlujoCompletoTrazabilidadQrSeeder --force; then
+        echo "🌱 Ejecutando AgroFusionDemoSeeder (una vez)..."
+        if php artisan db:seed --class=AgroFusionDemoSeeder --force; then
             date -u +"%Y-%m-%dT%H:%M:%SZ" > "$SEED_LOCK_DIR/.seed_flujo_completo.done" 2>/dev/null || true
             echo "✔️ Seed flujo OK. Pon RUN_FLUJO_SEED=false en Railway."
         fi

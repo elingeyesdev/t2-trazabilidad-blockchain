@@ -42,6 +42,7 @@ class InsumoController extends Controller
         unset($data['motivo_ajuste'], $data['materiaprimaloteid']);
         $data['stockminimo'] = $data['stockminimo'] ?? null;
         $insumo = Insumo::create($data);
+        app(\App\Services\InventarioMovimientoService::class)->registrarIngresoInicial($request->user(), $insumo);
 
         return response()->json($insumo->load(['tipo', 'unidadMedida'])->makeVisible(['tipo', 'unidadMedida']), 201);
     }
@@ -70,16 +71,19 @@ class InsumoController extends Controller
     }
 
     /**
-     * Insumos sin almacén (catálogo agrícola) siguen visibles según el permiso de la ruta; los que
-     * pertenecen a un almacén solo si ese almacén es visible para el usuario (MAY-05).
+     * Solo devuelve insumos que pertenecen a almacenes visibles para el usuario.
+     * Los insumos legacy sin almacén (`almacenid = null`) quedan excluidos.
      */
     private function scopeVisibles($query, Request $request)
     {
         $ids = AlmacenAcceso::idsVisibles($request->user());
+        $query->whereIn('almacenid', $ids ?: [-1]);
 
-        return $query->where(function ($q) use ($ids) {
-            $q->whereNull('almacenid')->orWhereIn('almacenid', $ids ?: [-1]);
-        });
+        if ($request->filled('almacenid')) {
+            $query->where('almacenid', (int) $request->input('almacenid'));
+        }
+
+        return $query;
     }
 
     private function asegurarPuedeModificar(Request $request, Insumo $insumo): void

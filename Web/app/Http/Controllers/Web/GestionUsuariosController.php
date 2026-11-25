@@ -67,6 +67,7 @@ class GestionUsuariosController extends Controller
             'roles' => $this->rolesDisponibles(),
             'modoJefe' => $modoJefe,
             'rolEmpleadoFijo' => $modoJefe ? UsuarioRol::rolEmpleadoAsignable(auth()->user()) : null,
+            'jefesPorRol' => $modoJefe ? [] : $this->jefesDisponiblesPorRolOperario(),
         ]);
     }
 
@@ -74,7 +75,7 @@ class GestionUsuariosController extends Controller
     {
         $this->autorizarAccesoUsuario($usuario);
 
-        $usuario->load(['roles', 'perfilTransportista']);
+        $usuario->load(['roles', 'perfilTransportista', 'supervisor']);
 
         $stats = [
             'lotes' => $usuario->lotes()->count(),
@@ -88,8 +89,23 @@ class GestionUsuariosController extends Controller
             ->get();
 
         $modoJefe = $this->modoJefe();
+        $rolSolicitadoEfectivo = $this->rolSolicitadoEfectivo($usuario);
+        $rolJefeRequerido = CuentaEstado::esPendiente($usuario->estado_cuenta) && $rolSolicitadoEfectivo
+            ? CuentaEstado::rolJefeDeEmpleado($rolSolicitadoEfectivo)
+            : null;
+        $jefesDisponibles = $rolJefeRequerido !== null
+            ? $this->jefesActivosPorRol($rolJefeRequerido)
+            : collect();
 
-        return view('usuarios.show', compact('usuario', 'stats', 'lotesRecientes', 'modoJefe'));
+        return view('usuarios.show', compact(
+            'usuario',
+            'stats',
+            'lotesRecientes',
+            'modoJefe',
+            'rolSolicitadoEfectivo',
+            'rolJefeRequerido',
+            'jefesDisponibles'
+        ));
     }
 
     public function edit(Usuario $usuario): View|RedirectResponse
@@ -103,12 +119,14 @@ class GestionUsuariosController extends Controller
         }
 
         $usuario->load('roles');
+        $modoJefe = $this->modoJefe();
 
         return view('usuarios.edit', [
             'usuario' => $usuario,
             'roles' => $this->rolesDisponibles(),
-            'modoJefe' => $this->modoJefe(),
+            'modoJefe' => $modoJefe,
             'rolEmpleadoFijo' => UsuarioRol::rolEmpleadoAsignable(auth()->user()),
+            'jefesPorRol' => $modoJefe ? [] : $this->jefesDisponiblesPorRolOperario(),
         ]);
     }
 
@@ -132,20 +150,22 @@ class GestionUsuariosController extends Controller
             'imagenurl' => 'nullable|string|max:250',
             'informacionadicional' => 'nullable|string',
             'rolid' => 'nullable|exists:roles,id',
+            'supervisor_usuarioid' => 'nullable|integer|exists:usuario,usuarioid',
         ], $this->mensajesValidacionUsuario(), $this->atributosValidacionUsuario());
+
+        $rol = $request->filled('rolid') ? Role::findById($request->rolid) : null;
+        $supervisorId = $this->resolverSupervisorParaAdmin($rol?->name, $data['supervisor_usuarioid'] ?? null);
 
         $data['passwordhash'] = Hash::make($data['passwordhash']);
         $data['activo'] = true;
         $data['estado_cuenta'] = CuentaEstado::APROBADO;
+        $data['supervisor_usuarioid'] = $supervisorId;
 
         $usuario = Usuario::create($data);
 
-        if ($request->filled('rolid')) {
-            $rol = Role::findById($request->rolid);
-            if ($rol) {
-                $usuario->assignRole($rol);
-                $usuario->update(['role' => $rol->name]);
-            }
+        if ($rol) {
+            $usuario->assignRole($rol);
+            $usuario->update(['role' => $rol->name]);
         }
 
         return redirect()->route('gestion.show', $usuario)->with('success', 'Usuario creado correctamente.');
@@ -174,18 +194,23 @@ class GestionUsuariosController extends Controller
             'imagenurl' => 'nullable|string|max:250',
             'informacionadicional' => 'nullable|string',
             'rolid' => 'nullable|exists:roles,id',
+            'supervisor_usuarioid' => 'nullable|integer|exists:usuario,usuarioid',
         ], $this->mensajesValidacionUsuario(), $this->atributosValidacionUsuario());
 
         unset($data['activo']);
 
+        $rol = $request->filled('rolid') ? Role::findById($request->rolid) : null;
+        $data['supervisor_usuarioid'] = $this->resolverSupervisorParaAdmin(
+            $rol?->name,
+            $data['supervisor_usuarioid'] ?? null,
+            (int) $usuario->usuarioid
+        );
+
         $usuario->update($data);
 
-        if ($request->filled('rolid')) {
-            $rol = Role::findById($request->rolid);
-            if ($rol) {
-                $usuario->syncRoles([$rol]);
-                $usuario->update(['role' => $rol->name]);
-            }
+        if ($rol) {
+            $usuario->syncRoles([$rol]);
+            $usuario->update(['role' => $rol->name]);
         } else {
             $usuario->syncRoles([]);
         }
@@ -261,7 +286,7 @@ class GestionUsuariosController extends Controller
     {
         $this->authorizeAprobar($usuario);
 
-        $rolNombre = $usuario->rol_solicitado;
+        $rolNombre = $this->rolSolicitadoEfectivo($usuario);
         if (! $rolNombre || ! in_array($rolNombre, CuentaEstado::rolesRegistroPublico(), true)) {
             return back()->withErrors(['rol' => 'La solicitud no tiene un rol válido.']);
         }
@@ -276,19 +301,44 @@ class GestionUsuariosController extends Controller
             ])['ambito_flota'];
         }
 
+        $jefeAsignado = null;
+        $rolJefeRequerido = CuentaEstado::rolJefeDeEmpleado($rolNombre);
+        if ($rolJefeRequerido !== null) {
+            $etiquetaJefe = UsuarioRol::etiquetaRol($rolJefeRequerido);
+            $supervisorId = (int) $request->validate([
+                'supervisor_usuarioid' => ['required', 'integer', 'exists:usuario,usuarioid'],
+            ], [
+                'supervisor_usuarioid.required' => 'Seleccione el '.$etiquetaJefe.' al que se asignará este operario antes de aprobar.',
+                'supervisor_usuarioid.exists' => 'El jefe seleccionado no existe.',
+            ])['supervisor_usuarioid'];
+
+            $jefeAsignado = $this->jefesActivosPorRol($rolJefeRequerido)
+                ->firstWhere('usuarioid', $supervisorId);
+
+            if (! $jefeAsignado) {
+                return back()
+                    ->withErrors(['supervisor_usuarioid' => 'El usuario seleccionado no es un '.$etiquetaJefe.' activo.'])
+                    ->withInput();
+            }
+        }
+
         Role::firstOrCreate(['name' => $rolNombre, 'guard_name' => 'web']);
         PermissionMatrixSync::syncRole($rolNombre);
 
-        $usernameService = app(UsuarioUsernameService::class);
-        $nombreusuario = $usernameService->generarDesdeNombreApellido(
-            (string) $usuario->nombre,
-            (string) $usuario->apellido
-        );
+        $nombreusuario = trim((string) ($usuario->nombreusuario ?? ''));
+        if ($nombreusuario === '' || str_starts_with($nombreusuario, 'sol_')) {
+            $usernameService = app(UsuarioUsernameService::class);
+            $nombreusuario = $usernameService->generarDesdeNombreApellido(
+                (string) $usuario->nombre,
+                (string) $usuario->apellido
+            );
+        }
 
-        $usuario->update([
+        $payloadAprobacion = [
             'estado_cuenta' => CuentaEstado::APROBADO,
             'activo' => true,
             'role' => $rolNombre,
+            'rol_solicitado' => $rolNombre,
             'nombreusuario' => $nombreusuario,
             'nombreusuario_editado' => false,
             'bienvenida_vista' => false,
@@ -296,17 +346,25 @@ class GestionUsuariosController extends Controller
             'revisado_por' => auth()->id(),
             'fecha_revision' => now(),
             'fechamodificacion' => now(),
-        ]);
+        ];
+
+        if ($rolJefeRequerido !== null) {
+            $payloadAprobacion['supervisor_usuarioid'] = $jefeAsignado->usuarioid;
+        }
+
+        $usuario->update($payloadAprobacion);
         $usuario->syncRoles([$rolNombre]);
 
         if ($rolNombre === 'transportista') {
             $this->crearPerfilTransportistaDesdeSolicitud($usuario, $ambitoFlota);
         }
 
-        return redirect()->route('gestion.show', $usuario)->with(
-            'success',
-            'Solicitud aprobada. Se asignó el usuario «'.$nombreusuario.'».'
-        );
+        $mensaje = 'Solicitud aprobada. Se asignó el usuario «'.$nombreusuario.'».';
+        if ($jefeAsignado !== null) {
+            $mensaje = 'Solicitud aprobada. Se asignó el usuario «'.$nombreusuario.'» al equipo de '.$jefeAsignado->nombreCompleto().'.';
+        }
+
+        return redirect()->route('gestion.show', $usuario)->with('success', $mensaje);
     }
 
     public function rechazarSolicitud(Request $request, Usuario $usuario): RedirectResponse
@@ -544,9 +602,79 @@ class GestionUsuariosController extends Controller
             abort(403, 'Esta solicitud ya fue procesada.');
         }
 
-        if (! UsuarioRol::puedeAprobarSolicitud(auth()->user(), $usuario->rol_solicitado)) {
+        if (! UsuarioRol::puedeAprobarSolicitud(auth()->user(), $this->rolSolicitadoEfectivo($usuario))) {
             abort(403, 'No tienes permiso para aprobar esta solicitud.');
         }
+    }
+
+    private function rolSolicitadoEfectivo(Usuario $usuario): ?string
+    {
+        if (filled($usuario->rol_solicitado)) {
+            return (string) $usuario->rol_solicitado;
+        }
+
+        if (filled($usuario->role) && in_array((string) $usuario->role, CuentaEstado::rolesRegistroPublico(), true)) {
+            return (string) $usuario->role;
+        }
+
+        return null;
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Collection<int, Usuario> */
+    private function jefesActivosPorRol(string $rolJefe)
+    {
+        return Usuario::query()
+            ->where('activo', true)
+            ->where(function ($q) {
+                $q->whereNull('estado_cuenta')->orWhere('estado_cuenta', CuentaEstado::APROBADO);
+            })
+            ->where(function ($q) use ($rolJefe) {
+                $q->whereHas('roles', fn ($r) => $r->where('name', $rolJefe))
+                    ->orWhere('role', $rolJefe);
+            })
+            ->orderBy('nombre')
+            ->orderBy('apellido')
+            ->get(['usuarioid', 'nombre', 'apellido', 'nombreusuario', 'email']);
+    }
+
+    /** @return array<string, \Illuminate\Database\Eloquent\Collection<int, Usuario>> */
+    private function jefesDisponiblesPorRolOperario(): array
+    {
+        return [
+            'agricultor' => $this->jefesActivosPorRol('jefe_agricultor'),
+            'planta' => $this->jefesActivosPorRol('jefe_planta'),
+        ];
+    }
+
+    private function resolverSupervisorParaAdmin(?string $rolNombre, mixed $supervisorRaw, ?int $usuarioActualId = null): ?int
+    {
+        $rolJefeRequerido = $rolNombre ? CuentaEstado::rolJefeDeEmpleado(strtolower($rolNombre)) : null;
+        if ($rolJefeRequerido === null) {
+            return null;
+        }
+
+        if ($supervisorRaw === null || $supervisorRaw === '') {
+            return null;
+        }
+
+        $supervisorId = (int) $supervisorRaw;
+        if ($usuarioActualId !== null && $supervisorId === $usuarioActualId) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'supervisor_usuarioid' => 'Un usuario no puede asignarse a sí mismo como jefe.',
+            ]);
+        }
+
+        $jefeValido = $this->jefesActivosPorRol($rolJefeRequerido)
+            ->firstWhere('usuarioid', $supervisorId);
+
+        if (! $jefeValido) {
+            $etiquetaJefe = UsuarioRol::etiquetaRol($rolJefeRequerido);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'supervisor_usuarioid' => 'El usuario seleccionado no es un '.$etiquetaJefe.' activo.',
+            ]);
+        }
+
+        return $supervisorId;
     }
 
     /** @return \Illuminate\Support\Collection<int, Role> */

@@ -41,6 +41,8 @@ class AuthController extends ChangeNotifier {
   LogoutResult? _logoutResult;
   bool _isDisposed = false;
   bool _profileUpdateNeedsRefresh = false;
+  int _externalPickerDepth = 0;
+  DateTime? _suppressResumeRestoreUntil;
 
   AuthUser? get user => _user;
   ApiException? get error => _error;
@@ -50,6 +52,14 @@ class AuthController extends ChangeNotifier {
   bool get isLoadingProfile => _operation == _AuthOperation.profile;
   bool get isSavingProfile => _operation == _AuthOperation.savingProfile;
   bool get profileUpdateNeedsRefresh => _profileUpdateNeedsRefresh;
+  bool get shouldSuppressResumeRestore {
+    if (_externalPickerDepth > 0 || _operation == _AuthOperation.pickingPhoto) {
+      return true;
+    }
+    final until = _suppressResumeRestoreUntil;
+    return until != null && DateTime.now().isBefore(until);
+  }
+
   ApiException? get sessionError => _sessionError;
   LogoutResult? get logoutResult => _logoutResult;
   bool get requiresLogoutRetry => _logoutResult?.localCleared == false;
@@ -87,6 +97,20 @@ class AuthController extends ChangeNotifier {
 
   Future<void> restoreSession() => _verifySession();
 
+  Future<T> runExternalPicker<T>(Future<T> Function() action) async {
+    _externalPickerDepth++;
+    try {
+      return await action();
+    } finally {
+      _externalPickerDepth = _externalPickerDepth > 0
+          ? _externalPickerDepth - 1
+          : 0;
+      _suppressResumeRestoreUntil = DateTime.now().add(
+        const Duration(seconds: 2),
+      );
+    }
+  }
+
   Future<ProfilePhoto?> selectProfilePhoto(
     Future<ProfilePhoto?> Function() select,
   ) async {
@@ -112,6 +136,9 @@ class AuthController extends ChangeNotifier {
       }
     } finally {
       _operation = _AuthOperation.idle;
+      _suppressResumeRestoreUntil = DateTime.now().add(
+        const Duration(seconds: 2),
+      );
       if (!_isDisposed) notifyListeners();
     }
     if (!_canApplyResult(revision)) return null;

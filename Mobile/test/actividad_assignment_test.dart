@@ -473,4 +473,55 @@ void main() {
       expect(find.text('Acceso no autorizado'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'El jefe agrícola carga su equipo desde actividades/responsables aunque usuarios devuelva 403',
+    (tester) async {
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') return jsonResponse(jefeProfile);
+        if (request.url.path == '/api/actividades' && request.method == 'GET') {
+          return jsonResponse(const []);
+        }
+        if (request.url.path == '/api/lotes' && request.method == 'GET') {
+          return jsonResponse(lotsPayload);
+        }
+        if (request.url.path == '/api/usuarios' && request.method == 'GET') {
+          return jsonResponse({'message': 'Forbidden'}, 403);
+        }
+        if (request.url.path == '/api/actividades/responsables' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [
+              {
+                'usuarioid': 8,
+                'nombre': 'Lucía',
+                'apellido': 'Quispe',
+                'role': 'agricultor',
+                'activo': true,
+              },
+            ],
+          });
+        }
+        if (request.url.path == '/api/tipoactividades') {
+          return jsonResponse(tiposPayload);
+        }
+        if (request.url.path == '/api/prioridades') {
+          return jsonResponse(prioridadesPayload);
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await openActividades(tester);
+      await tester.tap(find.text('Asignar actividad'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('No tienes permiso para realizar esta acción.'),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('actividad.responsable')));
+      await tester.pumpAndSettle();
+      expect(find.text('Lucía Quispe · Agricultor'), findsWidgets);
+    },
+  );
 }

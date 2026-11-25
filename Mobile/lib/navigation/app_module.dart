@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../theme/app_glyphs.dart';
 
 import '../models/auth_user.dart';
 
@@ -7,7 +7,7 @@ enum AppModule {
     'Lotes',
     'lotes',
     'lotes.view',
-    Icons.landscape_rounded,
+    AppGlyphs.mapTrifold,
     'loteid',
     'nombre',
     {'ubicacion': 'Ubicación', 'superficie': 'Superficie'},
@@ -16,7 +16,7 @@ enum AppModule {
     'Actividades',
     'actividades',
     'lotes.view',
-    Icons.agriculture_rounded,
+    AppGlyphs.shovel,
     'actividadid',
     'descripcion',
     {'fecha_planificada': 'Fecha planificada', 'fechainicio': 'Inicio'},
@@ -25,7 +25,7 @@ enum AppModule {
     'Cosechas',
     'producciones',
     'lotes.view',
-    Icons.grass_rounded,
+    AppGlyphs.basket,
     'produccionid',
     null,
     {'cantidad': 'Cantidad', 'fechacosecha': 'Fecha de cosecha'},
@@ -34,7 +34,7 @@ enum AppModule {
     'Tareas de planta',
     'planta/tareas',
     'lote_produccion.view',
-    Icons.precision_manufacturing_rounded,
+    AppGlyphs.factory,
     'asignacionetapaplantaid',
     null,
     {'estado': 'Estado', 'orden': 'Etapa'},
@@ -43,7 +43,7 @@ enum AppModule {
     'Recepciones en planta',
     'planta/recepciones',
     'recepcion_planta.view',
-    Icons.move_to_inbox_rounded,
+    AppGlyphs.scales,
     'pedidoid',
     'numero_solicitud',
     {'estado': 'Estado'},
@@ -52,7 +52,7 @@ enum AppModule {
     'Almacenes',
     'almacenes',
     'inventario.view',
-    Icons.warehouse_rounded,
+    AppGlyphs.warehouse,
     'almacenid',
     'nombre',
     {'ubicacion': 'Ubicación', 'capacidad': 'Capacidad'},
@@ -61,7 +61,7 @@ enum AppModule {
     'Insumos',
     'insumos',
     'inventario.view',
-    Icons.inventory_2_rounded,
+    AppGlyphs.grains,
     'insumoid',
     'nombre',
     {'stock': 'Stock', 'descripcion': 'Descripción'},
@@ -70,7 +70,7 @@ enum AppModule {
     'Movimientos de almacén',
     'almacen-movimientos',
     'almacen.movimientos.view',
-    Icons.swap_horiz_rounded,
+    AppGlyphs.arrowsLeftRight,
     'almacen_movimientoid',
     'referencia',
     {'fecha': 'Fecha', 'cantidad': 'Cantidad'},
@@ -79,7 +79,7 @@ enum AppModule {
     'Certificaciones',
     'certificaciones',
     'certificaciones.view',
-    Icons.verified_rounded,
+    AppGlyphs.sealCheck,
     'certificacionid',
     'codigo_certificado',
     {'resultado': 'Resultado', 'fecha_certificacion': 'Fecha de certificación'},
@@ -88,7 +88,7 @@ enum AppModule {
     'Pedidos',
     'pedidos',
     'pedidos.view',
-    Icons.receipt_long_rounded,
+    AppGlyphs.package,
     'pedidoid',
     'numero_solicitud',
     {'nombre_planta': 'Planta', 'estado': 'Estado'},
@@ -97,7 +97,7 @@ enum AppModule {
     'Incidentes',
     'incidentes',
     'incidentes.view',
-    Icons.report_problem_rounded,
+    AppGlyphs.warning,
     'incidenteenvioid',
     'tipo',
     {
@@ -114,7 +114,7 @@ enum AppModule {
     'Rutas',
     'rutas-multi',
     'rutas_multi.view',
-    Icons.route_rounded,
+    AppGlyphs.path,
     'rutamultientregaid',
     'nombre',
     {'estado': 'Estado', 'fecha_salida': 'Salida'},
@@ -123,7 +123,7 @@ enum AppModule {
     'Asignaciones',
     'asignaciones-multiples',
     'asignaciones.view',
-    Icons.local_shipping_rounded,
+    AppGlyphs.truck,
     'envioasignacionmultipleid',
     'vehiculo_ref',
     {'estado': 'Estado', 'fecha_asignacion': 'Fecha de asignación'},
@@ -132,7 +132,7 @@ enum AppModule {
     'Documentos de entrega',
     'documentos-entrega',
     'documentos.view',
-    Icons.description_rounded,
+    AppGlyphs.fileText,
     'documentoentregaid',
     'titulo',
     {'tipo_documento': 'Tipo'},
@@ -141,7 +141,7 @@ enum AppModule {
     'Usuarios',
     'usuarios',
     'usuarios.admin',
-    Icons.groups_rounded,
+    AppGlyphs.users,
     'usuarioid',
     'nombre',
     {
@@ -164,7 +164,7 @@ enum AppModule {
   final String label;
   final String endpoint;
   final String permission;
-  final IconData icon;
+  final Glyph icon;
   final String idField;
   final String? titleField;
   final Map<String, String> fields;

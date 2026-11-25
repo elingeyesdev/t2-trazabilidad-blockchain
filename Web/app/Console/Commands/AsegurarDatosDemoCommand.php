@@ -2,34 +2,27 @@
 
 namespace App\Console\Commands;
 
-use Database\Seeders\AlmacenPiraiStockSeeder;
-use Database\Seeders\MaquinaVariablePlantaSeeder;
-use Database\Seeders\PdvMercadoAlvaroCompletoSeeder;
-use Database\Seeders\PdvInventarioDemoSeeder;
-use Database\Seeders\PlantillaPasoVariableSeeder;
-use Database\Seeders\ProductosTerminadosPlantaMayoristaSeeder;
+use Database\Seeders\AgroFusionDemoSeeder;
+use Database\Seeders\CatalogosOperacionAgricolaSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Console\Command;
 
 class AsegurarDatosDemoCommand extends Command
 {
     protected $signature = 'agrofusion:asegurar-datos-demo';
 
-    protected $description = 'Restaura stock demo en planta, mayorista y puntos de venta sin borrar inventario existente';
+    protected $description = 'Asegura catálogos, cuentas y recorrido completo de trazabilidad demo de AgroFusion';
 
     public function handle(): int
     {
-        $this->info('Asegurando inventario demo en planta, almacén mayorista y puntos de venta…');
+        $this->info('Asegurando datos demo de AgroFusion (campo, planta, mayorista, distribución y PDV)…');
 
-        $this->call('db:seed', ['--class' => ProductosTerminadosPlantaMayoristaSeeder::class, '--force' => true]);
-        $this->call('db:seed', ['--class' => AlmacenPiraiStockSeeder::class, '--force' => true]);
-        $this->call('db:seed', ['--class' => PdvMercadoAlvaroCompletoSeeder::class, '--force' => true]);
-        $this->call('db:seed', ['--class' => PdvInventarioDemoSeeder::class, '--force' => true]);
-        $this->call('db:seed', ['--class' => MaquinaVariablePlantaSeeder::class, '--force' => true]);
-        $this->call('db:seed', ['--class' => PlantillaPasoVariableSeeder::class, '--force' => true]);
-        $this->call('agrofusion:migrar-rutas-lotes');
+        $this->call('db:seed', ['--class' => RolePermissionSeeder::class, '--force' => true]);
+        $this->call('db:seed', ['--class' => CatalogosOperacionAgricolaSeeder::class, '--force' => true]);
+        $this->call('db:seed', ['--class' => AgroFusionDemoSeeder::class, '--force' => true]);
 
         $this->newLine();
-        $this->info('Inventario demo listo (planta + mayorista + PDV).');
+        $this->info('Datos demo listos.');
 
         return self::SUCCESS;
     }

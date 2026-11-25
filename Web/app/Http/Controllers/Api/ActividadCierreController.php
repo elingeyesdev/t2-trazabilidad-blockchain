@@ -28,7 +28,7 @@ class ActividadCierreController extends Controller
         }
 
         return new ActividadConsultaResource($guardada->fresh()->load([
-            'lote.cultivo', 'lote.estadoTipo', 'usuario:usuarioid,nombre,apellido',
+            'lote.cultivo', 'lote.estadoTipo', 'lote.insumoSemilla.unidadMedida', 'usuario:usuarioid,nombre,apellido',
             'ejecutor:usuarioid,nombre,apellido', 'tipoActividad', 'prioridad',
         ]));
     }

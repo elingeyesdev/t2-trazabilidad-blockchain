@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/actividad_models.dart';
@@ -9,6 +10,7 @@ import '../../models/auth_user.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
 import '../../services/module_service.dart';
+import '../../services/pending_queue.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
 import '../../widgets/app_empty_state.dart';
@@ -34,6 +36,8 @@ class ActividadCloseScreen extends StatefulWidget {
     this.initialData,
     this.capturePhoto,
     this.selectFile,
+    this.onExternalPicker,
+    this.pending,
   });
 
   final int actividadId;
@@ -43,17 +47,35 @@ class ActividadCloseScreen extends StatefulWidget {
   final ActividadEditableData? initialData;
   final Future<XFile?> Function()? capturePhoto;
   final Future<XFile?> Function()? selectFile;
+  final Future<XFile?> Function(Future<XFile?> Function() action)?
+  onExternalPicker;
+  final PendingQueue? pending;
 
   @override
   State<ActividadCloseScreen> createState() => _ActividadCloseScreenState();
 }
 
 class _ConsumoDraft {
-  _ConsumoDraft({this.almacenId})
-    : quantityController = TextEditingController();
+  _ConsumoDraft({
+    this.almacenId,
+    this.insumoId,
+    String? initialQuantity,
+    this.locked = false,
+    this.lockedName,
+    this.lockedUnit,
+    this.lockedUnidadMedidaId,
+    this.lockedTitle,
+    this.lockedHint,
+  }) : quantityController = TextEditingController(text: initialQuantity ?? '');
 
   int? almacenId;
   int? insumoId;
+  final bool locked;
+  final String? lockedName;
+  final String? lockedUnit;
+  final int? lockedUnidadMedidaId;
+  final String? lockedTitle;
+  final String? lockedHint;
   final TextEditingController quantityController;
 
   void dispose() => quantityController.dispose();
@@ -76,6 +98,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
   bool _submitting = false;
   String? _loadError;
   String? _inventoryError;
+  String? _consumosError;
   String? _photoError;
   String? _cameraPermissionMessage;
   ApiException? _submitError;
@@ -84,16 +107,46 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       widget.user.permissions.contains(AppModule.insumos.permission) &&
       widget.user.permissions.contains(AppModule.almacenes.permission);
 
+  bool get _showInsumosSection =>
+      (_canSelectInventory || (_actividad?.hasPlannedInsumos ?? false)) &&
+      !(_actividad?.hidesInsumos ?? false);
+
   @override
   void initState() {
     super.initState();
     _actividad = widget.initialData;
+    _ensureLockedSeedDraft();
     if (_actividad == null) {
       unawaited(_loadActivity());
     }
-    if (_canSelectInventory) {
+    if (_canSelectInventory && !(_actividad?.hidesInsumos ?? false)) {
       unawaited(_loadInventoryOptions());
     }
+    if (widget.capturePhoto == null &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(_recoverLostAndroidPhoto());
+    }
+  }
+
+  Future<void> _recoverLostAndroidPhoto() async {
+    final lost = await retrieveLostCameraPhoto();
+    if (!mounted || lost == null || _photo != null) return;
+    try {
+      final picked = await _readPhoto(lost);
+      if (!mounted || picked == null) return;
+      setState(() {
+        _photo = picked;
+        _photoError = null;
+        _cameraPermissionMessage = null;
+      });
+      _clearError(field: 'evidencia_foto');
+    } catch (_) {}
+  }
+
+  Future<XFile?> _runPicker(Future<XFile?> Function() action) {
+    final wrapper = widget.onExternalPicker;
+    return wrapper != null ? wrapper(action) : action();
   }
 
   @override
@@ -117,11 +170,22 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       ]);
       if (!mounted) return;
       final almacenes = results[0] as List<AlmacenOption>;
-      final insumos = results[1] as List<InsumoOption>;
+      final almacenIds = almacenes.map((a) => a.id).toSet();
+      final rawInsumos = results[1] as List<InsumoOption>;
+      // Excluye insumos legacy sin almacén, almacenes ajenos y productos sin stock (> 0).
+      final insumos = rawInsumos
+          .where(
+            (item) =>
+                item.almacenId != null &&
+                almacenIds.contains(item.almacenId) &&
+                item.stock > 0,
+          )
+          .toList();
       setState(() {
         _almacenes = almacenes;
         _insumos = insumos;
         _loadingInventory = false;
+        _ensureLockedSeedDraft();
       });
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -155,11 +219,125 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
     return null;
   }
 
+  bool _matchesActivityCategory(InsumoOption item) {
+    final tipoAct = (_actividad?.tipoNombre ?? '').toLowerCase();
+    final tipoIns = (item.tipoNombre ?? '').toLowerCase();
+    if (tipoAct.isEmpty || tipoIns.isEmpty) return true;
+
+    final isSeed = tipoIns.contains('siembra') || tipoIns.contains('semilla');
+    final isPest =
+        tipoIns.contains('plaga') ||
+        tipoIns.contains('pesticid') ||
+        tipoIns.contains('fungic') ||
+        tipoIns.contains('insect') ||
+        tipoIns.contains('herbic');
+
+    if (tipoAct.contains('siembra')) {
+      return isSeed;
+    }
+    if (tipoAct.contains('plaga') ||
+        tipoAct.contains('fumig') ||
+        tipoAct.contains('fitosanit')) {
+      return isPest;
+    }
+    if (tipoAct.contains('fertiliz')) {
+      return !isSeed && !isPest;
+    }
+    return true;
+  }
+
   List<InsumoOption> _insumosForAlmacen(int? almacenId) {
-    if (almacenId == null) return _insumos;
-    return _insumos
-        .where((item) => item.almacenId == null || item.almacenId == almacenId)
+    if (almacenId == null) return const [];
+    final inAlmacen = _insumos
+        .where(
+          (item) =>
+              item.almacenId != null &&
+              item.almacenId == almacenId &&
+              item.stock > 0,
+        )
         .toList();
+    return inAlmacen.where(_matchesActivityCategory).toList();
+  }
+
+  void _ensureLockedSeedDraft() {
+    final act = _actividad;
+    if (act == null) return;
+    if (act.hasLockedSeed) {
+      final seedId = act.plannedSeedInsumoId!;
+      if (_consumos.any((c) => c.locked && c.insumoId == seedId)) return;
+      final seedInsumo = _insumoById(seedId);
+      final almacenId =
+          seedInsumo?.almacenId ??
+          act.plannedSeedAlmacenId ??
+          (_almacenes.length == 1 ? _almacenes.first.id : null);
+      if (almacenId == null) return;
+      for (final existing in _consumos) {
+        existing.dispose();
+      }
+      _consumos
+        ..clear()
+        ..add(
+          _ConsumoDraft(
+            almacenId: almacenId,
+            insumoId: seedId,
+            initialQuantity: act.plannedSeedQuantity,
+            locked: true,
+            lockedName: act.plannedSeedName,
+            lockedUnit: act.plannedSeedUnit,
+            lockedTitle: 'Semilla planificada del lote',
+            lockedHint:
+                'Esta semilla fue elegida al crear el lote y no puede cambiarse. Solo confirma la cantidad real utilizada.',
+          ),
+        );
+      return;
+    }
+
+    if (act.hasPlannedInsumos) {
+      final expectedIds = act.plannedInsumos.map((e) => e.insumoId).toSet();
+      final alreadyPopulated =
+          _consumos.length == act.plannedInsumos.length &&
+          _consumos.every(
+            (c) =>
+                c.locked &&
+                c.insumoId != null &&
+                expectedIds.contains(c.insumoId),
+          );
+      if (alreadyPopulated) {
+        for (final draft in _consumos) {
+          draft.almacenId ??=
+              _insumoById(draft.insumoId)?.almacenId ??
+              (_almacenes.length == 1 ? _almacenes.first.id : null);
+        }
+        return;
+      }
+      for (final existing in _consumos) {
+        existing.dispose();
+      }
+      _consumos.clear();
+      for (final item in act.plannedInsumos) {
+        final matchedInsumo = _insumoById(item.insumoId);
+        final almacenId =
+            item.almacenId ??
+            matchedInsumo?.almacenId ??
+            (_almacenes.length == 1 ? _almacenes.first.id : null);
+        _consumos.add(
+          _ConsumoDraft(
+            almacenId: almacenId,
+            insumoId: item.insumoId,
+            initialQuantity: item.cantidad > 0
+                ? formatQuantity(item.cantidad)
+                : null,
+            locked: true,
+            lockedName: item.name,
+            lockedUnit: item.unitLabel,
+            lockedUnidadMedidaId: item.unidadMedidaId,
+            lockedTitle: 'Insumo asignado para esta actividad',
+            lockedHint:
+                'Este insumo fue elegido al asignar la actividad. Solo confirma la cantidad real utilizada.',
+          ),
+        );
+      }
+    }
   }
 
   void _addConsumo() {
@@ -169,17 +347,42 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
         : null;
     setState(() {
       _consumos.add(_ConsumoDraft(almacenId: defaultAlmacenId));
+      _consumosError = null;
     });
     _clearError(field: 'consumos');
   }
 
   void _removeConsumo(int index) {
     if (_submitting || index < 0 || index >= _consumos.length) return;
-    setState(() {
-      final removed = _consumos.removeAt(index);
-      removed.dispose();
-    });
+    final removed = _consumos[index];
+    setState(() => _consumos.removeAt(index));
     _clearError();
+    var undone = false;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+          SnackBar(
+            content: const Text('Insumo quitado'),
+            action: SnackBarAction(
+              label: 'Deshacer',
+              onPressed: () {
+                if (!mounted || undone || _consumos.length >= _maxConsumos) {
+                  return;
+                }
+                undone = true;
+                setState(
+                  () => _consumos.insert(
+                    index.clamp(0, _consumos.length),
+                    removed,
+                  ),
+                );
+              },
+            ),
+          ),
+        )
+        .closed
+        .then((_) {
+          if (!undone) removed.dispose();
+        });
   }
 
   Future<void> _loadActivity() async {
@@ -197,6 +400,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       setState(() {
         _actividad = record.actividadData;
         _loading = false;
+        _ensureLockedSeedDraft();
       });
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -229,11 +433,8 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       _cameraPermissionMessage = null;
     });
     try {
-      final capture = widget.capturePhoto;
-      if (capture == null) {
-        throw const CameraPermissionException();
-      }
-      final picked = await _readPhoto(await capture());
+      final capture = widget.capturePhoto ?? captureCameraPhoto;
+      final picked = await _readPhoto(await _runPicker(capture));
       if (!mounted || picked == null) return;
       setState(() {
         _photo = picked;
@@ -268,22 +469,25 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       _photoError = null;
     });
     try {
-      final file =
-          await (widget.selectFile?.call() ??
-              openFile(
-                acceptedTypeGroups: const [
-                  XTypeGroup(
-                    label: 'Fotografías',
-                    extensions: ['jpg', 'jpeg', 'png', 'webp'],
-                    mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-                    uniformTypeIdentifiers: [
-                      'public.jpeg',
-                      'public.png',
-                      'org.webmproject.webp',
-                    ],
-                  ),
-                ],
-              ));
+      final file = await _runPicker(
+        () =>
+            widget.selectFile?.call() ??
+            openFile(
+              acceptedTypeGroups: const [
+                XTypeGroup(
+                  label: 'Fotografías',
+                  extensions: ['jpg', 'jpeg', 'png', 'webp'],
+                  mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+                  uniformTypeIdentifiers: [
+                    'public.jpeg',
+                    'public.png',
+                    'public.webp',
+                    'org.webmproject.webp',
+                  ],
+                ),
+              ],
+            ),
+      );
       final picked = await _readPhoto(file);
       if (!mounted || picked == null) return;
       setState(() {
@@ -367,7 +571,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
           insumoId: insumoId,
           almacenId: almacenId,
           quantityText: formatQuantity(parsed),
-          unidadMedidaId: insumo?.unidadMedidaId,
+          unidadMedidaId: insumo?.unidadMedidaId ?? draft.lockedUnidadMedidaId,
         ),
       );
     }
@@ -383,12 +587,26 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
         _photoError = 'Toma o selecciona una fotografía de evidencia.';
       });
     }
-    if (!validForm || photo == null) {
+    final missingRequiredInsumo =
+        _showInsumosSection &&
+        (_actividad?.requiresInsumos ?? false) &&
+        _consumos.isEmpty;
+    if (missingRequiredInsumo) {
+      setState(() {
+        _consumosError =
+            'Debes agregar al menos un insumo utilizado para cerrar esta actividad.';
+      });
+    } else if (_consumosError != null) {
+      setState(() => _consumosError = null);
+    }
+    if (!validForm || photo == null || missingRequiredInsumo) {
       return;
     }
 
     final resultText = _resultController.text.trim();
-    final consumoInputs = _buildConsumoInputs();
+    final consumoInputs = _showInsumosSection
+        ? _buildConsumoInputs()
+        : const <ActividadConsumoInput>[];
     final details = <String>[
       if (_actividad != null) 'Actividad: ${_actividad!.description}',
       'Resultado: $resultText',
@@ -415,6 +633,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
       _photoError = null;
     });
 
+    final key = PendingQueue.newKey();
     try {
       final closed = await widget.service.closeActividad(
         widget.user,
@@ -422,10 +641,31 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
         result: resultText,
         photo: photo,
         consumos: consumoInputs.map((item) => item.toPayload()).toList(),
+        idempotencyKey: key,
       );
       if (!mounted) return;
       Navigator.of(context).pop(ActividadCloseResult(record: closed));
     } on ApiException catch (error) {
+      final queue = widget.pending;
+      if (error.offline && queue != null) {
+        await queue.addCierre(
+          widget.user,
+          key: key,
+          label:
+              'Cierre: ${_actividad?.description ?? 'actividad #${widget.actividadId}'}',
+          actividadId: widget.actividadId,
+          result: resultText,
+          photo: photo,
+          consumos: consumoInputs.map((item) => item.toPayload()).toList(),
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop(
+          const QueuedResult(
+            'Sin señal: el cierre quedó guardado en el teléfono con su foto y se enviará solo al volver la conexión.',
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _submitting = false;
@@ -573,14 +813,15 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
                   },
                   onChanged: (_) => _clearError(field: 'resultado'),
                 ),
-                if (_canSelectInventory) ...[
+                if (_showInsumosSection) ...[
                   const SizedBox(height: 24),
                   const Divider(color: AppTheme.line),
                   const SizedBox(height: 16),
                   _buildConsumosSection(
                     context,
                     scrollPadding: scrollPadding,
-                    consumosGeneralError: consumosGeneralError,
+                    consumosGeneralError:
+                        _consumosError ?? consumosGeneralError,
                     hasConsumoServerError: hasConsumoServerError,
                   ),
                 ],
@@ -732,8 +973,10 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Selecciona el almacén autorizado, el insumo y la cantidad real utilizada con su unidad.',
+        Text(
+          (_actividad?.requiresInsumos ?? false)
+              ? 'Obligatorio para esta actividad. Selecciona el almacén autorizado, el insumo con stock y la cantidad real utilizada.'
+              : 'Selecciona el almacén autorizado, el insumo y la cantidad real utilizada con su unidad.',
         ),
         const SizedBox(height: 12),
         if (_loadingInventory)
@@ -747,34 +990,39 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 SizedBox(width: 10),
-                Text('Cargando almacenes e insumos disponibles...'),
+                Expanded(
+                  child: Text('Cargando almacenes e insumos disponibles...'),
+                ),
               ],
             ),
           )
         else if (_inventoryError case final invError?)
           AppNotice(tone: AppNoticeTone.error, message: invError)
-        else if (_almacenes.isEmpty || _insumos.isEmpty)
+        else if ((_almacenes.isEmpty ||
+                _insumos.where(_matchesActivityCategory).isEmpty) &&
+            _actividad?.hasLockedInsumos != true)
           const AppNotice(
             tone: AppNoticeTone.info,
             message:
-                'No hay insumos disponibles en almacenes agrícolas autorizados para registrar en esta actividad.',
+                'No hay insumos de este tipo con stock disponible en tu almacén agrícola. Carga existencias en Inventario antes de cerrar esta actividad.',
           )
         else ...[
           for (var i = 0; i < _consumos.length; i++) ...[
             _buildConsumoCard(context, i, scrollPadding: scrollPadding),
             const SizedBox(height: 14),
           ],
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              key: const ValueKey('consumos.add'),
-              onPressed: canAddMore ? _addConsumo : null,
-              icon: const Icon(Icons.add_circle_outline_rounded),
-              label: Text(
-                _consumos.isEmpty ? 'Agregar insumo' : 'Agregar otro insumo',
+          if (_actividad?.hasLockedInsumos != true)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const ValueKey('consumos.add'),
+                onPressed: canAddMore ? _addConsumo : null,
+                icon: const Icon(Icons.add_circle_outline_rounded),
+                label: Text(
+                  _consumos.isEmpty ? 'Agregar insumo' : 'Agregar otro insumo',
+                ),
               ),
             ),
-          ),
         ],
         if (consumosGeneralError != null) ...[
           const SizedBox(height: 12),
@@ -831,104 +1079,145 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Consumo #${index + 1}',
+                  draft.locked
+                      ? (draft.lockedTitle ?? 'Insumo asignado')
+                      : 'Consumo #${index + 1}',
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
-              IconButton(
-                key: ValueKey('consumo.$index.remove'),
-                tooltip: 'Quitar insumo',
-                onPressed: _submitting ? null : () => _removeConsumo(index),
-                icon: const Icon(Icons.delete_outline_rounded),
-              ),
+              if (!draft.locked)
+                IconButton(
+                  key: ValueKey('consumo.$index.remove'),
+                  tooltip: 'Quitar insumo',
+                  onPressed: _submitting ? null : () => _removeConsumo(index),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                )
+              else
+                const Icon(Icons.lock_outline_rounded, size: 20),
             ],
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<int>(
-            key: ValueKey('consumo.$index.almacen'),
-            initialValue: selectedAlmacen?.id,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Almacén autorizado',
-              prefixIcon: Icon(Icons.warehouse_outlined),
-            ),
-            forceErrorText: _fieldError('consumos.$index.almacenid'),
-            items: [
-              for (final almacen in _almacenes)
-                DropdownMenuItem(
-                  value: almacen.id,
-                  child: Text(
-                    almacen.displayLabel,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          if (draft.locked) ...[
+            if (draft.almacenId != null) ...[
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Almacén autorizado',
+                  prefixIcon: Icon(Icons.warehouse_outlined),
                 ),
-            ],
-            onChanged: _submitting
-                ? null
-                : (value) {
-                    setState(() {
-                      draft.almacenId = value;
-                      final currentInsumo = _insumoById(draft.insumoId);
-                      if (currentInsumo != null &&
-                          currentInsumo.almacenId != null &&
-                          currentInsumo.almacenId != value) {
-                        draft.insumoId = null;
-                      }
-                    });
-                    _clearError(field: 'consumos.$index.almacenid');
-                  },
-            validator: (value) =>
-                value == null ? 'Selecciona el almacén autorizado.' : null,
-          ),
-          const SizedBox(height: 14),
-          DropdownButtonFormField<int>(
-            key: ValueKey('consumo.$index.insumo'),
-            initialValue: availableInsumos.any((i) => i.id == draft.insumoId)
-                ? draft.insumoId
-                : null,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Insumo',
-              prefixIcon: Icon(Icons.inventory_2_outlined),
-            ),
-            forceErrorText: _fieldError('consumos.$index.insumoid'),
-            items: [
-              for (final insumo in availableInsumos)
-                DropdownMenuItem(
-                  value: insumo.id,
-                  child: Text(
-                    insumo.displayLabel,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                child: Text(
+                  selectedAlmacen?.displayLabel ??
+                      'Almacén #${draft.almacenId}',
                 ),
+              ),
+              const SizedBox(height: 14),
             ],
-            onChanged: _submitting
-                ? null
-                : (value) {
-                    setState(() {
-                      draft.insumoId = value;
-                      final chosen = _insumoById(value);
-                      if (draft.almacenId == null &&
-                          chosen?.almacenId != null &&
-                          _almacenById(chosen!.almacenId) != null) {
-                        draft.almacenId = chosen.almacenId;
-                      }
-                    });
-                    _clearError(field: 'consumos.$index.insumoid');
-                  },
-            validator: (value) {
-              if (value == null) return 'Selecciona el insumo utilizado.';
-              final duplicateCount = _consumos
-                  .where((item) => item.insumoId == value)
-                  .length;
-              if (duplicateCount > 1) {
-                return 'No repitas el mismo insumo; indica su cantidad total en una sola línea.';
-              }
-              return null;
-            },
-          ),
+            InputDecorator(
+              key: ValueKey('consumo.$index.insumo_locked'),
+              decoration: InputDecoration(
+                labelText: _actividad?.hasLockedSeed == true
+                    ? 'Semilla fijada al crear el lote'
+                    : 'Insumo asignado',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+              ),
+              child: Text(
+                selectedInsumo?.displayLabel ??
+                    draft.lockedName ??
+                    _actividad?.plannedSeedName ??
+                    'Insumo #${draft.insumoId}',
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              draft.lockedHint ??
+                  'Este insumo fue asignado previamente y no puede cambiarse. Solo confirma la cantidad real utilizada.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ] else ...[
+            DropdownButtonFormField<int>(
+              key: ValueKey('consumo.$index.almacen'),
+              initialValue: selectedAlmacen?.id,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Almacén autorizado',
+                prefixIcon: Icon(Icons.warehouse_outlined),
+              ),
+              forceErrorText: _fieldError('consumos.$index.almacenid'),
+              items: [
+                for (final almacen in _almacenes)
+                  DropdownMenuItem(
+                    value: almacen.id,
+                    child: Text(
+                      almacen.displayLabel,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: _submitting
+                  ? null
+                  : (value) {
+                      setState(() {
+                        draft.almacenId = value;
+                        final currentInsumo = _insumoById(draft.insumoId);
+                        if (currentInsumo != null &&
+                            currentInsumo.almacenId != value) {
+                          draft.insumoId = null;
+                        }
+                      });
+                      _clearError(field: 'consumos.$index.almacenid');
+                    },
+              validator: (value) =>
+                  value == null ? 'Selecciona el almacén autorizado.' : null,
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int>(
+              key: ValueKey('consumo.$index.insumo'),
+              initialValue: availableInsumos.any((i) => i.id == draft.insumoId)
+                  ? draft.insumoId
+                  : null,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Insumo',
+                prefixIcon: Icon(Icons.inventory_2_outlined),
+              ),
+              forceErrorText: _fieldError('consumos.$index.insumoid'),
+              items: [
+                for (final insumo in availableInsumos)
+                  DropdownMenuItem(
+                    value: insumo.id,
+                    child: Text(
+                      insumo.displayLabel,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: _submitting
+                  ? null
+                  : (value) {
+                      setState(() {
+                        draft.insumoId = value;
+                        final chosen = _insumoById(value);
+                        if (draft.almacenId == null &&
+                            chosen?.almacenId != null &&
+                            _almacenById(chosen!.almacenId) != null) {
+                          draft.almacenId = chosen.almacenId;
+                        }
+                      });
+                      _clearError(field: 'consumos.$index.insumoid');
+                    },
+              validator: (value) {
+                if (value == null) return 'Selecciona el insumo utilizado.';
+                final duplicateCount = _consumos
+                    .where((item) => item.insumoId == value)
+                    .length;
+                if (duplicateCount > 1) {
+                  return 'No repitas el mismo insumo; indica su cantidad total en una sola línea.';
+                }
+                return null;
+              },
+            ),
+          ],
           const SizedBox(height: 14),
           TextFormField(
             key: ValueKey('consumo.$index.cantidad'),
@@ -944,7 +1233,7 @@ class _ActividadCloseScreenState extends State<ActividadCloseScreen> {
               labelText: 'Cantidad utilizada',
               hintText: 'Ej. 2.5',
               prefixIcon: const Icon(Icons.scale_outlined),
-              suffixText: selectedInsumo?.unitLabel,
+              suffixText: selectedInsumo?.unitLabel ?? draft.lockedUnit,
             ),
             validator: (value) {
               if (selectedInsumo == null) {

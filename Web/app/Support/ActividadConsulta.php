@@ -53,9 +53,35 @@ final class ActividadConsulta
             }
         }
 
+        $insumosPlanificados = [];
+        if (! $cerrada && ! empty($detalle['insumos']) && is_array($detalle['insumos'])) {
+            foreach ($detalle['insumos'] as $fila) {
+                if (! is_array($fila) || (int) ($fila['insumoid'] ?? 0) <= 0) {
+                    continue;
+                }
+                $insumoId = (int) $fila['insumoid'];
+                $insumoModel = (! isset($fila['almacenid']) || ! isset($fila['nombre']) || ! isset($fila['unidadmedidaid']))
+                    ? \App\Models\Insumo::query()->with('unidadMedida')->find($insumoId)
+                    : null;
+                $insumosPlanificados[] = [
+                    'insumoid' => $insumoId,
+                    'nombre' => $fila['nombre'] ?? $insumoModel?->nombre,
+                    'cantidad' => (string) ($fila['cantidad'] ?? ''),
+                    'unidadmedidaid' => isset($fila['unidadmedidaid'])
+                        ? (int) $fila['unidadmedidaid']
+                        : ($insumoModel?->unidadmedidaid !== null ? (int) $insumoModel->unidadmedidaid : null),
+                    'unidad' => $fila['unidad'] ?? $insumoModel?->unidadMedida?->abreviatura ?? $insumoModel?->unidadMedida?->nombre,
+                    'almacenid' => isset($fila['almacenid'])
+                        ? (int) $fila['almacenid']
+                        : ($insumoModel?->almacenid !== null ? (int) $insumoModel->almacenid : null),
+                ];
+            }
+        }
+
         return [
             'resultado' => $cerrada ? ($detalle['cierre']['resultado'] ?? null) : null,
             'consumos' => $consumos,
+            'insumos_planificados' => $insumosPlanificados,
             'evidencia_estado' => $estado,
             'evidencia_foto_url' => $estado === 'disponible'
                 ? route($api ? 'api.actividades.evidencia' : 'actividades.evidencia', ['actividad' => $actividad->actividadid]) : null,

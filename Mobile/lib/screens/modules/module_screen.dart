@@ -11,14 +11,17 @@ import '../../models/lote_models.dart';
 import '../../models/module_page.dart';
 import '../../models/pedido_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
+import '../../services/pending_queue.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
-import '../../widgets/record_status_badge.dart';
+import '../../widgets/motion.dart';
+import '../../widgets/record_card.dart';
 import 'actividad_form_screen.dart';
 import 'cosecha_form_screen.dart';
 import 'lote_form_screen.dart';
@@ -34,6 +37,8 @@ class ModuleScreen extends StatefulWidget {
     this.loteUpdates,
     this.actividadUpdates,
     this.cosechaUpdates,
+    this.usuarioUpdates,
+    this.incidenteUpdates,
   });
 
   final AppModule module;
@@ -43,6 +48,8 @@ class ModuleScreen extends StatefulWidget {
   final ValueListenable<int>? loteUpdates;
   final ValueListenable<int>? actividadUpdates;
   final ValueListenable<int>? cosechaUpdates;
+  final ValueListenable<int>? usuarioUpdates;
+  final ValueListenable<int>? incidenteUpdates;
 
   @override
   State<ModuleScreen> createState() => _ModuleScreenState();
@@ -65,6 +72,13 @@ class _ModuleScreenState extends State<ModuleScreen> {
       widget.module == AppModule.actividades ||
       widget.module == AppModule.producciones ||
       widget.module == AppModule.almacenes;
+
+  bool get _supportsDetail =>
+      _supportsSearch ||
+      widget.module == AppModule.usuarios ||
+      widget.module == AppModule.incidentes ||
+      widget.module == AppModule.certificaciones ||
+      widget.module == AppModule.documentos;
 
   bool get _canCreateLote =>
       widget.module == AppModule.lotes &&
@@ -96,6 +110,8 @@ class _ModuleScreenState extends State<ModuleScreen> {
     widget.loteUpdates?.addListener(_onLoteUpdated);
     widget.actividadUpdates?.addListener(_onActividadUpdated);
     widget.cosechaUpdates?.addListener(_onCosechaUpdated);
+    widget.usuarioUpdates?.addListener(_onUsuarioUpdated);
+    widget.incidenteUpdates?.addListener(_onIncidenteUpdated);
   }
 
   @override
@@ -113,6 +129,14 @@ class _ModuleScreenState extends State<ModuleScreen> {
       oldWidget.cosechaUpdates?.removeListener(_onCosechaUpdated);
       widget.cosechaUpdates?.addListener(_onCosechaUpdated);
     }
+    if (oldWidget.usuarioUpdates != widget.usuarioUpdates) {
+      oldWidget.usuarioUpdates?.removeListener(_onUsuarioUpdated);
+      widget.usuarioUpdates?.addListener(_onUsuarioUpdated);
+    }
+    if (oldWidget.incidenteUpdates != widget.incidenteUpdates) {
+      oldWidget.incidenteUpdates?.removeListener(_onIncidenteUpdated);
+      widget.incidenteUpdates?.addListener(_onIncidenteUpdated);
+    }
   }
 
   @override
@@ -120,8 +144,20 @@ class _ModuleScreenState extends State<ModuleScreen> {
     widget.loteUpdates?.removeListener(_onLoteUpdated);
     widget.actividadUpdates?.removeListener(_onActividadUpdated);
     widget.cosechaUpdates?.removeListener(_onCosechaUpdated);
+    widget.usuarioUpdates?.removeListener(_onUsuarioUpdated);
+    widget.incidenteUpdates?.removeListener(_onIncidenteUpdated);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onIncidenteUpdated() {
+    if (!mounted || widget.module != AppModule.incidentes) return;
+    _load(_page);
+  }
+
+  void _onUsuarioUpdated() {
+    if (!mounted || widget.module != AppModule.usuarios) return;
+    _load(_page);
   }
 
   void _onLoteUpdated() {
@@ -143,12 +179,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
     FocusScope.of(context).unfocus();
     final result = await Navigator.of(
       context,
-    ).pushNamed('${AppModule.lotes.route}/nuevo');
+    ).pushNamed(AppRoutes.nuevo(AppModule.lotes));
     if (!mounted) return;
     if (result is LoteFormResult) {
       _load(1);
       await Navigator.of(context).pushNamed(
-        '${AppModule.lotes.route}/${result.record.id}',
+        AppRoutes.detalle(AppModule.lotes, result.record.id),
         arguments:
             'El lote "${result.record.title}" se registró correctamente.',
       );
@@ -159,12 +195,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
     FocusScope.of(context).unfocus();
     final result = await Navigator.of(
       context,
-    ).pushNamed('${AppModule.actividades.route}/nueva');
+    ).pushNamed(AppRoutes.nueva(AppModule.actividades));
     if (!mounted) return;
     if (result is ActividadFormResult) {
       _load(1);
       await Navigator.of(context).pushNamed(
-        '${AppModule.actividades.route}/${result.record.id}',
+        AppRoutes.detalle(AppModule.actividades, result.record.id),
         arguments:
             'La actividad "${result.record.title}" fue asignada correctamente.',
       );
@@ -175,12 +211,17 @@ class _ModuleScreenState extends State<ModuleScreen> {
     FocusScope.of(context).unfocus();
     final result = await Navigator.of(
       context,
-    ).pushNamed('${AppModule.producciones.route}/nueva');
+    ).pushNamed(AppRoutes.nueva(AppModule.producciones));
     if (!mounted) return;
+    if (result is QueuedResult) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+    }
     if (result is CosechaFormResult) {
       _load(1);
       await Navigator.of(context).pushNamed(
-        '${AppModule.producciones.route}/${result.record.id}',
+        AppRoutes.detalle(AppModule.producciones, result.record.id),
         arguments: 'La cosecha #${result.record.id} se registró correctamente.',
       );
     }
@@ -203,7 +244,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
   void _openRecord(ModuleRecord record) {
     FocusScope.of(context).unfocus();
     Navigator.of(context).pushNamed(
-      '${widget.module.route}/${record.id}',
+      AppRoutes.detalle(widget.module, record.id),
       arguments: widget.module == AppModule.almacenes ? record.title : null,
     );
   }
@@ -331,17 +372,19 @@ class _ModuleScreenState extends State<ModuleScreen> {
                               : (_canCreateCosecha
                                     ? _createCosecha
                                     : (_canViewInventarioAlertas
-                                          ? () => Navigator.of(context).pushNamed(
-                                              '${AppModule.almacenes.route}/alertas',
-                                            )
+                                          ? () =>
+                                                Navigator.of(context).pushNamed(
+                                                  AppRoutes.inventarioAlertas,
+                                                )
                                           : (_canOpenPedidosGestion
                                                 ? () => Navigator.of(context)
                                                       .pushNamed(
-                                                        '${AppModule.pedidos.route}/gestion',
+                                                        AppRoutes
+                                                            .pedidosGestion,
                                                       )
                                                 : () => Navigator.of(context)
                                                       .pushNamed(
-                                                        '/modules/entregas',
+                                                        AppRoutes.entregas,
                                                       ))))),
                     icon: Icon(
                       _canCreateLote
@@ -388,6 +431,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
     if (snapshot.connectionState != ConnectionState.done) {
       return AppLoading(
         message: 'Cargando ${widget.module.label.toLowerCase()}...',
+        shape: LoadingShape.list,
       );
     }
     if (snapshot.hasError) {
@@ -501,7 +545,7 @@ class _ModuleScreenState extends State<ModuleScreen> {
         Expanded(
           child: page.records.isEmpty
               ? AppEmptyState(
-                  icon: widget.module.icon,
+                  icon: widget.module.icon.line,
                   tone: look.tone,
                   ink: look.ink,
                   title: 'Todavía no hay ${widget.module.label.toLowerCase()}',
@@ -548,7 +592,12 @@ class _ModuleScreenState extends State<ModuleScreen> {
                         : 20,
                   ),
                   itemCount: records.length,
-                  itemBuilder: (context, index) => _recordCard(records[index]),
+                  itemBuilder: (context, index) => index < 6
+                      ? FadeSlideIn(
+                          index: index,
+                          child: _recordCard(records[index]),
+                        )
+                      : _recordCard(records[index]),
                 ),
         ),
         if (page.lastPage > 1) _pager(page),
@@ -635,80 +684,45 @@ class _ModuleScreenState extends State<ModuleScreen> {
   );
 
   Widget _recordCard(ModuleRecord record) {
-    final look = widget.module.look;
     final info = record.fieldInfo;
     final cosecha = record.cosechaData;
+    final trazabilidadCodigo = widget.module == AppModule.insumos
+        ? record.trazabilidadCodigo
+        : null;
     final fields = (cosecha?.toSummaryMap() ?? info?.summary ?? record.details)
         .entries
         .where((field) => field.key != 'Identificador')
         .toList();
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: PressableCard(
-        onTap: _supportsSearch ? () => _openRecord(record) : null,
-        padding: EdgeInsets.zero,
-        borderColor: AppTheme.border,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    cosecha != null ? 'Cosecha #${record.id}' : record.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  if (info?.status != null) ...[
-                    const SizedBox(height: 10),
-                    RecordStatusBadge(status: info!.status!),
-                  ],
-                  const SizedBox(height: 14),
-                  if (info != null && info.status == null)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 10),
-                      child: InfoLine(label: 'Estado', value: 'No disponible'),
-                    ),
-                  for (final field in fields)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: InfoLine(label: field.key, value: field.value),
-                    ),
-                ],
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RecordCard(
+            module: widget.module,
+            title: cosecha != null ? 'Cosecha #${record.id}' : record.title,
+            status: info?.status,
+            facts: [
+              if (info != null && info.status == null)
+                ('Estado', 'No disponible'),
+              for (final field in fields) (field.key, field.value),
+              if (trazabilidadCodigo != null)
+                ('Código de trazabilidad', trazabilidadCodigo),
+            ],
+            onTap: _supportsDetail ? () => _openRecord(record) : null,
+          ),
+          if (trazabilidadCodigo != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: ValueKey('insumo.trazabilidad.${record.id}'),
+              onPressed: () => Navigator.of(
+                context,
+              ).pushNamed(AppRoutes.trazabilidadDetalle(trazabilidadCodigo)),
+              icon: const Icon(Icons.qr_code_2_rounded),
+              label: const Text('Ver trazabilidad pública'),
             ),
-            if (_supportsSearch)
-              Container(
-                padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
-                decoration: BoxDecoration(
-                  color: look.tone,
-                  border: const Border(
-                    top: BorderSide(color: AppTheme.border, width: 1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Ver detalle',
-                        style: TextStyle(
-                          color: look.ink,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      color: look.ink,
-                      size: 26,
-                    ),
-                  ],
-                ),
-              ),
           ],
-        ),
+        ],
       ),
     );
   }

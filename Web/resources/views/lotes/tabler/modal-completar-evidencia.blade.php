@@ -55,6 +55,16 @@
                     <hr class="my-3" id="actividadModalSeparadorFoto" style="display: none;">
 
                     <div id="actividadModalSeccionFoto" style="display: none;">
+                        <div class="mb-3">
+                            <label class="fw-semibold d-block mb-1" for="actividadModalResultado">
+                                Resultado de la actividad <span class="text-danger">*</span>
+                            </label>
+                            <textarea name="resultado" id="actividadModalResultado" class="form-control" rows="2" maxlength="250" required
+                                      placeholder="Describe el resultado del trabajo realizado en campo…">{{ old('resultado') }}</textarea>
+                            @error('resultado')
+                                <div class="alert alert-danger small mt-2 mb-0">{{ $message }}</div>
+                            @enderror
+                        </div>
                         <label class="fw-semibold d-block mb-2">
                             <i class="ti ti-camera text-primary me-1"></i> Foto de evidencia <span class="text-danger">*</span>
                         </label>
@@ -332,7 +342,12 @@
             tituloModal.innerHTML = '<i class="ti ti-clipboard-check me-2"></i>' + escHtml(titulo || 'Completar actividad');
         }
 
-        if (window.jQuery) window.jQuery('#modalCompletarEvidencia').modal('show');
+        var modalEl = document.getElementById('modalCompletarEvidencia');
+        if (window.bootstrap && modalEl) {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        } else if (window.jQuery) {
+            window.jQuery('#modalCompletarEvidencia').modal('show');
+        }
 
         if (resumenUrl) {
             if (cargandoEl) cargandoEl.style.display = '';

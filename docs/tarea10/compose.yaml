@@ -1,0 +1,82 @@
+name: agrofusion-t10
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: docs/tarea10/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      APP_NAME: AgroFusion
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${APP_URL:?Configura APP_URL en .env}
+      APP_KEY: ${APP_KEY:?Configura APP_KEY en .env}
+      APP_TIMEZONE: America/La_Paz
+      APP_LOCALE: es
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: agrofusion
+      DB_USERNAME: agrofusion_app
+      DB_PASSWORD: ${DB_PASSWORD:?Configura DB_PASSWORD en .env}
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: info
+      SESSION_DRIVER: file
+      SESSION_SECURE_COOKIE: "false"
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: log
+      BLOCKCHAIN_ENABLED: "false"
+    volumes:
+      - app-storage:/var/www/html/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1/up') === false ? 1 : 0);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agrofusion
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configura POSTGRES_PASSWORD en .env}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agrofusion"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  frontend:
+  backend:
+    internal: true
+
+volumes:
+  pg-data:
+  app-storage:

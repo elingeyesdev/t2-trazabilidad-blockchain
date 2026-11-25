@@ -25,10 +25,26 @@ class PedidoMovilResource extends JsonResource
             'fecha_envio' => $agricola ? null : $this->fecha_envio?->toIso8601String(),
             'fecha_recepcion' => $agricola ? null : $this->fecha_recepcion?->toIso8601String(),
             'envio' => $agricola && $this->envioAsignacion ? [
-                'id' => (int) $this->envioAsignacion->getKey(), 'estado' => $this->envioAsignacion->estado,
+                'id' => (int) $this->envioAsignacion->getKey(),
+                'externo_envio_id' => $this->envioAsignacion->externo_envio_id,
+                'estado' => $this->envioAsignacion->estado,
                 'transportista_usuarioid' => $this->envioAsignacion->transportista_usuarioid ? (int) $this->envioAsignacion->transportista_usuarioid : null,
+                'transportista_nombre' => $this->envioAsignacion->transportista
+                    ? trim($this->envioAsignacion->transportista->nombre.' '.($this->envioAsignacion->transportista->apellido ?? ''))
+                    : null,
+                'vehiculo_placa' => $this->envioAsignacion->vehiculo_ref,
+                'costo_bs' => $this->envioAsignacion->costo_bs !== null ? (float) $this->envioAsignacion->costo_bs : null,
                 'fecha_recepcion_planta' => $this->envioAsignacion->fecha_recepcion_planta?->toIso8601String(),
             ] : null,
+            'origen' => $agricola ? [
+                'direccion' => $this->origen_direccion,
+                'latitud' => $this->origen_latitud,
+                'longitud' => $this->origen_longitud,
+            ] : null,
+            'hora_recogida' => $agricola ? $this->hora_recogida : null,
+            'hora_entrega_estimada' => $agricola ? $this->hora_entrega_estimada : null,
+            'instrucciones_recogida' => $agricola ? $this->instrucciones_recogida : null,
+            'instrucciones_entrega' => $agricola ? $this->instrucciones_entrega : null,
             'destino' => $agricola ? ['latitud' => $this->latitud, 'longitud' => $this->longitud, 'direccion' => $this->direccion_texto]
                 : ['puntoventaid' => (int) $this->puntoventaid, 'nombre' => $this->puntoVenta?->nombre],
             'observaciones' => $this->observaciones,

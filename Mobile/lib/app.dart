@@ -10,19 +10,22 @@ import 'models/incidente_models.dart';
 import 'models/lote_models.dart';
 import 'models/pedido_models.dart';
 import 'models/qr_envio_models.dart';
+import 'models/trazabilidad_publica_models.dart';
 import 'navigation/app_module.dart';
 import 'navigation/app_routes.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/connection/connection_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/modules/actividad_close_screen.dart';
 import 'screens/modules/actividad_form_screen.dart';
 import 'screens/modules/almacen_detail_screen.dart';
+import 'screens/modules/certificacion_detail_screen.dart';
 import 'screens/modules/cosecha_form_screen.dart';
+import 'screens/modules/documento_detail_screen.dart';
 import 'screens/modules/entrega_detail_screen.dart';
 import 'screens/modules/entregas_screen.dart';
 import 'screens/modules/envio_qr_detail_screen.dart';
+import 'screens/modules/incidente_detail_screen.dart';
 import 'screens/modules/incidente_form_screen.dart';
 import 'screens/modules/inventario_alertas_screen.dart';
 import 'screens/modules/lote_activity_history_screen.dart';
@@ -30,6 +33,7 @@ import 'screens/modules/lote_form_screen.dart';
 import 'screens/modules/module_access_denied.dart';
 import 'screens/modules/module_detail_screen.dart';
 import 'screens/modules/module_screen.dart';
+import 'screens/modules/movimientos_screen.dart';
 import 'screens/modules/pedido_detail_screen.dart';
 import 'screens/modules/pedido_form_screen.dart';
 import 'screens/modules/pedidos_screen.dart';
@@ -39,11 +43,17 @@ import 'screens/modules/planta_recepciones_screen.dart';
 import 'screens/modules/planta_tarea_detail_screen.dart';
 import 'screens/modules/planta_tareas_screen.dart';
 import 'screens/modules/qr_scanner_screen.dart';
+import 'screens/modules/usuario_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/public/trazabilidad_lookup_screen.dart';
+import 'screens/public/trazabilidad_publica_screen.dart';
 import 'services/api_client.dart';
-import 'services/api_health_service.dart';
 import 'services/auth_service.dart';
 import 'services/module_service.dart';
+import 'services/offline_store.dart';
+import 'services/pending_queue.dart';
+import 'services/task_notifier.dart';
+import 'services/trazabilidad_publica_service.dart';
 import 'services/session_storage.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_error_state.dart';
@@ -58,6 +68,8 @@ class AgroFusionApp extends StatefulWidget {
     this.requestLocation,
     this.capturePhoto,
     this.selectEvidenceFile,
+    this.offlineStore,
+    this.trazabilidadCameraBuilder,
   });
 
   final ApiClient? apiClient;
@@ -65,6 +77,10 @@ class AgroFusionApp extends StatefulWidget {
   final Future<DeviceLocation?> Function()? requestLocation;
   final Future<XFile?> Function()? capturePhoto;
   final Future<XFile?> Function()? selectEvidenceFile;
+
+  /// Si es nulo (pruebas), no se guarda nada para trabajar sin conexión.
+  final OfflineStore? offlineStore;
+  final QrCameraBuilder? trazabilidadCameraBuilder;
 
   @override
   State<AgroFusionApp> createState() => _AgroFusionAppState();
@@ -77,7 +93,14 @@ class _AgroFusionAppState extends State<AgroFusionApp>
       ApiClient(
         config: ApiConfig.fromEnvironment(),
         sessionStorage: widget.sessionStorage,
+        offlineStore: widget.offlineStore,
       );
+  late final PendingQueue? _pending = widget.offlineStore == null
+      ? null
+      : PendingQueue(widget.offlineStore!);
+  late final TaskNotifier? _notifier = widget.offlineStore == null
+      ? null
+      : TaskNotifier(widget.offlineStore!);
   late final AuthController _auth = AuthController(
     AuthService(_api, widget.sessionStorage),
   );
@@ -88,18 +111,57 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   final ValueNotifier<int> _recepcionUpdates = ValueNotifier(0);
   final ValueNotifier<int> _pedidosUpdates = ValueNotifier(0);
   final ValueNotifier<int> _entregasUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _usuarioUpdates = ValueNotifier(0);
+  final ValueNotifier<int> _incidenteUpdates = ValueNotifier(0);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _auth.addListener(_onAuthChanged);
+    unawaited(_pending?.load().then((_) => _syncPending()));
     unawaited(_auth.restoreSession());
+  }
+
+  bool _hadUser = false;
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  void _onAuthChanged() {
+    final user = _auth.user;
+    if (user == null && _hadUser) {
+      unawaited(widget.offlineStore?.clearCache());
+      // Quien entre después debe empezar en el inicio, no en la pantalla que
+      // dejó abierta la cuenta anterior (por ejemplo, el perfil).
+      if (_auth.isLoggingOut) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _navigatorKey.currentState?.popUntil((route) => route.isFirst),
+        );
+      }
+    }
+    if (user != null && !_hadUser) unawaited(_syncPending());
+    _hadUser = user != null;
+  }
+
+  Future<void> _syncPending() async {
+    final user = _auth.user;
+    if (user == null || _pending == null) return;
+    final service = ModuleService(_api);
+    final sent = await _pending.flush(service, user);
+    if (sent > 0) {
+      _loteUpdates.value++;
+      _actividadUpdates.value++;
+      _cosechaUpdates.value++;
+    }
+    await _notifier?.check(service, user);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _auth.user != null) {
+    if (state == AppLifecycleState.resumed &&
+        _auth.user != null &&
+        !_auth.shouldSuppressResumeRestore) {
       unawaited(_auth.restoreSession());
+      unawaited(_syncPending());
     }
   }
 
@@ -113,6 +175,10 @@ class _AgroFusionAppState extends State<AgroFusionApp>
     _recepcionUpdates.dispose();
     _pedidosUpdates.dispose();
     _entregasUpdates.dispose();
+    _usuarioUpdates.dispose();
+    _incidenteUpdates.dispose();
+    _auth.removeListener(_onAuthChanged);
+    _pending?.dispose();
     _auth.dispose();
     if (widget.apiClient == null) {
       _api.close();
@@ -195,20 +261,32 @@ class _AgroFusionAppState extends State<AgroFusionApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'AgroFusion',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       initialRoute: AppRoutes.home,
       routes: {
         AppRoutes.home: (_) => _sessionGate(
-          () => HomeScreen(user: _auth.user!, onLogout: _auth.logout),
+          () => HomeScreen(
+            key: ValueKey(_auth.user!.id),
+            user: _auth.user!,
+            onLogout: _auth.logout,
+            pending: _pending,
+            offlineData: _api.servedFromCache,
+            onSync: _syncPending,
+            // Con almacenamiento local (la app real) se muestran las tareas del día;
+            // las pruebas de pantallas no esperan esa consulta adicional.
+            service: _pending == null ? null : ModuleService(_api),
+          ),
           requiresAuthentication: true,
-        ),
-        AppRoutes.connection: (_) => _sessionGate(
-          () => ConnectionScreen(healthService: ApiHealthService(_api)),
         ),
         AppRoutes.register: (_) =>
             _sessionGate(() => RegisterScreen(controller: _auth)),
+        AppRoutes.trazabilidadPublica: (_) => TrazabilidadLookupScreen(
+          service: TrazabilidadPublicaService(_api),
+          cameraBuilder: widget.trazabilidadCameraBuilder,
+        ),
         AppRoutes.profile: (_) => _sessionGate(
           () => ProfileScreen(controller: _auth),
           requiresAuthentication: true,
@@ -231,9 +309,19 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     onRefreshPermissions: _auth.restoreSession,
                     updates: _recepcionUpdates,
                   )
+                : module == AppModule.movimientos
+                ? MovimientosScreen(
+                    key: ValueKey(_auth.user),
+                    user: _auth.user!,
+                    service: ModuleService(_api),
+                    onRefreshPermissions: _auth.restoreSession,
+                  )
                 : module == AppModule.pedidos &&
-                      !PedidoPermissions.canViewAgricola(_auth.user!) &&
-                      PedidoPermissions.canViewDistribucion(_auth.user!)
+                      (PedidoPermissions.canCreateAgricola(_auth.user!) ||
+                          (!PedidoPermissions.canViewAgricola(_auth.user!) &&
+                              PedidoPermissions.canViewDistribucion(
+                                _auth.user!,
+                              )))
                 ? PedidosScreen(
                     key: ValueKey(_auth.user),
                     user: _auth.user!,
@@ -256,6 +344,12 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     cosechaUpdates: module == AppModule.producciones
                         ? _cosechaUpdates
                         : null,
+                    usuarioUpdates: module == AppModule.usuarios
+                        ? _usuarioUpdates
+                        : null,
+                    incidenteUpdates: module == AppModule.incidentes
+                        ? _incidenteUpdates
+                        : null,
                   ),
             requiresAuthentication: true,
             module: module,
@@ -269,6 +363,78 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             uri.hasQuery ||
             uri.hasFragment) {
           return null;
+        }
+        if (uri.pathSegments case ['trazabilidad', final rawCodigo]) {
+          final codigo = Uri.decodeComponent(rawCodigo).trim();
+          if (codigo.isEmpty) return null;
+          final args = settings.arguments;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => TrazabilidadPublicaScreen(
+              codigo: codigo,
+              service: TrazabilidadPublicaService(_api),
+              initialReporte: args is TrazabilidadPublicaReporte ? args : null,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'certificaciones', final rawId]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => CertificacionDetailScreen(
+                key: ValueKey(_auth.user),
+                certificacionId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.certificaciones,
+            ),
+          );
+        }
+        if (uri.pathSegments case [
+          'modules',
+          'documentos-entrega',
+          final rawId,
+        ]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => DocumentoDetailScreen(
+                key: ValueKey(_auth.user),
+                documentoId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.documentos,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'usuarios', final rawId]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => UsuarioDetailScreen(
+                key: ValueKey(_auth.user),
+                usuarioId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onUsuarioUpdated: () => _usuarioUpdates.value++,
+              ),
+              requiresAuthentication: true,
+              module: AppModule.usuarios,
+            ),
+          );
         }
         if (uri.pathSegments case ['modules', 'incidentes', 'nuevo']) {
           final args = settings.arguments;
@@ -284,6 +450,28 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 onRefreshPermissions: _auth.restoreSession,
               ),
               requiresAuthentication: true,
+            ),
+          );
+        }
+        if (uri.pathSegments case ['modules', 'incidentes', final rawId]) {
+          final id = int.tryParse(rawId);
+          if (id == null || id <= 0) return null;
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => _sessionGate(
+              () => IncidenteDetailScreen(
+                key: ValueKey(_auth.user),
+                incidenteId: id,
+                user: _auth.user!,
+                service: ModuleService(_api),
+                onRefreshPermissions: _auth.restoreSession,
+                onIncidenteUpdated: () {
+                  _incidenteUpdates.value++;
+                  _pedidosUpdates.value++;
+                },
+              ),
+              requiresAuthentication: true,
+              module: AppModule.incidentes,
             ),
           );
         }
@@ -392,7 +580,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             settings: settings,
             builder: (_) => _sessionGate(
               () => PedidoFormScreen(
-                key: ValueKey(_auth.user),
+                key: ValueKey(
+                  'pedido-form:${_auth.user?.id}:${_auth.user?.roles.join(",")}',
+                ),
                 user: _auth.user!,
                 service: ModuleService(_api),
                 onRefreshPermissions: _auth.restoreSession,
@@ -532,7 +722,9 @@ class _AgroFusionAppState extends State<AgroFusionApp>
             settings: settings,
             builder: (_) => _sessionGate(
               () => ActividadCloseScreen(
-                key: ValueKey(_auth.user),
+                key: ValueKey(
+                  'close:$id:${_auth.user?.id}:${_auth.user?.roles.join(",")}:${_auth.user?.permissions.join(",")}',
+                ),
                 actividadId: id,
                 user: _auth.user!,
                 service: ModuleService(_api),
@@ -542,6 +734,8 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                     : null,
                 capturePhoto: widget.capturePhoto,
                 selectFile: widget.selectEvidenceFile,
+                onExternalPicker: _auth.runExternalPicker,
+                pending: _pending,
               ),
               requiresAuthentication: true,
               module: AppModule.actividades,
@@ -665,6 +859,7 @@ class _AgroFusionAppState extends State<AgroFusionApp>
                 onRefreshPermissions: _auth.restoreSession,
                 initialLoteId: loteArg?.id,
                 initialLoteName: loteArg?.name,
+                pending: _pending,
               ),
               requiresAuthentication: true,
               module: AppModule.producciones,

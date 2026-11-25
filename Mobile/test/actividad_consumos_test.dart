@@ -522,4 +522,207 @@ void main() {
       expect(find.text('3.5 kg'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Excluye insumos legacy sin almacén y fija automáticamente la semilla del lote en actividades de siembra',
+    (tester) async {
+      final siembraActivity = {
+        'actividadid': 11,
+        'loteid': 25,
+        'usuarioid': 8,
+        'descripcion': 'Siembra de papa',
+        'fecha_planificada': '2026-11-20',
+        'fechainicio': '2026-11-16T08:00:00Z',
+        'fechafin': null,
+        'lote': {
+          'loteid': 25,
+          'nombre': 'Parcela Papa',
+          'insumosemillaid': 201,
+          'cantidad_semilla_planificada': '15',
+          'insumo_semilla': {
+            'insumoid': 201,
+            'almacenid': 4,
+            'nombre': 'Semilla de Papa',
+            'unidadmedidaid': 2,
+            'unidad': 'kg',
+          },
+        },
+        'usuario': {'usuarioid': 8, 'nombre': 'Lucía', 'apellido': 'Quispe'},
+        'tipo_actividad': {'tipoactividadid': 2, 'nombre': 'Siembra'},
+        'prioridad': {'prioridadid': 2, 'nombre': 'Alta'},
+      };
+
+      final mixedInsumos = [
+        {
+          'insumoid': 999,
+          'nombre': 'Insumo Legacy Global',
+          'almacenid': null,
+          'unidadmedidaid': 2,
+          'stock': 500,
+          'unidad_medida': {'unidadmedidaid': 2, 'abreviatura': 'kg'},
+          'tipo': {'tipoinsumoid': 4, 'nombre': 'Material de Siembra'},
+        },
+        {
+          'insumoid': 201,
+          'nombre': 'Semilla de Papa',
+          'almacenid': 4,
+          'unidadmedidaid': 2,
+          'stock': 80,
+          'unidad_medida': {'unidadmedidaid': 2, 'abreviatura': 'kg'},
+          'tipo': {'tipoinsumoid': 4, 'nombre': 'Material de Siembra'},
+        },
+        {
+          'insumoid': 202,
+          'nombre': 'Semilla de Tomate',
+          'almacenid': 4,
+          'unidadmedidaid': 2,
+          'stock': 50,
+          'unidad_medida': {'unidadmedidaid': 2, 'abreviatura': 'kg'},
+          'tipo': {'tipoinsumoid': 4, 'nombre': 'Material de Siembra'},
+        },
+      ];
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') return jsonResponse(workerProfile);
+        if (request.url.path == '/api/actividades' && request.method == 'GET') {
+          return jsonResponse([siembraActivity]);
+        }
+        if (request.url.path == '/api/actividades/11' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': siembraActivity});
+        }
+        if (request.url.path == '/api/almacenes' && request.method == 'GET') {
+          return jsonResponse(almacenesPayload);
+        }
+        if (request.url.path == '/api/insumos' && request.method == 'GET') {
+          return jsonResponse(mixedInsumos);
+        }
+        return jsonResponse({}, 404);
+      }, capturePhoto: () async => photoFile('siembra.png'));
+
+      await tester.tap(find.text('Trabajo'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Actividades'));
+      await tester.tap(find.text('Actividades'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Siembra de papa'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Completar y cerrar actividad'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('consumo.0.insumo_locked')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Semilla de Papa'), findsWidgets);
+      expect(find.text('Insumo Legacy Global'), findsNothing);
+      expect(find.text('Semilla de Tomate'), findsNothing);
+      expect(find.byKey(const ValueKey('consumos.add')), findsNothing);
+      expect(find.byKey(const ValueKey('consumo.0.remove')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Oculta insumos en Riego y exige al menos un insumo con stock en Fertilización',
+    (tester) async {
+      final riegoActivity = {
+        ...pendingActivity,
+        'descripcion': 'Riego por aspersión',
+        'tipo_actividad': {'tipoactividadid': 1, 'nombre': 'Riego'},
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') return jsonResponse(workerProfile);
+        if (request.url.path == '/api/actividades' && request.method == 'GET') {
+          return jsonResponse([riegoActivity]);
+        }
+        if (request.url.path == '/api/actividades/11' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': riegoActivity});
+        }
+        if (request.url.path == '/api/almacenes' && request.method == 'GET') {
+          return jsonResponse(almacenesPayload);
+        }
+        if (request.url.path == '/api/insumos' && request.method == 'GET') {
+          return jsonResponse(buildInsumos());
+        }
+        return jsonResponse({}, 404);
+      }, capturePhoto: () async => photoFile('riego.png'));
+
+      await tester.tap(find.text('Trabajo'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Actividades'));
+      await tester.tap(find.text('Actividades'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Riego por aspersión'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Completar y cerrar actividad'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Insumos utilizados'), findsNothing);
+      expect(find.byKey(const ValueKey('consumos.add')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Preselecciona y bloquea el pesticida asignado por el jefe al cerrar Control de plagas',
+    (tester) async {
+      final plagaActivity = {
+        ...pendingActivity,
+        'descripcion': 'Control de plagas: Pesticida Deltox (5 L)',
+        'tipo_actividad': {'tipoactividadid': 4, 'nombre': 'Control de plagas'},
+        'insumos_planificados': [
+          {
+            'insumoid': 301,
+            'almacenid': 4,
+            'nombre': 'Pesticida Deltox',
+            'cantidad': '5',
+            'unidadmedidaid': 3,
+            'unidad': 'L',
+          },
+        ],
+      };
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse({
+            ...workerProfile,
+            'permissions': ['lotes.view'],
+          });
+        }
+        if (request.url.path == '/api/actividades' && request.method == 'GET') {
+          return jsonResponse([plagaActivity]);
+        }
+        if (request.url.path == '/api/actividades/11' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': plagaActivity});
+        }
+        return jsonResponse({}, 404);
+      }, capturePhoto: () async => photoFile('plagas.png'));
+
+      await tester.tap(find.text('Trabajo'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Actividades'));
+      await tester.tap(find.text('Actividades'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Control de plagas: Pesticida Deltox (5 L)'));
+      await tester.pumpAndSettle();
+
+      // En el detalle pendiente ya muestra el insumo asignado.
+      expect(find.text('Insumos asignados'), findsOneWidget);
+      expect(find.text('Pesticida Deltox'), findsOneWidget);
+
+      await tester.tap(find.text('Completar y cerrar actividad'));
+      await tester.pumpAndSettle();
+
+      // Al cerrar viene preseleccionado y bloqueado, con la cantidad precargada.
+      expect(
+        find.byKey(const ValueKey('consumo.0.insumo_locked')),
+        findsOneWidget,
+      );
+      expect(find.text('Pesticida Deltox'), findsOneWidget);
+      expect(find.text('5'), findsOneWidget);
+      expect(find.byKey(const ValueKey('consumos.add')), findsNothing);
+    },
+  );
 }

@@ -240,25 +240,46 @@
         </div>
 
         @if($estadoCuenta === \App\Support\CuentaEstado::PENDIENTE)
+        @php
+            $rolSolicitud = $usuario->rol_solicitado ?: $usuario->role;
+        @endphp
         <div class="usu-show-solicitud card border-0 shadow-none">
             <div class="card-header py-3">
                 <i class="fas fa-clock mr-1"></i> Solicitud de registro pendiente
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-3"><strong>Rol solicitado</strong><br>{{ ucfirst($usuario->rol_solicitado ?? '—') }}</div>
-                    <div class="col-md-3"><strong>CI/NIT</strong><br>{{ $usuario->ci_nit ?? '—' }}</div>
-                    <div class="col-md-3"><strong>Teléfono</strong><br>{{ $usuario->telefono ?? '—' }}</div>
-                    @if(($usuario->rol_solicitado ?? '') === 'transportista')
-                    <div class="col-md-3"><strong>Tipo de licencia</strong><br>{{ \App\Support\TiposLicenciaBolivia::etiqueta($usuario->tipo_licencia) ?? '—' }}</div>
+                    <div class="col-md-3 mb-2"><strong>Rol solicitado</strong><br>{{ $rolSolicitud ? \App\Support\UsuarioRol::etiquetaRol($rolSolicitud) : '—' }}</div>
+                    @if(filled($usuario->nombreusuario))
+                    <div class="col-md-3 mb-2"><strong>Usuario</strong><br>{{ '@'.$usuario->nombreusuario }}</div>
+                    @endif
+                    <div class="col-md-3 mb-2"><strong>Correo</strong><br>{{ $usuario->email }}</div>
+                    <div class="col-md-3 mb-2"><strong>Teléfono</strong><br>{{ filled($usuario->telefono) ? $usuario->telefono : 'No registrado' }}</div>
+                    @if(filled($usuario->ci_nit))
+                    <div class="col-md-3 mb-2"><strong>CI/NIT</strong><br>{{ $usuario->ci_nit }}</div>
+                    @endif
+                    @if(($rolSolicitud ?? '') === 'transportista' && filled($usuario->tipo_licencia))
+                    <div class="col-md-3 mb-2"><strong>Tipo de licencia</strong><br>{{ \App\Support\TiposLicenciaBolivia::etiqueta($usuario->tipo_licencia) ?? '—' }}</div>
                     @endif
                 </div>
+                @if(filled($usuario->informacionadicional))
+                <p class="mb-1 font-weight-bold small text-muted text-uppercase">Información adicional</p>
+                <div class="bg-white border rounded p-3 mb-3" style="white-space:pre-wrap;">{{ $usuario->informacionadicional }}</div>
+                @endif
+                @if(filled($usuario->carta_motivacion))
                 <p class="mb-1 font-weight-bold small text-muted text-uppercase">Carta de motivación</p>
                 <div class="bg-white border rounded p-3 mb-3" style="white-space:pre-wrap;">{{ $usuario->carta_motivacion }}</div>
+                @endif
                 @can('solicitudes.approve')
+                @if($rolJefeRequerido && $jefesDisponibles->isEmpty())
+                <div class="alert alert-warning py-2 px-3 small mb-3">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    No hay ningún <strong>{{ \App\Support\UsuarioRol::etiquetaRol($rolJefeRequerido) }}</strong> activo para asignar a este operario. Primero aprueba o registra un {{ \App\Support\UsuarioRol::etiquetaRol($rolJefeRequerido) }}.
+                </div>
+                @endif
                 <div class="d-flex flex-wrap" style="gap:8px;">
                     <form action="{{ route('gestion.solicitud.aprobar', $usuario) }}" method="POST" class="d-flex flex-wrap align-items-center" style="gap:8px;">@csrf
-                        @if(($usuario->rol_solicitado ?? '') === 'transportista')
+                        @if(($rolSolicitadoEfectivo ?? '') === 'transportista')
                             <select name="ambito_flota" class="form-control form-control-sm w-auto @error('ambito_flota') is-invalid @enderror" required aria-label="Flota del transportista">
                                 <option value="">Flota del transportista…</option>
                                 @foreach(\App\Support\TransportistaFlotaCatalogo::etiquetas() as $valorFlota => $etiquetaFlota)
@@ -266,9 +287,20 @@
                                 @endforeach
                             </select>
                         @endif
-                        <button type="submit" class="btn btn-success"><i class="fas fa-check mr-1"></i> Aprobar</button>
+                        @if($rolJefeRequerido)
+                            <select name="supervisor_usuarioid" class="form-control form-control-sm w-auto @error('supervisor_usuarioid') is-invalid @enderror" required aria-label="Asignar a {{ \App\Support\UsuarioRol::etiquetaRol($rolJefeRequerido) }}" @disabled($jefesDisponibles->isEmpty())>
+                                <option value="">Asignar a {{ \App\Support\UsuarioRol::etiquetaRol($rolJefeRequerido) }}…</option>
+                                @foreach($jefesDisponibles as $jefe)
+                                    <option value="{{ $jefe->usuarioid }}" @selected((string) old('supervisor_usuarioid') === (string) $jefe->usuarioid)>
+                                        {{ $jefe->nombreCompleto() }}{{ $jefe->nombreusuario ? ' (@'.$jefe->nombreusuario.')' : '' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        @endif
+                        <button type="submit" class="btn btn-success" @disabled($rolJefeRequerido && $jefesDisponibles->isEmpty())><i class="fas fa-check mr-1"></i> Aprobar</button>
                     </form>
                     @error('ambito_flota')<div class="w-100 small text-danger">{{ $message }}</div>@enderror
+                    @error('supervisor_usuarioid')<div class="w-100 small text-danger">{{ $message }}</div>@enderror
                     <form action="{{ route('gestion.solicitud.rechazar', $usuario) }}" method="POST"
                         onsubmit="return confirm('¿Rechazar esta solicitud? Se eliminará del sistema.')">@csrf
                         <button type="submit" class="btn btn-outline-danger"><i class="fas fa-times mr-1"></i> Rechazar</button>
@@ -316,6 +348,18 @@
                     <div class="usu-show-dl-row">
                         <dt>Tipo de licencia</dt>
                         <dd>{{ \App\Support\TiposLicenciaBolivia::etiqueta($tipoLicencia) ?? '—' }}</dd>
+                    </div>
+                    @endif
+                    @if($usuario->supervisor || $usuario->hasAnyRole(['agricultor', 'planta']) || in_array(strtolower((string) ($usuario->role ?? '')), ['agricultor', 'planta'], true))
+                    <div class="usu-show-dl-row">
+                        <dt>Jefe asignado</dt>
+                        <dd>
+                            @if($usuario->supervisor)
+                                {{ $usuario->supervisor->nombreCompleto() }}
+                            @else
+                                <span class="text-warning font-weight-semibold">Sin asignar</span>
+                            @endif
+                        </dd>
                     </div>
                     @endif
                     <div class="usu-show-dl-row">

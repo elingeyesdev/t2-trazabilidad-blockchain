@@ -57,6 +57,7 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
   List<PrioridadOption> _prioridades = const [];
 
   late int? _selectedLoteId = widget.initialLoteId;
+  int? _initialResponsableId;
   int? _selectedResponsableId;
   int? _selectedTipoId;
   int? _selectedPrioridadId;
@@ -89,16 +90,60 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
 
     final warnings = <String>[];
 
-    List<LoteOption> lotes = const [];
-    try {
-      lotes = List<LoteOption>.from(
-        await widget.service.loadLoteOptions(widget.user),
-      );
-    } on ApiException catch (error) {
-      warnings.add(error.message);
-    } catch (_) {
-      warnings.add('No se pudieron cargar los lotes.');
+    Future<List<LoteOption>> fetchLotes() async {
+      try {
+        return List<LoteOption>.from(
+          await widget.service.loadLoteOptions(widget.user),
+        );
+      } on ApiException catch (error) {
+        warnings.add(error.message);
+      } catch (_) {
+        warnings.add('No se pudieron cargar los lotes.');
+      }
+      return const [];
     }
+
+    Future<List<ResponsableOption>> fetchResponsables() async {
+      try {
+        return await widget.service.loadResponsables(widget.user);
+      } on ApiException catch (error) {
+        warnings.add(error.message);
+      } catch (_) {
+        warnings.add('No se pudo cargar el equipo de campo.');
+      }
+      return const [];
+    }
+
+    Future<List<ActividadTipoOption>> fetchTipos() async {
+      try {
+        return await widget.service.loadActividadTipos(widget.user);
+      } on ApiException catch (error) {
+        warnings.add(error.message);
+      } catch (_) {
+        warnings.add('No se pudieron cargar los tipos de actividad.');
+      }
+      return const [];
+    }
+
+    Future<List<PrioridadOption>> fetchPrioridades() async {
+      try {
+        return await widget.service.loadPrioridades(widget.user);
+      } on ApiException catch (error) {
+        warnings.add(error.message);
+      } catch (_) {
+        warnings.add('No se pudieron cargar las prioridades.');
+      }
+      return const [];
+    }
+
+    final results = await Future.wait<Object>([
+      fetchLotes(),
+      fetchResponsables(),
+      fetchTipos(),
+      fetchPrioridades(),
+    ]);
+
+    var lotes = results[0] as List<LoteOption>;
     if (widget.initialLoteId != null &&
         !lotes.any((item) => item.id == widget.initialLoteId)) {
       lotes = [
@@ -109,33 +154,9 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
         ...lotes,
       ];
     }
-
-    List<ResponsableOption> responsables = const [];
-    try {
-      responsables = await widget.service.loadResponsables(widget.user);
-    } on ApiException catch (error) {
-      warnings.add(error.message);
-    } catch (_) {
-      warnings.add('No se pudo cargar el equipo de campo.');
-    }
-
-    List<ActividadTipoOption> tipos = const [];
-    try {
-      tipos = await widget.service.loadActividadTipos(widget.user);
-    } on ApiException catch (error) {
-      warnings.add(error.message);
-    } catch (_) {
-      warnings.add('No se pudieron cargar los tipos de actividad.');
-    }
-
-    List<PrioridadOption> prioridades = const [];
-    try {
-      prioridades = await widget.service.loadPrioridades(widget.user);
-    } on ApiException catch (error) {
-      warnings.add(error.message);
-    } catch (_) {
-      warnings.add('No se pudieron cargar las prioridades.');
-    }
+    final responsables = results[1] as List<ResponsableOption>;
+    final tipos = results[2] as List<ActividadTipoOption>;
+    final prioridades = results[3] as List<PrioridadOption>;
 
     if (!mounted) return;
     setState(() {
@@ -149,6 +170,7 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
       }
       if (_selectedResponsableId == null && _responsables.length == 1) {
         _selectedResponsableId = _responsables.first.id;
+        _initialResponsableId = _responsables.first.id;
       }
       _loadingCatalogs = false;
       _catalogWarning = warnings.isEmpty ? null : warnings.first;
@@ -157,7 +179,7 @@ class _ActividadFormScreenState extends State<ActividadFormScreen> {
 
   bool get _hasUnsavedChanges =>
       _selectedLoteId != widget.initialLoteId ||
-      _selectedResponsableId != null ||
+      _selectedResponsableId != _initialResponsableId ||
       _selectedTipoId != null ||
       _selectedPrioridadId != null ||
       _selectedIrrigationKey != null ||

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/actividad_models.dart';
 import '../models/api_exception.dart';
 import '../models/auth_user.dart';
+import '../models/certificacion_documento_models.dart';
 import '../models/cosecha_models.dart';
 import '../models/entrega_models.dart';
 import '../models/incidente_models.dart';
@@ -14,6 +15,7 @@ import '../models/module_page.dart';
 import '../models/pedido_models.dart';
 import '../models/planta_models.dart';
 import '../models/qr_envio_models.dart';
+import '../models/usuario_admin_models.dart';
 import '../navigation/app_module.dart';
 import 'api_client.dart';
 
@@ -330,7 +332,17 @@ class ModuleService {
       ),
     };
     try {
-      final response = await _api.request('GET', AppModule.usuarios.endpoint);
+      Object? response;
+      try {
+        response = await _api.request('GET', 'actividades/responsables');
+      } on ApiException catch (error) {
+        if (error.statusCode == 401) rethrow;
+        if (error.statusCode == 404) {
+          response = await _api.request('GET', AppModule.usuarios.endpoint);
+        } else {
+          rethrow;
+        }
+      }
       for (final item in ResponsableOption.listFromUsersJson(response)) {
         if (item.id == user.id) continue;
         byId[item.id] = item;
@@ -425,16 +437,50 @@ class ModuleService {
     return record;
   }
 
+  Future<ModuleRecord> reassignActividad(
+    AuthUser user,
+    int actividadId, {
+    required int responsableId,
+  }) async {
+    if (!ActividadPermissions.canAssign(user)) {
+      throw const ApiException(
+        'Solo el jefe agrícola autorizado puede cambiar el responsable.',
+        statusCode: 403,
+      );
+    }
+    if (actividadId <= 0 || responsableId <= 0) {
+      throw const ApiException('Selecciona un responsable válido.');
+    }
+    final response = await _api.request(
+      'PATCH',
+      '${AppModule.actividades.endpoint}/$actividadId',
+      body: {'usuarioid': responsableId},
+    );
+    final record = ModuleRecord.fromJson(
+      response,
+      idField: AppModule.actividades.idField,
+      titleField: AppModule.actividades.titleField,
+      fallbackTitle: 'Actividad',
+      fields: _actividadDetailFields,
+    );
+    if (record.id != actividadId) {
+      throw const ApiException(
+        'La información recibida no corresponde a la actividad editada.',
+      );
+    }
+    return record;
+  }
+
   Future<ModuleRecord> closeActividad(
     AuthUser user,
     int actividadId, {
     required String result,
     required EvidencePhoto photo,
     List<Map<String, Object?>> consumos = const [],
+    String? idempotencyKey,
   }) async {
     if (!user.permissions.contains(AppModule.actividades.permission) ||
-        user.roles.contains('admin') ||
-        user.roles.contains('jefe_agricultor')) {
+        user.roles.contains('admin')) {
       throw const ApiException(
         'No tienes permiso para cerrar esta actividad.',
         statusCode: 403,
@@ -455,6 +501,7 @@ class ModuleService {
     final response = await _api.request(
       'POST',
       '${AppModule.actividades.endpoint}/$actividadId/cerrar',
+      headers: _idempotency(idempotencyKey),
       fields: fields,
       files: [
         http.MultipartFile.fromBytes(
@@ -560,6 +607,7 @@ class ModuleService {
     int? catalogoTamanoConteoId,
     String? fechaCosecha,
     String? observaciones,
+    String? idempotencyKey,
   }) async {
     if (!CosechaPermissions.canCreate(user)) {
       throw const ApiException(
@@ -582,6 +630,7 @@ class ModuleService {
     final response = await _api.request(
       'POST',
       AppModule.producciones.endpoint,
+      headers: _idempotency(idempotencyKey),
       body: body,
     );
     return ModuleRecord.fromJson(
@@ -788,6 +837,75 @@ class ModuleService {
     return PedidoRecord.fromJson(response);
   }
 
+  Future<PedidoAgricolaFormData> loadPedidoAgricolaForm(AuthUser user) async {
+    if (!PedidoPermissions.canCreateAgricola(user)) {
+      throw const ApiException(
+        'No tienes permiso para crear envíos agrícolas.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'pedidos-agricolas/formulario');
+    return PedidoAgricolaFormData.fromJson(response);
+  }
+
+  Future<PedidoDistribucionFormData> loadPedidoDistribucionForm(
+    AuthUser user,
+  ) async {
+    if (!PedidoPermissions.canCreateDistribucion(user)) {
+      throw const ApiException(
+        'No tienes permiso para crear pedidos de distribución.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'GET',
+      'pedidos-distribucion/formulario',
+    );
+    return PedidoDistribucionFormData.fromJson(response);
+  }
+
+  Future<PedidoCostoEstimacion> calcularCostoPedidoAgricola(
+    AuthUser user, {
+    required List<Map<String, double>> paradas,
+  }) async {
+    if (!PedidoPermissions.canCreateAgricola(user)) {
+      throw const ApiException(
+        'No tienes permiso para calcular costos de envío.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'POST',
+      'pedidos-agricolas/calcular-costo',
+      body: {'paradas': paradas},
+    );
+    return PedidoCostoEstimacion.fromJson(response);
+  }
+
+  Future<PedidoCapacidadValidacion> validarCapacidadPedidoAgricola(
+    AuthUser user, {
+    required int vehiculoId,
+    required double pesoKg,
+    double? volumenM3,
+  }) async {
+    if (!PedidoPermissions.canCreateAgricola(user)) {
+      throw const ApiException(
+        'No tienes permiso para validar la capacidad del vehículo.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request(
+      'POST',
+      'pedidos-agricolas/validar-capacidad',
+      body: {
+        'vehiculo_id': vehiculoId,
+        'peso_kg': pesoKg,
+        'volumen_m3': ?volumenM3,
+      },
+    );
+    return PedidoCapacidadValidacion.fromJson(response);
+  }
+
   Future<PedidoRecord> createPedidoMovil(
     AuthUser user, {
     required PedidoTipo tipo,
@@ -887,6 +1005,214 @@ class ModuleService {
     };
     final response = await _api.request('POST', 'incidentes', body: body);
     return IncidenteRecord.fromJson(response);
+  }
+
+  Future<IncidenteRecord> loadIncidenteDetail(
+    AuthUser user,
+    int incidenteId,
+  ) async {
+    if (!IncidentePermissions.canView(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar esta incidencia.',
+        statusCode: 403,
+      );
+    }
+    if (incidenteId <= 0) {
+      throw const ApiException('La incidencia solicitada no es válida.');
+    }
+    final response = await _api.request('GET', 'incidentes/$incidenteId');
+    return IncidenteRecord.fromJson(response);
+  }
+
+  Future<IncidenteRecord> resolveIncidente(
+    AuthUser user,
+    int incidenteId, {
+    required String notaResolucion,
+  }) async {
+    if (!IncidentePermissions.canResolve(user)) {
+      throw const ApiException(
+        'No tienes permiso para resolver incidencias.',
+        statusCode: 403,
+      );
+    }
+    final cleanNota = notaResolucion.trim();
+    if (cleanNota.isEmpty) {
+      throw const ApiException(
+        'Ingresa una explicación de la solución aplicada.',
+        statusCode: 422,
+        validationErrors: {
+          'nota_resolucion': ['La nota de resolución es obligatoria.'],
+        },
+      );
+    }
+    final response = await _api.request(
+      'PATCH',
+      'incidentes/$incidenteId/resolver',
+      body: {'nota_resolucion': cleanNota},
+    );
+    return IncidenteRecord.fromJson(response);
+  }
+
+  Future<CertificacionDetailRecord> loadCertificacionDetail(
+    AuthUser user,
+    int certificacionId,
+  ) async {
+    if (!user.permissions.contains('certificaciones.view')) {
+      throw const ApiException(
+        'No tienes permiso para consultar certificaciones.',
+        statusCode: 403,
+      );
+    }
+    if (certificacionId <= 0) {
+      throw const ApiException('La certificación solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      'certificaciones/$certificacionId',
+    );
+    return CertificacionDetailRecord.fromJson(response);
+  }
+
+  Future<Uint8List> downloadCertificacionArchivo(
+    AuthUser user,
+    int certificacionId,
+  ) async {
+    if (!user.permissions.contains('certificaciones.view')) {
+      throw const ApiException(
+        'No tienes permiso para descargar este certificado.',
+        statusCode: 403,
+      );
+    }
+    return _api.getBytes('certificaciones/$certificacionId/archivo');
+  }
+
+  Future<DocumentoEntregaDetailRecord> loadDocumentoEntregaDetail(
+    AuthUser user,
+    int documentoId,
+  ) async {
+    if (!user.permissions.contains('documentos.view')) {
+      throw const ApiException(
+        'No tienes permiso para consultar documentos de entrega.',
+        statusCode: 403,
+      );
+    }
+    if (documentoId <= 0) {
+      throw const ApiException('El documento solicitado no es válido.');
+    }
+    var page = 1;
+    while (page <= 5) {
+      final response = await _api.request(
+        'GET',
+        'documentos-entrega',
+        queryParameters: {'page': '$page'},
+      );
+      final rows = response is List
+          ? response
+          : response is Map<String, dynamic> && response['data'] is List
+          ? response['data'] as List
+          : const [];
+      for (final item in rows) {
+        if (item is Map<String, dynamic>) {
+          final parsed = DocumentoEntregaDetailRecord.fromJson(item);
+          if (parsed.id == documentoId) return parsed;
+        }
+      }
+      final lastPage = response is Map<String, dynamic>
+          ? (response['last_page'] as int? ?? 1)
+          : 1;
+      if (page >= lastPage) break;
+      page++;
+    }
+    throw const ApiException(
+      'No encontramos el documento de entrega solicitado.',
+      statusCode: 404,
+    );
+  }
+
+  Future<Uint8List> downloadDocumentoEntregaArchivo(
+    AuthUser user,
+    int documentoId,
+  ) async {
+    if (!user.permissions.contains('documentos.view')) {
+      throw const ApiException(
+        'No tienes permiso para descargar este documento.',
+        statusCode: 403,
+      );
+    }
+    return _api.getBytes('documentos-entrega/$documentoId/download');
+  }
+
+  Uri? resolvePublicStorageUri(String? archivoPath) {
+    if (archivoPath == null || archivoPath.trim().isEmpty) return null;
+    final clean = archivoPath.trim();
+    final parsed = Uri.tryParse(clean);
+    if (parsed != null && parsed.hasScheme && parsed.hasAuthority) {
+      return parsed;
+    }
+    final apiUri = _api.config.baseUri;
+    final segments = apiUri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (segments.isNotEmpty && segments.last.toLowerCase() == 'api') {
+      segments.removeLast();
+    }
+    final origin = Uri(
+      scheme: apiUri.scheme,
+      host: apiUri.host,
+      port: apiUri.hasPort ? apiUri.port : null,
+      pathSegments: segments,
+    );
+    final normalizedPath = clean.startsWith('/')
+        ? clean
+        : (clean.startsWith('storage/') ? '/$clean' : '/storage/$clean');
+    return origin.resolve(normalizedPath);
+  }
+
+  Future<UsuarioAdminRecord> loadUsuarioAdminDetail(
+    AuthUser user,
+    int usuarioId,
+  ) async {
+    if (!user.permissions.contains('usuarios.admin')) {
+      throw const ApiException(
+        'No tienes permiso para consultar el detalle de usuarios.',
+        statusCode: 403,
+      );
+    }
+    final response = await _api.request('GET', 'usuarios/$usuarioId');
+    return UsuarioAdminRecord.fromJson(response);
+  }
+
+  Future<UsuarioAdminRecord> aprobarUsuarioAdmin(
+    AuthUser user,
+    int usuarioId, {
+    String? ambitoFlota,
+  }) async {
+    if (!user.permissions.contains('usuarios.admin')) {
+      throw const ApiException(
+        'No tienes permiso para aprobar solicitudes de usuario.',
+        statusCode: 403,
+      );
+    }
+    final body = <String, dynamic>{
+      if (ambitoFlota != null && ambitoFlota.isNotEmpty)
+        'ambito_flota': ambitoFlota,
+    };
+    final response = await _api.request(
+      'POST',
+      'usuarios/$usuarioId/aprobar',
+      body: body,
+    );
+    return UsuarioAdminRecord.fromJson(response);
+  }
+
+  Future<void> rechazarUsuarioAdmin(AuthUser user, int usuarioId) async {
+    if (!user.permissions.contains('usuarios.admin')) {
+      throw const ApiException(
+        'No tienes permiso para rechazar solicitudes de usuario.',
+        statusCode: 403,
+      );
+    }
+    await _api.request('POST', 'usuarios/$usuarioId/rechazar');
   }
 
   Future<QrResolucionResult> resolveEnvioQr(
@@ -1139,6 +1465,33 @@ class ModuleService {
     return InventarioMovimientosPage.fromJson(response);
   }
 
+  /// Movimientos de todos los almacenes visibles para el usuario.
+  Future<InventarioMovimientosPage> loadMovimientos(
+    AuthUser user, {
+    String? naturaleza,
+    int page = 1,
+  }) async {
+    if (!InventarioPermissions.canViewMovimientos(user)) {
+      throw const ApiException(
+        'No tienes permiso para consultar los movimientos.',
+        statusCode: 403,
+      );
+    }
+    if (page < 1) {
+      throw const ApiException('La página solicitada no es válida.');
+    }
+    final response = await _api.request(
+      'GET',
+      AppModule.movimientos.endpoint,
+      queryParameters: {
+        'page': '$page',
+        if (naturaleza != null && naturaleza.isNotEmpty)
+          'naturaleza': naturaleza,
+      },
+    );
+    return InventarioMovimientosPage.fromJson(response);
+  }
+
   Future<InventarioMovimientoRecord> registerAlmacenMovimiento(
     AuthUser user, {
     required String naturaleza,
@@ -1189,4 +1542,8 @@ class ModuleService {
     );
     return InventarioMovimientoRecord.fromJson(response);
   }
+
+  /// Con la misma clave, Laravel no repite un registro que ya guardó.
+  Map<String, String>? _idempotency(String? key) =>
+      key == null ? null : {'Idempotency-Key': key};
 }

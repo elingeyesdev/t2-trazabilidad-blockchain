@@ -8,13 +8,13 @@ import '../../models/auth_user.dart';
 import '../../models/pedido_models.dart';
 import '../../models/qr_envio_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
-import '../../widgets/field_kit.dart';
-import '../../widgets/record_status_badge.dart';
+import '../../widgets/record_card.dart';
 import 'module_access_denied.dart';
 
 class PedidosScreen extends StatefulWidget {
@@ -36,11 +36,12 @@ class PedidosScreen extends StatefulWidget {
 }
 
 class _PedidosScreenState extends State<PedidosScreen> {
-  static const _estadoFilters = <(String?, String)>[
+  List<(String?, String)> get _estadoFilters => [
     (null, 'Todos'),
     ('pendiente', 'Pendiente'),
     ('confirmado', 'Confirmado'),
     ('rechazado', 'Rechazado'),
+    if (_tipo == PedidoTipo.agricola) ('sin asignacion', 'Pendiente agrícola'),
   ];
 
   late PedidoTipo _tipo;
@@ -148,16 +149,15 @@ class _PedidosScreenState extends State<PedidosScreen> {
             IconButton(
               key: const ValueKey('pedidos.escanear_qr'),
               tooltip: 'Leer código QR',
-              onPressed: () => Navigator.of(context).pushNamed('/modules/qr'),
+              onPressed: () => Navigator.of(context).pushNamed(AppRoutes.qr),
               icon: const Icon(Icons.qr_code_scanner_rounded),
             ),
           if (canCreate)
             IconButton(
               key: const ValueKey('pedidos.nuevo'),
               tooltip: 'Nuevo pedido',
-              onPressed: () => Navigator.of(
-                context,
-              ).pushNamed('${AppModule.pedidos.route}/nuevo'),
+              onPressed: () =>
+                  Navigator.of(context).pushNamed(AppRoutes.pedidoNuevo),
               icon: const Icon(Icons.add_rounded),
             ),
           IconButton(
@@ -211,9 +211,13 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                 key: const ValueKey('pedidos.crear_btn'),
                                 onPressed: () => Navigator.of(
                                   context,
-                                ).pushNamed('${AppModule.pedidos.route}/nuevo'),
+                                ).pushNamed(AppRoutes.pedidoNuevo),
                                 icon: const Icon(Icons.add_rounded, size: 18),
-                                label: const Text('Nuevo pedido'),
+                                label: Text(
+                                  _tipo == PedidoTipo.agricola
+                                      ? 'Nuevo envío'
+                                      : 'Nuevo pedido',
+                                ),
                               ),
                           ],
                         ),
@@ -254,7 +258,10 @@ class _PedidosScreenState extends State<PedidosScreen> {
             ),
             Expanded(
               child: _loading
-                  ? const AppLoading(message: 'Cargando pedidos...')
+                  ? const AppLoading(
+                      message: 'Cargando pedidos...',
+                      shape: LoadingShape.list,
+                    )
                   : _error != null
                   ? AppErrorState(
                       message: _error!,
@@ -322,51 +329,41 @@ class _PedidosScreenState extends State<PedidosScreen> {
   }
 
   Widget _card(BuildContext context, PedidoRecord record) {
-    final theme = Theme.of(context).textTheme;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: Padding(
           padding: const EdgeInsets.only(bottom: 14),
-          child: PressableCard(
+          child: RecordCard(
             key: ValueKey('pedidos.item.${record.tipo.value}.${record.id}'),
-            onTap: () => Navigator.of(context).pushNamed(
-              '${AppModule.pedidos.route}/${record.tipo.value}/${record.id}',
-            ),
-            color: AppTheme.surface,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: RecordStatusBadge(status: record.estadoLabel),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      size: 26,
-                      color: AppTheme.ink,
-                    ),
-                  ],
+            module: AppModule.pedidos,
+            title: record.numeroSolicitud,
+            status: record.estadoLabel,
+            facts: [
+              if (record.origen?.direccion != null)
+                ('Origen', record.origen!.direccion!),
+              ('Destino', record.destino.label),
+              (
+                '',
+                '${record.detalles.length} ${record.detalles.length == 1 ? 'producto' : 'productos'}',
+              ),
+              if (record.envio?.transportistaNombre != null ||
+                  record.envio?.vehiculoPlaca != null)
+                (
+                  '',
+                  [
+                    if (record.envio?.transportistaNombre != null)
+                      'Chofer: ${record.envio!.transportistaNombre}',
+                    if (record.envio?.vehiculoPlaca != null)
+                      'Vehículo: ${record.envio!.vehiculoPlaca}',
+                    if (record.envio?.costoBs != null)
+                      'Bs ${record.envio!.costoBs!.toStringAsFixed(0)}',
+                  ].join(' · '),
                 ),
-                const SizedBox(height: 10),
-                Text(record.numeroSolicitud, style: theme.titleLarge),
-                const SizedBox(height: 6),
-                Text(
-                  'Destino: ${record.destino.label}',
-                  style: theme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${record.detalles.length} ${record.detalles.length == 1 ? 'producto' : 'productos'}',
-                  style: theme.bodyMedium,
-                ),
-              ],
-            ),
+            ],
+            onTap: () => Navigator.of(
+              context,
+            ).pushNamed(AppRoutes.pedido(record.tipo, record.id)),
           ),
         ),
       ),

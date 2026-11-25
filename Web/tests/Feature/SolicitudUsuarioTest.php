@@ -76,6 +76,122 @@ class SolicitudUsuarioTest extends TestCase
         $this->assertMatchesRegularExpression('/^jmamani\d+$/', $pendiente->nombreusuario);
     }
 
+    public function test_aprobar_operario_agricultor_requiere_jefe_agricultor_valido(): void
+    {
+        $admin = $this->crearUsuarioConRol('admin');
+        $jefeAgricola = $this->crearUsuarioConRol('jefe_agricultor');
+        $jefePlanta = $this->crearUsuarioConRol('jefe_planta');
+        $pendiente = $this->crearSolicitudPendiente([
+            'nombre' => 'Luis',
+            'apellido' => 'Quispe',
+            'rol_solicitado' => 'agricultor',
+        ]);
+
+        // Sin jefe seleccionado: falla validación.
+        $this->actingAs($admin)
+            ->post(route('gestion.solicitud.aprobar', $pendiente))
+            ->assertSessionHasErrors('supervisor_usuarioid');
+
+        // Con un jefe de otro ámbito (jefe_planta): rechaza.
+        $this->actingAs($admin)
+            ->post(route('gestion.solicitud.aprobar', $pendiente), [
+                'supervisor_usuarioid' => $jefePlanta->usuarioid,
+            ])
+            ->assertSessionHasErrors('supervisor_usuarioid');
+
+        // Con jefe_agricultor activo: aprueba y vincula supervisor_usuarioid.
+        $this->actingAs($admin)
+            ->post(route('gestion.solicitud.aprobar', $pendiente), [
+                'supervisor_usuarioid' => $jefeAgricola->usuarioid,
+            ])
+            ->assertRedirect(route('gestion.show', $pendiente));
+
+        $pendiente->refresh();
+        $this->assertSame(CuentaEstado::APROBADO, $pendiente->estado_cuenta);
+        $this->assertSame('agricultor', $pendiente->role);
+        $this->assertSame((int) $jefeAgricola->usuarioid, (int) $pendiente->supervisor_usuarioid);
+        $this->assertTrue($pendiente->hasRole('agricultor'));
+        $this->assertContains(
+            (int) $pendiente->usuarioid,
+            \App\Support\UsuarioRol::idsEmpleadosOperativosDeJefeAgricultor($jefeAgricola)
+        );
+    }
+
+    public function test_aprobar_operario_planta_asigna_jefe_planta_y_habilita_equipo(): void
+    {
+        $admin = $this->crearUsuarioConRol('admin');
+        $jefePlanta = $this->crearUsuarioConRol('jefe_planta');
+        $pendiente = $this->crearSolicitudPendiente([
+            'nombre' => 'Elena',
+            'apellido' => 'Flores',
+            'rol_solicitado' => 'planta',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('gestion.show', $pendiente))
+            ->assertOk()
+            ->assertSee('supervisor_usuarioid', false)
+            ->assertSee($jefePlanta->nombreCompleto());
+
+        $this->actingAs($admin)
+            ->post(route('gestion.solicitud.aprobar', $pendiente), [
+                'supervisor_usuarioid' => $jefePlanta->usuarioid,
+            ])
+            ->assertRedirect(route('gestion.show', $pendiente));
+
+        $pendiente->refresh();
+        $this->assertSame(CuentaEstado::APROBADO, $pendiente->estado_cuenta);
+        $this->assertSame('planta', $pendiente->role);
+        $this->assertSame((int) $jefePlanta->usuarioid, (int) $pendiente->supervisor_usuarioid);
+        $this->assertTrue(\App\Support\PlantaAccess::puedeAsignarOperario($jefePlanta, $pendiente));
+    }
+
+    public function test_admin_puede_asignar_jefe_a_trabajador_ya_registrado(): void
+    {
+        $admin = $this->crearUsuarioConRol('admin');
+        $jefePlanta = $this->crearUsuarioConRol('jefe_planta');
+        $jefeAgricola = $this->crearUsuarioConRol('jefe_agricultor');
+        $operarioPlanta = $this->crearUsuarioConRol('planta');
+        $rolPlanta = Role::findByName('planta', 'web');
+
+        $this->assertNull($operarioPlanta->supervisor_usuarioid);
+
+        // El formulario de edición muestra el selector de jefe.
+        $this->actingAs($admin)
+            ->get(route('gestion.edit', $operarioPlanta))
+            ->assertOk()
+            ->assertSee('supervisor_usuarioid', false)
+            ->assertSee($jefePlanta->nombreCompleto());
+
+        // No permite asignar un jefe de otro ámbito (jefe_agricultor a operario planta).
+        $this->actingAs($admin)
+            ->put(route('gestion.usuario.update', $operarioPlanta), [
+                'nombre' => $operarioPlanta->nombre,
+                'apellido' => $operarioPlanta->apellido,
+                'email' => $operarioPlanta->email,
+                'nombreusuario' => $operarioPlanta->nombreusuario,
+                'rolid' => $rolPlanta->id,
+                'supervisor_usuarioid' => $jefeAgricola->usuarioid,
+            ])
+            ->assertSessionHasErrors('supervisor_usuarioid');
+
+        // Asigna correctamente el jefe_planta.
+        $this->actingAs($admin)
+            ->put(route('gestion.usuario.update', $operarioPlanta), [
+                'nombre' => $operarioPlanta->nombre,
+                'apellido' => $operarioPlanta->apellido,
+                'email' => $operarioPlanta->email,
+                'nombreusuario' => $operarioPlanta->nombreusuario,
+                'rolid' => $rolPlanta->id,
+                'supervisor_usuarioid' => $jefePlanta->usuarioid,
+            ])
+            ->assertRedirect(route('gestion.show', $operarioPlanta));
+
+        $operarioPlanta->refresh();
+        $this->assertSame((int) $jefePlanta->usuarioid, (int) $operarioPlanta->supervisor_usuarioid);
+        $this->assertTrue(\App\Support\PlantaAccess::puedeAsignarOperario($jefePlanta, $operarioPlanta));
+    }
+
     public function test_eliminar_usuario_con_relaciones_no_falla(): void
     {
         $admin = $this->crearUsuarioConRol('admin');

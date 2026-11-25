@@ -1,13 +1,11 @@
-import 'dart:async';
+import 'dart:convert';
 
 import 'package:agrofusion_mobile/app.dart';
 import 'package:agrofusion_mobile/config/api_config.dart';
-import 'package:agrofusion_mobile/navigation/app_routes.dart';
 import 'package:agrofusion_mobile/screens/auth/login_screen.dart';
 import 'package:agrofusion_mobile/services/api_client.dart';
 import 'package:agrofusion_mobile/services/session_storage.dart';
-import 'package:agrofusion_mobile/widgets/app_loading.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -26,64 +24,48 @@ void main() {
     return api;
   }
 
-  testWidgets('Navega a conexión, muestra carga y permite volver al inicio', (
-    tester,
-  ) async {
-    final response = Completer<http.Response>();
-    final api = apiWith(MockClient((_) => response.future));
-    await tester.pumpWidget(AgroFusionApp(apiClient: api));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'No muestra opciones de comprobar conexión en inicio de sesión ni en inicio',
+    (tester) async {
+      final api = apiWith(
+        MockClient((request) async {
+          if (request.url.path == '/api/me') {
+            return http.Response(
+              jsonEncode({
+                'usuarioid': 1,
+                'nombre': 'Admin',
+                'apellido': 'Sistema',
+                'email': 'admin@agrofusion.com',
+                'activo': true,
+                'estado_cuenta': 'aprobado',
+                'roles': [
+                  {'id': 1, 'name': 'admin'},
+                ],
+                'permissions': ['lotes.view'],
+              }),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          }
+          return http.Response('{}', 404);
+        }),
+      );
 
-    expect(find.text('Comprobar conexión'), findsNothing);
-    unawaited(
-      tester
-          .state<NavigatorState>(find.byType(Navigator))
-          .pushNamed(AppRoutes.connection),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byType(AppLoading), findsOneWidget);
+      await tester.pumpWidget(AgroFusionApp(apiClient: api));
+      await tester.pumpAndSettle();
 
-    response.complete(http.Response('{"ok":true}', 200));
-    await tester.pumpAndSettle();
-    expect(find.text('Conexión disponible'), findsOneWidget);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text('Comprobar conexión'), findsNothing);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.byType(LoginScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      await const SessionStorage().saveToken('1|nav-check');
+      await tester.pumpWidget(
+        AgroFusionApp(key: const ValueKey('authenticated'), apiClient: api),
+      );
+      await tester.pumpAndSettle();
 
-  testWidgets('Permite reintentar después de un error del servidor', (
-    tester,
-  ) async {
-    var attempts = 0;
-    final api = apiWith(
-      MockClient((_) async {
-        attempts++;
-        return attempts == 1
-            ? http.Response('', 503)
-            : http.Response('{"ok":true}', 200);
-      }),
-    );
-    await tester.pumpWidget(AgroFusionApp(apiClient: api));
-    await tester.pumpAndSettle();
-
-    unawaited(
-      tester
-          .state<NavigatorState>(find.byType(Navigator))
-          .pushNamed(AppRoutes.connection),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.text('El servidor no está disponible. Intenta más tarde.'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('Reintentar'));
-    await tester.pumpAndSettle();
-    expect(find.text('Conexión disponible'), findsOneWidget);
-    expect(attempts, 2);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.text('Hola, Admin'), findsOneWidget);
+      expect(find.text('Comprobar conexión'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

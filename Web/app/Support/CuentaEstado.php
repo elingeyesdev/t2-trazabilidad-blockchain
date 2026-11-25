@@ -11,7 +11,7 @@ final class CuentaEstado
     /** @return list<string> */
     public static function rolesRegistroPublico(): array
     {
-        return ['jefe_agricultor', 'jefe_planta', 'transportista', 'minorista'];
+        return ['jefe_agricultor', 'jefe_planta', 'agricultor', 'planta', 'transportista', 'minorista'];
     }
 
     /** Rol operativo que crea un jefe al registrar empleados. */
@@ -20,6 +20,16 @@ final class CuentaEstado
         return match ($rolJefe) {
             'jefe_agricultor' => 'agricultor',
             'jefe_planta' => 'planta',
+            default => null,
+        };
+    }
+
+    /** Rol jefe requerido como supervisor al aprobar la solicitud de un operario. */
+    public static function rolJefeDeEmpleado(string $rolEmpleado): ?string
+    {
+        return match ($rolEmpleado) {
+            'agricultor' => 'jefe_agricultor',
+            'planta' => 'jefe_planta',
             default => null,
         };
     }

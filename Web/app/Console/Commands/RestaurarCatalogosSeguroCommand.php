@@ -28,7 +28,7 @@ class RestaurarCatalogosSeguroCommand extends Command
             foreach ([['CAMIONETA','Camioneta','pequeno',1500,8],['CAMION_PQ','Camión pequeño','mediano',3500,15],['CAMION_GR','Camión grande','grande',10000,40]] as [$codigo,$nombre,$tamano,$kg,$m3]) {
                 TipoVehiculo::firstOrCreate(['codigo'=>$codigo], ['nombre'=>$nombre,'tamano'=>$tamano,'capacidad_kg'=>$kg,'capacidad_m3'=>$m3,'activo'=>true]);
             }
-            foreach (['FlotaVehiculosPorAmbitoSeeder','MaquinasProcesoPlantaSeeder','PlantillasTransformacionSeeder','PlantaInsumosOperativosSeeder'] as $seeder) {
+            foreach (['ProcesosPlantaOperativosSeeder','MaquinasProcesoPlantaSeeder','PlantillasTransformacionSeeder'] as $seeder) {
                 $this->call('db:seed', ['--class'=>$seeder,'--force'=>true]);
             }
             $this->documentos();
