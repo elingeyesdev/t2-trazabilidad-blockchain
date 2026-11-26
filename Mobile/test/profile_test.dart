@@ -158,7 +158,7 @@ void main() {
       await openProfile(tester);
       expect(find.text('Sin registrar'), findsWidgets);
       expect(find.text('Sin roles asignados'), findsOneWidget);
-      expect(find.byIcon(Icons.person_outline), findsOneWidget);
+      expect(find.text('A'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -172,9 +172,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await startApp(tester, (_) async => jsonResponse(profile));
     await openProfile(tester);
-    await tester.ensureVisible(find.text('Último acceso'));
+    await tester.ensureVisible(find.text('Cerrar sesión'));
     await tester.pumpAndSettle();
-    expect(find.text('Último acceso').hitTestable(), findsOneWidget);
+    expect(find.text('Cerrar sesión').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -281,7 +281,7 @@ void main() {
       final image = tester.widget<Image>(find.byType(Image));
       expect((image.image as NetworkImage).headers, isNull);
       expect(find.text('Ana Mamani'), findsOneWidget);
-      expect(find.byIcon(Icons.person_outline), findsOneWidget);
+      expect(find.text('AM'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -408,6 +408,6 @@ void main() {
     );
     await openProfile(tester);
     expect(find.byType(Image), findsNothing);
-    expect(find.byIcon(Icons.person_outline), findsOneWidget);
+    expect(find.text('AM'), findsOneWidget);
   });
 }

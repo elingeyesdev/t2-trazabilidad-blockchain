@@ -32,6 +32,9 @@ class ActionPermissionMiddleware
         }
 
         if (! $user->can($permission)) {
+            if ($module === 'catalogos' && $action === 'read' && $request->isMethodSafe() && $this->puedeLeerCatalogosOperativos($user)) {
+                return $next($request);
+            }
             if ($module === 'documentos' && $action === 'read' && DocumentoEntregaAcceso::puedeAccederModulo($user)) {
                 return $next($request);
             }
@@ -45,6 +48,24 @@ class ActionPermissionMiddleware
         }
 
         return $next($request);
+    }
+
+    private function puedeLeerCatalogosOperativos($user): bool
+    {
+        foreach ([
+            'lotes.view',
+            'lotes.update',
+            'inventario.view',
+            'pedidos.view',
+            'pedidos_distribucion.view',
+            'lote_produccion.view',
+        ] as $permiso) {
+            if ($user->can($permiso)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function puedeAccederAlmacenPorAmbito($user, Request $request, string $module): bool

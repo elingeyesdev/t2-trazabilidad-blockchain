@@ -86,12 +86,9 @@ final class ActividadPermisos
             return false;
         }
 
-        // AGR-05: el jefe supervisa; no ejecuta/completa tareas del operario.
-        if (UsuarioRol::esJefeAgricultor($user)) {
-            return false;
-        }
-
-        if (UsuarioRol::debeAcotarPorAsignacion($user)) {
+        // AGR-05: el jefe supervisa y no completa tareas asignadas a un operario,
+        // pero sí puede cerrar las actividades que tenga asignadas a sí mismo.
+        if (UsuarioRol::debeAcotarPorAsignacion($user) || UsuarioRol::esJefeAgricultor($user)) {
             $uid = (int) $user->usuarioid;
 
             return (int) $actividad->usuarioid === $uid
@@ -105,7 +102,7 @@ final class ActividadPermisos
     public static function puedeEjecutarCierre(?Usuario $user, Actividad $actividad): bool
     {
         return $user !== null && UsuarioRol::puedeOperar($user)
-            && UsuarioRol::debeAcotarPorAsignacion($user)
+            && (UsuarioRol::debeAcotarPorAsignacion($user) || UsuarioRol::esJefeAgricultor($user))
             && $user->can('lotes.view')
             && ((int) $actividad->usuarioid === (int) $user->usuarioid
                 || (int) $actividad->usuarioid_ejecutor === (int) $user->usuarioid)

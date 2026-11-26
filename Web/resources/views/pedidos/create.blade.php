@@ -195,6 +195,18 @@
             </div>
             @endif
 
+            @if($errors->any())
+            <div class="alert alert-danger alert-dismissible fade show">
+                <strong><i class="fas fa-exclamation-triangle mr-1"></i>No se pudo registrar el envío:</strong>
+                <ul class="mb-0 mt-1 pl-3">
+                    @foreach($errors->all() as $err)
+                        <li>{{ $err }}</li>
+                    @endforeach
+                </ul>
+                <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+            </div>
+            @endif
+
             <div id="env-wizard-unificado" class="env-wizard-wrap" data-tema="{{ $destinoInicial === 'mayorista' ? 'mayorista' : ($destinoInicial === 'punto-venta' ? 'punto-venta' : 'planta') }}">
             @include('pedidos.partials.wizard-progress-bar')
 

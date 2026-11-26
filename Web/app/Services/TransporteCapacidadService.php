@@ -57,20 +57,32 @@ class TransporteCapacidadService
     {
         $transportista->loadMissing('perfilTransportista');
 
-        $json = $transportista->licencias_json ?? $transportista->perfilTransportista?->licencias_json;
-        if (is_string($json)) {
-            $decoded = json_decode($json, true);
-            $json = is_array($decoded) ? $decoded : null;
+        foreach ([$transportista->licencias_json, $transportista->perfilTransportista?->licencias_json] as $json) {
+            if (is_string($json)) {
+                $decoded = json_decode($json, true);
+                $json = is_array($decoded) ? $decoded : null;
+            }
+
+            if (is_array($json) && $json !== []) {
+                $normalizadas = TiposLicenciaBolivia::normalizarLista($json);
+                if ($normalizadas !== []) {
+                    return $normalizadas;
+                }
+            }
         }
 
-        if (is_array($json) && $json !== []) {
-            return TiposLicenciaBolivia::normalizarLista($json);
+        foreach ([$transportista->tipo_licencia, $transportista->perfilTransportista?->tipo_licencia] as $unica) {
+            if ($unica === null || trim((string) $unica) === '') {
+                continue;
+            }
+
+            $normalizadas = TiposLicenciaBolivia::normalizarLista([$unica]);
+            if ($normalizadas !== []) {
+                return $normalizadas;
+            }
         }
 
-        $unica = $transportista->tipo_licencia
-            ?? $transportista->perfilTransportista?->tipo_licencia;
-
-        return TiposLicenciaBolivia::normalizarLista($unica !== null ? [$unica] : []);
+        return [];
     }
 
     public function validarAsignacion(Usuario $transportista, Vehiculo $vehiculo): void

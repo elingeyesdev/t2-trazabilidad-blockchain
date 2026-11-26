@@ -13,15 +13,18 @@ abstract final class ActividadPermissions {
       !user.roles.contains('admin') &&
       user.permissions.contains('lotes.update');
 
+  static bool canReassign(AuthUser user, ActividadEditableData? actividad) =>
+      actividad != null && !actividad.isCompleted && canAssign(user);
+
   static bool canClose(AuthUser user, ActividadEditableData? actividad) {
     if (actividad == null || actividad.isCompleted) return false;
-    if (user.roles.contains('admin') ||
-        user.roles.contains('jefe_agricultor')) {
-      return false;
-    }
+    if (user.roles.contains('admin')) return false;
     if (!user.permissions.contains('lotes.view')) return false;
     final assignedId = actividad.responsableId;
     final executorId = actividad.ejecutorId;
+    if (user.roles.contains('jefe_agricultor')) {
+      return assignedId == user.id || executorId == user.id;
+    }
     if (assignedId == null && executorId == null) return true;
     return assignedId == user.id || executorId == user.id;
   }
@@ -201,6 +204,12 @@ class ActividadEditableData {
     required this.loteId,
     required this.description,
     this.loteName,
+    this.tipoNombre,
+    this.plannedSeedInsumoId,
+    this.plannedSeedAlmacenId,
+    this.plannedSeedName,
+    this.plannedSeedUnit,
+    this.plannedSeedQuantity,
     this.responsableId,
     this.ejecutorId,
     this.closingResponsibleName,
@@ -211,6 +220,7 @@ class ActividadEditableData {
     this.evidenceStatus,
     this.hasEvidence = false,
     this.consumos = const [],
+    this.plannedInsumos = const [],
     this.isCompleted = false,
   });
 
@@ -219,7 +229,21 @@ class ActividadEditableData {
     final loteMap = row['lote'] is Map<String, dynamic>
         ? row['lote'] as Map<String, dynamic>
         : null;
+    final tipoMap = row['tipo_actividad'] is Map<String, dynamic>
+        ? row['tipo_actividad'] as Map<String, dynamic>
+        : (row['tipoActividad'] is Map<String, dynamic>
+              ? row['tipoActividad'] as Map<String, dynamic>
+              : null);
+    final seedMap = loteMap?['insumo_semilla'] is Map<String, dynamic>
+        ? loteMap!['insumo_semilla'] as Map<String, dynamic>
+        : null;
     final loteId = _asInt(row['loteid']) ?? _asInt(loteMap?['loteid']) ?? 0;
+    final plannedSeedInsumoId =
+        _asInt(loteMap?['insumosemillaid']) ?? _asInt(seedMap?['insumoid']);
+    final plannedSeedQtyRaw = loteMap?['cantidad_semilla_planificada'];
+    final plannedSeedQty = plannedSeedQtyRaw == null
+        ? null
+        : formatQuantity(_asDouble(plannedSeedQtyRaw) ?? 0);
     final responsableId =
         _asInt(row['usuarioid']) ??
         (row['usuario'] is Map<String, dynamic>
@@ -243,6 +267,15 @@ class ActividadEditableData {
       id: id,
       loteId: loteId,
       loteName: _asText(loteMap?['nombre']),
+      tipoNombre: _asText(tipoMap?['nombre']),
+      plannedSeedInsumoId: plannedSeedInsumoId,
+      plannedSeedAlmacenId: _asInt(seedMap?['almacenid']),
+      plannedSeedName: _asText(seedMap?['nombre']),
+      plannedSeedUnit: _asText(seedMap?['unidad']),
+      plannedSeedQuantity:
+          plannedSeedQtyRaw == null || (_asDouble(plannedSeedQtyRaw) ?? 0) <= 0
+          ? null
+          : plannedSeedQty,
       description: _asText(row['descripcion']) ?? 'Actividad #$id',
       responsableId: responsableId,
       ejecutorId: ejecutorId,
@@ -254,6 +287,9 @@ class ActividadEditableData {
       evidenceStatus: evidenceStatus,
       hasEvidence: hasEvidence,
       consumos: ActividadConsumoRecord.listFromJson(row['consumos']),
+      plannedInsumos: ActividadConsumoRecord.listFromJson(
+        row['insumos_planificados'],
+      ),
       isCompleted: row['fechafin'] != null,
     );
   }
@@ -261,6 +297,12 @@ class ActividadEditableData {
   final int id;
   final int loteId;
   final String? loteName;
+  final String? tipoNombre;
+  final int? plannedSeedInsumoId;
+  final int? plannedSeedAlmacenId;
+  final String? plannedSeedName;
+  final String? plannedSeedUnit;
+  final String? plannedSeedQuantity;
   final String description;
   final int? responsableId;
   final int? ejecutorId;
@@ -272,7 +314,33 @@ class ActividadEditableData {
   final String? evidenceStatus;
   final bool hasEvidence;
   final List<ActividadConsumoRecord> consumos;
+  final List<ActividadConsumoRecord> plannedInsumos;
   final bool isCompleted;
+
+  bool get isSiembra => (tipoNombre ?? '').toLowerCase().contains('siembra');
+  bool get isRiego {
+    final n = (tipoNombre ?? '').toLowerCase();
+    return n.contains('riego') || n.contains('regad');
+  }
+
+  bool get isLabranza {
+    final n = (tipoNombre ?? '').toLowerCase();
+    return n.contains('labranza') || n.contains('prepar');
+  }
+
+  bool get requiresInsumos {
+    final n = (tipoNombre ?? '').toLowerCase();
+    return n.contains('siembra') ||
+        n.contains('fertiliz') ||
+        n.contains('plaga') ||
+        n.contains('fumig') ||
+        n.contains('fitosanit');
+  }
+
+  bool get hidesInsumos => isRiego || isLabranza;
+  bool get hasLockedSeed => isSiembra && plannedSeedInsumoId != null;
+  bool get hasPlannedInsumos => !isCompleted && plannedInsumos.isNotEmpty;
+  bool get hasLockedInsumos => hasLockedSeed || hasPlannedInsumos;
 
   bool get isEvidenceAvailable =>
       evidenceStatus == 'disponible' ||

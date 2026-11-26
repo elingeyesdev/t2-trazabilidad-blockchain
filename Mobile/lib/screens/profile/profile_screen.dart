@@ -6,6 +6,7 @@ import '../../controllers/auth_controller.dart';
 import '../../models/auth_user.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
+import '../../theme/app_glyphs.dart';
 import '../../widgets/app_loading.dart';
 import '../../widgets/field_kit.dart';
 import 'profile_edit_form.dart';
@@ -105,46 +106,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _profile(BuildContext context, AuthUser user) {
-    final theme = Theme.of(context);
+    final theme = Theme.of(context).textTheme;
     final roleText = user.roles.isEmpty
         ? 'Sin roles asignados'
         : user.roles.map(_roleLabel).join(' · ');
-    final personalFields = [
-      (
-        icon: Icons.alternate_email_rounded,
-        label: 'Nombre de usuario',
-        value: user.username == null ? null : '@${user.username}',
-      ),
-      (
-        icon: Icons.mail_outline_rounded,
-        label: 'Correo electrónico',
-        value: user.email,
-      ),
-      (icon: Icons.phone_outlined, label: 'Teléfono', value: user.phone),
-      (
-        icon: Icons.badge_outlined,
-        label: 'CI/NIT',
-        value: user.identityDocument,
-      ),
-      (icon: Icons.shield_outlined, label: 'Roles', value: roleText),
+    final fields = [
+      ('Correo electrónico', user.email),
+      ('Teléfono', user.phone),
+      ('Nombre de usuario', user.username == null ? null : '@${user.username}'),
+      ('CI/NIT', user.identityDocument),
     ];
-    final activityFields = [
-      (
-        icon: Icons.calendar_today_outlined,
-        label: 'Miembro desde',
-        value: _date(user.registeredAt),
-      ),
-      (
-        icon: Icons.update_rounded,
-        label: 'Última actualización',
-        value: _date(user.updatedAt, withTime: true),
-      ),
-      (
-        icon: Icons.login_rounded,
-        label: 'Último acceso',
-        value: _date(user.lastLoginAt, withTime: true),
-      ),
-    ];
+    final since = _date(user.registeredAt);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
@@ -155,9 +127,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _idCard(theme, user),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _ProfileAvatar(url: user.avatarUrl, name: user.fullName),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              user.fullName,
+                              style: theme.headlineSmall,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            roleText,
+                            style: theme.bodyLarge?.copyWith(
+                              color: AppTheme.fieldDeep,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (since != null)
+                            Text(
+                              'En AgroFusion desde $since',
+                              style: theme.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 if (user.canUpdateUsername || user.canUpdatePhoto) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
                   FilledButton.icon(
                     onPressed: () {
                       widget.controller.clearError();
@@ -181,12 +186,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 28),
                 const SectionTitle('Tus datos'),
                 const SizedBox(height: 14),
-                _infoCard(context, personalFields),
+                _dataCard(context, fields),
                 const SizedBox(height: 28),
-                const SectionTitle('Tu actividad', color: AppTheme.sprout),
-                const SizedBox(height: 14),
-                _infoCard(context, activityFields),
-                const SizedBox(height: 24),
                 OutlinedButton.icon(
                   onPressed: widget.controller.isSubmitting
                       ? null
@@ -195,7 +196,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     foregroundColor: AppTheme.clay,
                     side: const BorderSide(color: AppTheme.clay, width: 1),
                   ),
-                  icon: const Icon(Icons.logout_rounded),
+                  icon: const Icon(AppIcons.signOut, size: 20),
                   label: const Text('Cerrar sesión'),
                 ),
               ],
@@ -206,119 +207,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _idCard(ThemeData theme, AuthUser user) => Container(
-    padding: const EdgeInsets.all(22),
-    decoration: BoxDecoration(
-      color: AppTheme.sprout,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: AppTheme.border, width: 1),
-      boxShadow: AppTheme.stamp(5),
-    ),
-    child: Column(
-      children: [
-        _ProfileAvatar(url: user.avatarUrl),
-        const SizedBox(height: 16),
-        Semantics(
-          header: true,
-          child: Text(
-            user.fullName,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppTheme.border, width: 1),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.verified_user_rounded,
-                size: 18,
-                color: AppTheme.field,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  'Cuenta activa',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: AppTheme.fieldDeep,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _infoCard(
-    BuildContext context,
-    List<({IconData icon, String label, String? value})> fields,
-  ) {
+  /// Datos de contacto en un solo bloque: nombre del dato arriba, valor abajo.
+  Widget _dataCard(BuildContext context, List<(String, String?)> fields) {
     final theme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radius),
-        border: Border.all(color: AppTheme.border, width: 1),
+        border: Border.all(color: AppTheme.border),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < fields.length; i++) ...[
+          for (final (i, (label, value)) in fields.indexed) ...[
             if (i > 0) const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppTheme.paper,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.line, width: 1),
+              child: MergeSemantics(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: theme.bodySmall),
+                    const SizedBox(height: 2),
+                    SelectableText(
+                      value ?? 'Sin registrar',
+                      style: theme.titleMedium?.copyWith(
+                        color: value == null ? AppTheme.inkSoft : AppTheme.ink,
+                        fontWeight: value == null
+                            ? FontWeight.w400
+                            : FontWeight.w700,
+                        fontStyle: value == null ? FontStyle.italic : null,
+                      ),
                     ),
-                    child: Icon(
-                      fields[i].icon,
-                      size: 22,
-                      color: AppTheme.inkSoft,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(fields[i].label, style: theme.bodyMedium),
-                        const SizedBox(height: 2),
-                        SelectableText(
-                          fields[i].value ?? 'Sin registrar',
-                          style: theme.titleMedium?.copyWith(
-                            color: fields[i].value == null
-                                ? AppTheme.inkSoft
-                                : AppTheme.ink,
-                            fontWeight: fields[i].value == null
-                                ? FontWeight.w500
-                                : FontWeight.w700,
-                            fontStyle: fields[i].value == null
-                                ? FontStyle.italic
-                                : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -351,13 +274,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar({required this.url});
+  const _ProfileAvatar({required this.url, required this.name});
 
   final String? url;
+  final String name;
+
+  String get _initials {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    return parts.take(2).map((p) => p[0].toUpperCase()).join();
+  }
 
   Widget _fallback(BuildContext context) => ColoredBox(
-    color: AppTheme.maizeSoft,
-    child: const Icon(Icons.person_outline, size: 52, color: AppTheme.ink),
+    color: AppTheme.fieldDeep,
+    child: Center(
+      child: Text(
+        _initials,
+        style: AppTheme.display(32, 1, 800, 0).copyWith(color: Colors.white),
+      ),
+    ),
   );
 
   @override
@@ -398,13 +332,9 @@ class _ProfileAvatar extends StatelessWidget {
       label: 'Foto de perfil',
       image: true,
       child: Container(
-        width: 108,
-        height: 108,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: AppTheme.border, width: 1),
-          boxShadow: AppTheme.stamp(4),
-        ),
+        width: 84,
+        height: 84,
+        decoration: const BoxDecoration(shape: BoxShape.circle),
         clipBehavior: Clip.antiAlias,
         child: ClipOval(child: image),
       ),

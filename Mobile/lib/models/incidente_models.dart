@@ -7,6 +7,10 @@ abstract final class IncidentePermissions {
   static bool canCreate(AuthUser user) =>
       !user.roles.contains('admin') &&
       user.permissions.contains('incidentes.create');
+
+  static bool canResolve(AuthUser user) =>
+      !user.roles.contains('admin') &&
+      user.permissions.contains('incidentes.resolve');
 }
 
 class IncidenteFormArgs {
@@ -35,6 +39,7 @@ class IncidenteRecord {
     this.notaResolucion,
     this.fechaResolucion,
     this.resueltoPorNombre,
+    this.puedeResolver,
   });
 
   factory IncidenteRecord.fromJson(Object? json) {
@@ -76,6 +81,9 @@ class IncidenteRecord {
       notaResolucion: _asText(root['nota_resolucion']),
       fechaResolucion: _asText(root['fecha_resolucion']),
       resueltoPorNombre: _asText(resueltoPor?['nombre']),
+      puedeResolver: root['puede_resolver'] is bool
+          ? root['puede_resolver'] as bool
+          : null,
     );
   }
 
@@ -91,6 +99,7 @@ class IncidenteRecord {
   final String? notaResolucion;
   final String? fechaResolucion;
   final String? resueltoPorNombre;
+  final bool? puedeResolver;
 
   bool get isResolved => estado == 'resuelto';
 }

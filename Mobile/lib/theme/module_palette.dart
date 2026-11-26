@@ -13,82 +13,63 @@ class ModuleLook {
   final String hint;
 }
 
+// Todos los módulos comparten el verde de la marca: el color se reserva para
+// el estado de cada registro (pendiente, completado, cancelado...).
+const _tone = Color(0xFFDCEBD3);
+const _ink = Color(0xFF23552F);
+
 extension ModulePalette on AppModule {
   ModuleLook get look => switch (this) {
-    AppModule.lotes => const ModuleLook(
-      Color(0xFFDCEBD3),
-      Color(0xFF23552F),
-      'Cultivos y ubicación',
-    ),
-    AppModule.actividades => const ModuleLook(
-      Color(0xFFFBE8B8),
-      Color(0xFF654600),
-      'Tareas y fechas',
-    ),
+    AppModule.lotes => const ModuleLook(_tone, _ink, 'Cultivos y ubicación'),
+    AppModule.actividades => const ModuleLook(_tone, _ink, 'Tareas y fechas'),
     AppModule.producciones => const ModuleLook(
-      Color(0xFFF7DCC6),
-      Color(0xFF853914),
+      _tone,
+      _ink,
       'Cantidades y fechas',
     ),
     AppModule.tareasPlanta => const ModuleLook(
-      Color(0xFFDCEBD3),
-      Color(0xFF23552F),
+      _tone,
+      _ink,
       'Etapas y máquinas',
     ),
     AppModule.recepcionesPlanta => const ModuleLook(
-      Color(0xFFDCEBD3),
-      Color(0xFF23552F),
+      _tone,
+      _ink,
       'Pesaje y recepción',
     ),
     AppModule.almacenes => const ModuleLook(
-      Color(0xFFE9DDCC),
-      Color(0xFF5A452D),
+      _tone,
+      _ink,
       'Lugares de almacenamiento',
     ),
     AppModule.insumos => const ModuleLook(
-      Color(0xFFD2E9E3),
-      Color(0xFF1B5A50),
+      _tone,
+      _ink,
       'Materiales y existencias',
     ),
     AppModule.movimientos => const ModuleLook(
-      Color(0xFFD7E6F0),
-      Color(0xFF214F6E),
+      _tone,
+      _ink,
       'Entradas y salidas',
     ),
     AppModule.certificaciones => const ModuleLook(
-      Color(0xFFE6DDF1),
-      Color(0xFF4D3677),
+      _tone,
+      _ink,
       'Certificados de lotes',
     ),
-    AppModule.pedidos => const ModuleLook(
-      Color(0xFFF4DADA),
-      Color(0xFF822F2E),
-      'Solicitudes y estado',
-    ),
+    AppModule.pedidos => const ModuleLook(_tone, _ink, 'Solicitudes y estado'),
     AppModule.incidentes => const ModuleLook(
-      Color(0xFFF8D8CC),
-      Color(0xFF962E12),
+      _tone,
+      _ink,
       'Problemas reportados',
     ),
-    AppModule.rutas => const ModuleLook(
-      Color(0xFFE0E7D2),
-      Color(0xFF42552A),
-      'Recorridos y salidas',
-    ),
+    AppModule.rutas => const ModuleLook(_tone, _ink, 'Recorridos y salidas'),
     AppModule.asignaciones => const ModuleLook(
-      Color(0xFFDFE2F3),
-      Color(0xFF333E7A),
+      _tone,
+      _ink,
       'Envíos y transporte',
     ),
-    AppModule.documentos => const ModuleLook(
-      Color(0xFFECE6D7),
-      Color(0xFF4A4535),
-      'Papeles de entrega',
-    ),
-    AppModule.usuarios => const ModuleLook(
-      Color(0xFFE4E0EA),
-      Color(0xFF3D3949),
-      'Cuentas del equipo',
-    ),
+    AppModule.documentos => const ModuleLook(_tone, _ink, 'Papeles de entrega'),
+    AppModule.usuarios => const ModuleLook(_tone, _ink, 'Cuentas del equipo'),
   };
 }

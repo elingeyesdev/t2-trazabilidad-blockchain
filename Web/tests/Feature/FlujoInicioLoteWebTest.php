@@ -366,10 +366,14 @@ class FlujoInicioLoteWebTest extends TestCase
         $this->get(route('actividades.show', $a))->assertOk()->assertSee('Reasignar actividad');
         $this->get(route('actividades.edit', $a))->assertOk();
         $datos = $a->only(['loteid', 'tipoactividadid', 'descripcion', 'prioridadid']) + ['usuarioid' => $this->ajeno->usuarioid];
+        $this->patch(route('actividades.reasignar-responsable', $a), ['usuarioid' => $this->ajeno->usuarioid])->assertSessionHasErrors('usuarioid');
         $this->put(route('actividades.update', $a), $datos)->assertSessionHasErrors('usuarioid');
         $this->put(route('actividades.update', $a), array_replace($datos, ['usuarioid' => $this->suplente->usuarioid]))->assertSessionHasNoErrors();
         $this->assertSame($this->suplente->usuarioid, $a->fresh()->usuarioid);
         $this->assertCount(1, json_decode($a->fresh()->detalle_json, true)['historial_asignaciones']);
+        $this->patch(route('actividades.reasignar-responsable', $a), ['usuarioid' => $this->agricultor->usuarioid])->assertSessionHasNoErrors();
+        $this->patch(route('actividades.reasignar-responsable', $a), ['usuarioid' => $this->suplente->usuarioid])->assertSessionHasNoErrors();
+        $this->assertCount(3, json_decode($a->fresh()->detalle_json, true)['historial_asignaciones']);
         $this->assertFalse(ActividadPermisos::puedeMarcarCompletada($this->agricultor, $a->fresh()));
         $this->assertTrue(ActividadPermisos::puedeMarcarCompletada($this->suplente, $a->fresh()));
         $this->actingAs($this->agricultor)->put(route('actividades.update', $a), $datos)->assertForbidden();
@@ -378,6 +382,7 @@ class FlujoInicioLoteWebTest extends TestCase
         $antes = $a->fresh()->getAttributes();
         $this->actingAs($this->jefe)->get(route('actividades.edit', $a))->assertForbidden();
         $this->put(route('actividades.update', $a), $datos)->assertSessionHas('error');
+        $this->patch(route('actividades.reasignar-responsable', $a), ['usuarioid' => $this->agricultor->usuarioid])->assertSessionHas('error');
         $this->assertSame($antes, $a->fresh()->getAttributes());
     }
 
@@ -404,6 +409,8 @@ class FlujoInicioLoteWebTest extends TestCase
         $this->assertNull($preparacion->fresh()->fechafin);
         $this->assertSame($this->jefe->usuarioid, $preparacion->fresh()->cancelada_por_usuarioid);
         $cancelacion = $preparacion->fresh()->getAttributes();
+        $this->patch(route('actividades.reasignar-responsable', $preparacion), ['usuarioid' => $this->suplente->usuarioid])->assertSessionHas('error');
+        $this->assertSame($cancelacion, $preparacion->fresh()->getAttributes());
         $this->post(route('actividades.cancelar-preparacion', $preparacion), ['motivo' => 'Preparación pendiente incompatible: la siembra ya fue realizada.'])->assertSessionHasNoErrors();
         $this->assertSame($cancelacion, $preparacion->fresh()->getAttributes());
         $this->patchJson('/api/actividades/'.$preparacion->actividadid, ['descripcion' => 'No debe cambiar'])->assertConflict();

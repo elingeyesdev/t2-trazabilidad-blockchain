@@ -7,13 +7,13 @@ import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/planta_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
-import '../../widgets/field_kit.dart';
-import '../../widgets/record_status_badge.dart';
+import '../../widgets/record_card.dart';
 import 'module_access_denied.dart';
 
 class PlantaTareasScreen extends StatefulWidget {
@@ -132,7 +132,10 @@ class _PlantaTareasScreenState extends State<PlantaTareasScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando tareas asignadas...')
+            ? const AppLoading(
+                message: 'Cargando tareas asignadas...',
+                shape: LoadingShape.list,
+              )
             : _error != null
             ? AppErrorState(
                 message: _error!,
@@ -231,68 +234,21 @@ class _PlantaTareasScreenState extends State<PlantaTareasScreen> {
   }
 
   Widget _taskCard(BuildContext context, TareaPlantaSummary tarea) {
-    final theme = Theme.of(context).textTheme;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: Padding(
           padding: const EdgeInsets.only(bottom: 14),
-          child: PressableCard(
+          child: RecordCard(
             key: ValueKey('planta.tarea.${tarea.id}'),
+            module: AppModule.tareasPlanta,
+            eyebrow: 'Etapa ${tarea.orden}',
+            title: tarea.procesoNombre,
+            status: tarea.estadoLabel,
+            facts: [('', tarea.loteLabel), ('Máquina', tarea.maquinaLabel)],
             onTap: () => Navigator.of(
               context,
-            ).pushNamed('${AppModule.tareasPlanta.route}/${tarea.id}'),
-            color: AppTheme.surface,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.sprout,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppTheme.fieldDeep, width: 1),
-                      ),
-                      child: Text(
-                        'Etapa ${tarea.orden}',
-                        style: const TextStyle(
-                          color: AppTheme.fieldDeep,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: RecordStatusBadge(status: tarea.estadoLabel),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      size: 26,
-                      color: AppTheme.ink,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(tarea.procesoNombre, style: theme.titleLarge),
-                const SizedBox(height: 6),
-                Text(
-                  tarea.loteLabel,
-                  style: theme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text('Máquina: ${tarea.maquinaLabel}', style: theme.bodyMedium),
-              ],
-            ),
+            ).pushNamed(AppRoutes.detalle(AppModule.tareasPlanta, tarea.id)),
           ),
         ),
       ),

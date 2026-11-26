@@ -313,4 +313,144 @@ void main() {
       expect(find.text('Acceso no autorizado'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'El jefe agrícola puede cambiar el responsable pendiente y cerrar si queda asignada a él',
+    (tester) async {
+      var assignedUserId = 8;
+      var assignedUserName = 'Lucía';
+      var assignedUserLast = 'Quispe';
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse({
+            ...workerProfile,
+            'usuarioid': 1,
+            'nombre': 'Carlos',
+            'apellido': 'Jefe',
+            'roles': [
+              {'id': 2, 'name': 'jefe_agricultor'},
+            ],
+            'permissions': ['lotes.view', 'lotes.update'],
+          });
+        }
+        if (request.url.path == '/api/actividades/responsables' &&
+            request.method == 'GET') {
+          return jsonResponse({
+            'data': [
+              {
+                'usuarioid': 8,
+                'nombre': 'Lucía',
+                'apellido': 'Quispe',
+                'activo': true,
+                'roles': [
+                  {'id': 3, 'name': 'agricultor'},
+                ],
+              },
+            ],
+          });
+        }
+        Map<String, Object?> currentActivity() => {
+          ...pendingActivity,
+          'usuarioid': assignedUserId,
+          'usuario': {
+            'usuarioid': assignedUserId,
+            'nombre': assignedUserName,
+            'apellido': assignedUserLast,
+          },
+        };
+        if (request.url.path == '/api/actividades' && request.method == 'GET') {
+          return jsonResponse([currentActivity()]);
+        }
+        if (request.url.path == '/api/actividades/11' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': currentActivity()});
+        }
+        if (request.url.path == '/api/actividades/11' &&
+            request.method == 'PATCH') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          assignedUserId = body['usuarioid'] as int;
+          assignedUserName = 'Carlos';
+          assignedUserLast = 'Jefe';
+          return jsonResponse({'data': currentActivity()});
+        }
+        return jsonResponse({}, 404);
+      });
+
+      await openActivityDetail(tester);
+      expect(find.text('Completar y cerrar actividad'), findsNothing);
+      expect(find.text('Cambiar responsable'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('actividad.cambiar_responsable')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('actividad.responsable_select')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Carlos Jefe · Yo (Jefe agrícola)').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('actividad.guardar_responsable')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirmar cambio'));
+      await tester.pumpAndSettle();
+
+      expect(assignedUserId, 1);
+      expect(find.text('Completar y cerrar actividad'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Conserva la fotografía tomada aunque Android reanude el ciclo de vida al volver de la cámara',
+    (tester) async {
+      final cameraCompleter = Completer<XFile?>();
+
+      await startApp(tester, (request) async {
+        if (request.url.path == '/api/me') {
+          return jsonResponse(workerProfile);
+        }
+        if (request.url.path == '/api/actividades' && request.method == 'GET') {
+          return jsonResponse([pendingActivity]);
+        }
+        if (request.url.path == '/api/actividades/11' &&
+            request.method == 'GET') {
+          return jsonResponse({'data': pendingActivity});
+        }
+        return jsonResponse({}, 404);
+      }, capturePhoto: () => cameraCompleter.future);
+
+      await openActivityDetail(tester);
+      await tester.tap(find.text('Completar y cerrar actividad'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Tomar foto'));
+      await tester.tap(find.text('Tomar foto'));
+      await tester.pump();
+
+      // Simula el salto a la app de cámara nativa y el retorno a Flutter.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      cameraCompleter.complete(photoFile('captura_android.jpg'));
+      await tester.pumpAndSettle();
+
+      // Incluso si llega otro resumed justo después de resolver la cámara.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tomar otra foto'), findsOneWidget);
+      expect(find.text('captura_android.jpg'), findsOneWidget);
+    },
+  );
 }

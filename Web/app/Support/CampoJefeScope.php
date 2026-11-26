@@ -83,7 +83,10 @@ final class CampoJefeScope
                 $q->orWhereIn('almacenid', $almacenIds);
             }
             if ($idsEquipo !== []) {
-                $q->orWhereHas('pedido', fn (Builder $p) => $p->whereIn('aceptado_por_usuarioid', $idsEquipo));
+                $q->orWhereHas('pedido', function (Builder $p) use ($idsEquipo) {
+                    $p->whereIn('aceptado_por_usuarioid', $idsEquipo)
+                        ->orWhereIn('creado_por_usuarioid', $idsEquipo);
+                });
             }
             if ($almacenIds !== []) {
                 $q->orWhereHas('pedido', fn (Builder $p) => self::aplicarFiltroPedidoOrigenAlmacenes($p, $almacenIds));
@@ -119,8 +122,10 @@ final class CampoJefeScope
         }
 
         $idsEquipo = self::idsEquipo($user);
-        if ($pedido->aceptado_por_usuarioid !== null
-            && in_array((int) $pedido->aceptado_por_usuarioid, $idsEquipo, true)) {
+        if (($pedido->aceptado_por_usuarioid !== null
+                && in_array((int) $pedido->aceptado_por_usuarioid, $idsEquipo, true))
+            || ($pedido->creado_por_usuarioid !== null
+                && in_array((int) $pedido->creado_por_usuarioid, $idsEquipo, true))) {
             return true;
         }
 

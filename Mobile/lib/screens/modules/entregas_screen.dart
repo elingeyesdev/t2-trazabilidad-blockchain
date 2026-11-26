@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -12,8 +14,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
-import '../../widgets/field_kit.dart';
-import '../../widgets/record_status_badge.dart';
+import '../../widgets/record_card.dart';
 import 'module_access_denied.dart';
 
 enum _EntregasTab { rutas, agricola, distribucion }
@@ -156,7 +157,7 @@ class _EntregasScreenState extends State<EntregasScreen> {
             IconButton(
               key: const ValueKey('entregas.qr_btn'),
               tooltip: 'Leer código QR',
-              onPressed: () => Navigator.of(context).pushNamed('/modules/qr'),
+              onPressed: () => Navigator.of(context).pushNamed(AppRoutes.qr),
               icon: const Icon(Icons.qr_code_scanner_rounded),
             ),
           IconButton(
@@ -208,7 +209,10 @@ class _EntregasScreenState extends State<EntregasScreen> {
               ),
             Expanded(
               child: _loading
-                  ? const AppLoading(message: 'Cargando envíos...')
+                  ? const AppLoading(
+                      message: 'Cargando envíos...',
+                      shape: LoadingShape.list,
+                    )
                   : _error != null
                   ? AppErrorState(message: _error!, onRetry: _load)
                   : _tab == _EntregasTab.rutas
@@ -249,50 +253,25 @@ class _EntregasScreenState extends State<EntregasScreen> {
   }
 
   Widget _rutaCard(BuildContext context, RutaEntregaRecord ruta) {
-    final theme = Theme.of(context).textTheme;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: Padding(
           padding: const EdgeInsets.only(bottom: 14),
-          child: PressableCard(
+          child: RecordCard(
             key: ValueKey('entregas.ruta.${ruta.id}'),
-            onTap: () => Navigator.of(
-              context,
-            ).pushNamed('/modules/entregas/ruta/${ruta.id}'),
-            color: AppTheme.surface,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: RecordStatusBadge(status: ruta.estadoLabel),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      size: 26,
-                      color: AppTheme.ink,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(ruta.nombre, style: theme.titleLarge),
-                const SizedBox(height: 6),
-                Text(
-                  '${ruta.paradasCount} ${ruta.paradasCount == 1 ? 'parada' : 'paradas'}',
-                  style: theme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (ruta.fechaSalida != null) ...[
-                  const SizedBox(height: 4),
-                  Text('Salida: ${ruta.fechaSalida}', style: theme.bodyMedium),
-                ],
-              ],
-            ),
+            module: AppModule.rutas,
+            title: ruta.nombre,
+            status: ruta.estadoLabel,
+            facts: [
+              (
+                '',
+                '${ruta.paradasCount} ${ruta.paradasCount == 1 ? 'parada' : 'paradas'}',
+              ),
+              if (ruta.fechaSalida != null) ('Salida', '${ruta.fechaSalida}'),
+            ],
+            onTap: () =>
+                Navigator.of(context).pushNamed(AppRoutes.entregaRuta(ruta.id)),
           ),
         ),
       ),
@@ -315,7 +294,6 @@ class _EntregasScreenState extends State<EntregasScreen> {
       );
     }
 
-    final theme = Theme.of(context).textTheme;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       itemCount: items.length,
@@ -326,42 +304,18 @@ class _EntregasScreenState extends State<EntregasScreen> {
             constraints: const BoxConstraints(maxWidth: 640),
             child: Padding(
               padding: const EdgeInsets.only(bottom: 14),
-              child: PressableCard(
+              child: RecordCard(
                 key: ValueKey('entregas.envio.${envio.tipo.value}.${envio.id}'),
+                module: AppModule.asignaciones,
+                title: envio.referencia,
+                status: envio.estadoLabel,
+                facts: [
+                  if (envio.destinos.isNotEmpty)
+                    ('Destino', envio.destinos.map((d) => d.label).join(', ')),
+                ],
                 onTap: () => Navigator.of(
                   context,
-                ).pushNamed('/modules/envios/${envio.tipo.value}/${envio.id}'),
-                color: AppTheme.surface,
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: RecordStatusBadge(status: envio.estadoLabel),
-                        ),
-                        const Spacer(),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          size: 26,
-                          color: AppTheme.ink,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(envio.referencia, style: theme.titleLarge),
-                    if (envio.destinos.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'Destino: ${envio.destinos.map((d) => d.label).join(', ')}',
-                        style: theme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                ).pushNamed(AppRoutes.envio(envio.tipo, envio.id)),
               ),
             ),
           ),

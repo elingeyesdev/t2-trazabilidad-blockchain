@@ -362,7 +362,12 @@
             tituloModal.innerHTML = '<i class="ti ti-clipboard-check me-2"></i>' + escHtml(titulo || 'Completar actividad');
         }
 
-        if (window.jQuery) window.jQuery('#modalCompletarEvidencia').modal('show');
+        var modalEl = document.getElementById('modalCompletarEvidencia');
+        if (window.bootstrap && modalEl) {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        } else if (window.jQuery) {
+            window.jQuery('#modalCompletarEvidencia').modal('show');
+        }
 
         if (resumenUrl) {
             if (cargandoEl) cargandoEl.style.display = '';

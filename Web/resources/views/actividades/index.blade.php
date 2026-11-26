@@ -20,7 +20,7 @@
         ? round(($stats['completadas'] / $stats['total']) * 100)
         : 0;
     $urlTrazabilidadActividad = fn ($act) => $act->lote
-        ? route('actividades.show', $act)
+        ? route('lotes.trazabilidad', $act->lote)
         : null;
     $loteFiltroId = $filtros['loteid'] ?? '';
     $loteFiltroNombre = $loteFiltroNombre ?? '';
@@ -240,11 +240,7 @@
                         @endphp
                         <tr>
                             <td>
-                                @if($trzUrl)
-                                    <a href="{{ $trzUrl }}" class="act-tipo">{{ $act->tipoActividad->nombre ?? '—' }}</a>
-                                @else
-                                    <span class="act-tipo">{{ $act->tipoActividad->nombre ?? '—' }}</span>
-                                @endif
+                                <a href="{{ route('actividades.show', $act) }}" class="act-tipo">{{ $act->tipoActividad->nombre ?? '—' }}</a>
                                 @if($act->prioridad)
                                 <span class="badge badge-{{ $prioridadBadge($act->prioridad->nombre) }} badge-sm ml-1">
                                     {{ $act->prioridad->nombre }}
@@ -287,16 +283,17 @@
                                     {{ $act->cancelada_en ? 'Cancelada' : ($esCompletada ? 'Completada' : 'Pendiente') }}
                                 </span>
                             </td>
-                            <td class="text-center">
+                            <td class="text-center text-nowrap">
                                 @if(\App\Support\ActividadPermisos::puedeReasignar(auth()->user(), $act))
                                 <a href="{{ route('actividades.edit', $act) }}" class="btn btn-outline-secondary btn-sm">Reasignar</a>
                                 @endif
+                                <a href="{{ route('actividades.show', $act) }}" class="btn btn-default btn-sm btn-actions" title="Ver detalle, cambiar responsable o cerrar">
+                                    <i class="fas fa-clipboard-check text-success"></i>
+                                </a>
                                 @if($trzUrl)
                                 <a href="{{ $trzUrl }}" class="btn btn-default btn-sm btn-actions" title="Ver en trazabilidad del lote">
                                     <i class="fas fa-eye text-info"></i>
                                 </a>
-                                @else
-                                <span class="text-muted">—</span>
                                 @endif
                             </td>
                         </tr>
@@ -367,11 +364,16 @@
                         <p class="act-desc mb-0 mt-2">{{ Str::limit($act->descripcion, 100) }}</p>
                         @endif
                     </div>
-                    @if($trzUrl)
-                    <a href="{{ $trzUrl }}" class="btn btn-default btn-sm btn-actions flex-shrink-0 align-self-center" title="Ver en trazabilidad">
-                        <i class="fas fa-eye text-info"></i>
-                    </a>
-                    @endif
+                    <div class="d-flex flex-shrink-0 align-self-center" style="gap: 4px;">
+                        <a href="{{ route('actividades.show', $act) }}" class="btn btn-default btn-sm btn-actions" title="Ver detalle, cambiar responsable o cerrar">
+                            <i class="fas fa-clipboard-check text-success"></i>
+                        </a>
+                        @if($trzUrl)
+                        <a href="{{ $trzUrl }}" class="btn btn-default btn-sm btn-actions" title="Ver en trazabilidad">
+                            <i class="fas fa-eye text-info"></i>
+                        </a>
+                        @endif
+                    </div>
                 </div>
             @empty
                 <div class="text-center text-muted py-5">No hay actividades registradas.</div>

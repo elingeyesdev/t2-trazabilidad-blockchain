@@ -5,6 +5,7 @@ import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/module_page.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/module_palette.dart';
@@ -65,7 +66,7 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
 
   void _backToLote() {
     final navigator = Navigator.of(context);
-    final detailRoute = '${AppModule.lotes.route}/${widget.loteId}';
+    final detailRoute = AppRoutes.detalle(AppModule.lotes, widget.loteId);
     var found = false;
     navigator.popUntil((route) {
       found = route.settings.name == detailRoute;
@@ -105,7 +106,10 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
         ),
         body: SafeArea(
           child: loading
-              ? const AppLoading(message: 'Cargando historial...')
+              ? const AppLoading(
+                  message: 'Cargando historial...',
+                  shape: LoadingShape.list,
+                )
               : error is ApiException && error.statusCode == 404
               ? const AppEmptyState(
                   icon: Icons.search_off_rounded,
@@ -232,7 +236,7 @@ class _LoteActivityHistoryScreenState extends State<LoteActivityHistoryScreen> {
                 child: ActivityHistoryCard(
                   activity: activity,
                   onTap: () => Navigator.of(context).pushNamed(
-                    '${AppModule.actividades.route}/${activity.id}',
+                    AppRoutes.detalle(AppModule.actividades, activity.id),
                     arguments: ActivityDetailArgs(
                       returnToLoteId: widget.loteId,
                       returnToLoteName: widget.loteName,

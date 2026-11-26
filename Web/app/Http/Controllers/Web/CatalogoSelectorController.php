@@ -32,9 +32,12 @@ use App\Services\VehiculoDimensionesService;
 use InvalidArgumentException;
 use App\Support\ActividadDetalleCatalogo;
 use App\Support\BusquedaTexto;
+use App\Support\CampoAccess;
 use App\Support\CultivoSiembraCatalogo;
 use App\Support\InsumoCatalogo;
+use App\Support\MayoristaAccess;
 use App\Support\PedidoCatalogo;
+use App\Support\PlantaAccess;
 use App\Support\ProcesoPlantaCatalogo;
 use App\Support\PuntoVentaAccess;
 use App\Services\VehiculoFlotaEstadoService;
@@ -1024,8 +1027,27 @@ class CatalogoSelectorController extends Controller
             $query->where('capacidad', '>', 0);
         }
 
+        $user = $request->user();
         if ($request->filled('ambito') && AlmacenAmbito::esValido($request->string('ambito')->toString())) {
-            $query = AlmacenAmbito::scope($query, $request->string('ambito')->toString());
+            $ambito = $request->string('ambito')->toString();
+            if ($ambito === AlmacenAmbito::AGRICOLA
+                && $user
+                && ! UsuarioRol::esAdminGlobal($user)
+                && (UsuarioRol::esJefeAgricultor($user) || UsuarioRol::debeAcotarPorAsignacion($user))) {
+                $query = CampoAccess::scopeAlmacenesAgricolas($query, $user);
+            } elseif ($ambito === AlmacenAmbito::PLANTA
+                && $user
+                && ! UsuarioRol::esAdminGlobal($user)
+                && UsuarioRol::esPlantaOperativo($user)) {
+                $query = PlantaAccess::scopeAlmacenesPlanta($query, $user);
+            } elseif ($ambito === AlmacenAmbito::MAYORISTA
+                && $user
+                && ! UsuarioRol::esAdminGlobal($user)
+                && UsuarioRol::esMayorista($user)) {
+                $query = MayoristaAccess::scopeAlmacenesMayorista($query, $user);
+            } else {
+                $query = AlmacenAmbito::scope($query, $ambito);
+            }
         }
 
         $pedidosListosPorAlmacen = collect();
@@ -1169,9 +1191,19 @@ class CatalogoSelectorController extends Controller
 
         $q = mb_strtolower(trim((string) $request->q));
         $almacenId = $request->filled('almacenid') ? (int) $request->almacenid : null;
+        $user = $request->user();
+        $almacenesAutorizados = ($user && UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user))
+            ? CampoAccess::scopeAlmacenesAgricolas(Almacen::query()->where('activo', true), $user)
+                ->pluck('almacenid')
+                ->map(fn ($id) => (int) $id)
+                ->all()
+            : null;
         $items = collect();
 
         foreach (PedidoCatalogo::insumosMaterialSiembraGlobales() as $insumo) {
+            if ($almacenesAutorizados !== null && ! in_array((int) $insumo->almacenid, $almacenesAutorizados, true)) {
+                continue;
+            }
             if ($almacenId && (int) $insumo->almacenid !== $almacenId) {
                 continue;
             }
@@ -1208,6 +1240,9 @@ class CatalogoSelectorController extends Controller
         }
 
         foreach (PedidoCatalogo::cosechasAgricolasDisponibles() as $cosecha) {
+            if ($almacenesAutorizados !== null && ! in_array((int) $cosecha->almacenid, $almacenesAutorizados, true)) {
+                continue;
+            }
             if ($almacenId && (int) $cosecha->almacenid !== $almacenId) {
                 continue;
             }

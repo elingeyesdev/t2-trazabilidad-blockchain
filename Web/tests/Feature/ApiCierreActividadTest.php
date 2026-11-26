@@ -174,4 +174,117 @@ class ApiCierreActividadTest extends TestCase
         try { $copia->decrementarStock('10.000'); $this->fail('No debe permitir stock negativo.'); }
         catch (\Illuminate\Validation\ValidationException $e) { $this->assertSame('9.500000', $this->stock()); }
     }
+
+    public function test_jefe_puede_reasignar_responsable_pendiente_y_cerrar_si_se_la_asigna(): void
+    {
+        // En web el jefe puede reasignar a otro trabajador de su equipo y luego a sí mismo.
+        $this->actingAs($this->jefe, 'web')
+            ->patch(route('actividades.reasignar-responsable', $this->actividad), [
+                'usuarioid' => $this->otro->usuarioid,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $this->assertSame((int) $this->otro->usuarioid, (int) $this->actividad->fresh()->usuarioid);
+
+        // En API el jefe se la reasigna a sí mismo.
+        Sanctum::actingAs($this->jefe);
+        $this->patchJson('/api/actividades/'.$this->actividad->actividadid, [
+            'usuarioid' => $this->jefe->usuarioid,
+        ])->assertOk();
+        $this->assertSame((int) $this->jefe->usuarioid, (int) $this->actividad->fresh()->usuarioid);
+
+        // Al estar asignada al propio jefe, ahora sí puede cerrarla con evidencia.
+        $this->cerrar()->assertOk();
+        $this->assertNotNull($this->actividad->fresh()->fechafin);
+
+        // Una vez cerrada, ya no se puede reasignar el responsable.
+        $this->patchJson('/api/actividades/'.$this->actividad->actividadid, [
+            'usuarioid' => $this->operario->usuarioid,
+        ])->assertConflict();
+    }
+
+    public function test_api_insumos_excluye_legacy_sin_almacen_y_siembra_fija_semilla_del_lote(): void
+    {
+        $unidadId = $this->insumo->unidadmedidaid;
+        $tipoSemilla = TipoInsumo::firstOrCreate(['nombre' => 'Material de Siembra'])->tipoinsumoid;
+
+        $legacy = Insumo::create([
+            'nombre' => 'Semilla Legacy Sin Almacen',
+            'almacenid' => null,
+            'unidadmedidaid' => $unidadId,
+            'tipoinsumoid' => $tipoSemilla,
+            'stock' => '50.000000',
+        ]);
+        $semillaPapa = Insumo::create([
+            'nombre' => 'Semilla de Papa',
+            'almacenid' => $this->almacen->almacenid,
+            'unidadmedidaid' => $unidadId,
+            'tipoinsumoid' => $tipoSemilla,
+            'stock' => '100.000000',
+        ]);
+        $semillaTomate = Insumo::create([
+            'nombre' => 'Semilla de Tomate',
+            'almacenid' => $this->almacen->almacenid,
+            'unidadmedidaid' => $unidadId,
+            'tipoinsumoid' => $tipoSemilla,
+            'stock' => '100.000000',
+        ]);
+
+        Sanctum::actingAs($this->jefe);
+        $idsVisibles = collect($this->getJson('/api/insumos')->assertOk()->json())->pluck('insumoid')->all();
+        $this->assertNotContains($legacy->insumoid, $idsVisibles);
+        $this->assertContains($semillaPapa->insumoid, $idsVisibles);
+
+        $loteSiembra = Lote::create([
+            'usuarioid' => $this->jefe->usuarioid,
+            'nombre' => 'Parcela Siembra Fija',
+            'superficie' => 1,
+            'unidadsuperficieid' => LoteDefaults::unidadHectareaId(),
+            'cultivoid' => Cultivo::firstOrCreate(['nombre' => 'Papa'])->cultivoid,
+            'estadolotetipoid' => EstadoLoteCatalogo::idPorSlug('planificado'),
+            'insumosemillaid' => $semillaPapa->insumoid,
+            'cantidad_semilla_planificada' => '12.500',
+        ]);
+        $siembra = Actividad::create([
+            'loteid' => $loteSiembra->loteid,
+            'usuarioid' => $this->jefe->usuarioid,
+            'descripcion' => 'Siembra Papa',
+            'tipoactividadid' => TipoActividad::firstOrCreate(['nombre' => 'Siembra'])->tipoactividadid,
+            'prioridadid' => Prioridad::firstOrCreate(['nombre' => 'Media'])->prioridadid,
+            'fechainicio' => now(),
+            'orden_secuencia' => 1,
+        ]);
+
+        // El detalle API expone la semilla planificada del lote.
+        $this->getJson('/api/actividades/'.$siembra->actividadid)
+            ->assertOk()
+            ->assertJsonPath('data.lote.insumosemillaid', $semillaPapa->insumoid)
+            ->assertJsonPath('data.lote.insumo_semilla.nombre', 'Semilla de Papa');
+
+        // Intentar cerrar con otra semilla (Tomate) se rechaza.
+        $foto = UploadedFile::fake()->createWithContent('cierre.png', $this->imagen);
+        $this->post('/api/actividades/'.$siembra->actividadid.'/cerrar', [
+            'resultado' => 'Siembra realizada',
+            'evidencia_foto' => $foto,
+            'consumos' => [[
+                'insumoid' => $semillaTomate->insumoid,
+                'almacenid' => $this->almacen->almacenid,
+                'cantidad' => '10',
+            ]],
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('consumos.0.insumoid');
+
+        // Cerrar con la semilla planificada del lote funciona.
+        $foto2 = UploadedFile::fake()->createWithContent('cierre2.png', $this->imagen);
+        $this->post('/api/actividades/'.$siembra->actividadid.'/cerrar', [
+            'resultado' => 'Siembra realizada con semilla de papa',
+            'evidencia_foto' => $foto2,
+            'consumos' => [[
+                'insumoid' => $semillaPapa->insumoid,
+                'almacenid' => $this->almacen->almacenid,
+                'cantidad' => '12.5',
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+    }
 }

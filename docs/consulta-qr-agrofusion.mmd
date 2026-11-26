@@ -1,0 +1,9 @@
+flowchart TD
+    A([Inicio de consulta]) --> B[/U: escanear QR del producto/]
+    B --> C[S: buscar código de trazabilidad]
+    C --> D{¿Existe el código?}
+    D -- No --> E[/S: informar producto no encontrado/]
+    D -- Sí --> F[S: reunir historial disponible del producto]
+    F --> G[/S: mostrar origen, procesos, entregas y rutas disponibles/]
+    E --> H([Fin de consulta])
+    G --> H

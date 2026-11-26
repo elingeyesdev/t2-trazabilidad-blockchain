@@ -7,13 +7,13 @@ import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
 import '../../models/planta_models.dart';
 import '../../navigation/app_module.dart';
+import '../../navigation/app_routes.dart';
 import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading.dart';
-import '../../widgets/field_kit.dart';
-import '../../widgets/record_status_badge.dart';
+import '../../widgets/record_card.dart';
 import 'module_access_denied.dart';
 
 class PlantaRecepcionesScreen extends StatefulWidget {
@@ -133,7 +133,10 @@ class _PlantaRecepcionesScreenState extends State<PlantaRecepcionesScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const AppLoading(message: 'Cargando recepciones...')
+            ? const AppLoading(
+                message: 'Cargando recepciones...',
+                shape: LoadingShape.list,
+              )
             : _error != null
             ? AppErrorState(
                 message: _error!,
@@ -211,59 +214,40 @@ class _PlantaRecepcionesScreenState extends State<PlantaRecepcionesScreen> {
   }
 
   Widget _card(BuildContext context, RecepcionPlantaRecord record) {
-    final theme = Theme.of(context).textTheme;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: Padding(
           padding: const EdgeInsets.only(bottom: 14),
-          child: PressableCard(
+          child: RecordCard(
             key: ValueKey('planta.recepcion.${record.pedidoId}'),
-            onTap: () => Navigator.of(context).pushNamed(
-              '${AppModule.recepcionesPlanta.route}/${record.pedidoId}',
-            ),
-            color: AppTheme.surface,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: RecordStatusBadge(status: record.estadoLabel),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      size: 26,
-                      color: AppTheme.ink,
-                    ),
-                  ],
+            module: AppModule.recepcionesPlanta,
+            title: record.numeroSolicitud,
+            status: record.estadoLabel,
+            facts: [
+              (
+                '',
+                '${record.lineas.length} ${record.lineas.length == 1 ? 'línea' : 'líneas'} de materia prima',
+              ),
+              if (record.lineas.isNotEmpty) ...[
+                (
+                  'Origen',
+                  record.lineas
+                      .map((l) => l.origenLoteLabel)
+                      .toSet()
+                      .join(', '),
                 ),
-                const SizedBox(height: 10),
-                Text(record.numeroSolicitud, style: theme.titleLarge),
-                const SizedBox(height: 6),
-                Text(
-                  '${record.lineas.length} ${record.lineas.length == 1 ? 'línea' : 'líneas'} de materia prima',
-                  style: theme.bodyMedium,
-                ),
-                if (record.lineas.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Origen: ${record.lineas.map((l) => l.origenLoteLabel).toSet().join(', ')}',
-                    style: theme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                if (record.isReceived)
+                  (
+                    'Recibido',
+                    record.lineas
+                        .map((l) => l.formattedRecibida ?? l.formattedEnviada)
+                        .join(' · '),
                   ),
-                  if (record.isReceived) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Recibido: ${record.lineas.map((l) => l.formattedRecibida ?? l.formattedEnviada).join(' · ')}',
-                      style: theme.bodyMedium,
-                    ),
-                  ],
-                ],
               ],
+            ],
+            onTap: () => Navigator.of(context).pushNamed(
+              AppRoutes.detalle(AppModule.recepcionesPlanta, record.pedidoId),
             ),
           ),
         ),

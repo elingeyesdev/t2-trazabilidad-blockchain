@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import '../../navigation/app_routes.dart';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../models/api_exception.dart';
 import '../../models/auth_user.dart';
@@ -10,16 +10,10 @@ import '../../services/module_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/action_confirmation.dart';
 import '../../widgets/field_kit.dart';
+import '../../widgets/qr_camera.dart';
 import 'module_access_denied.dart';
 
-enum QrCameraIssue { permissionDenied, unavailable }
-
-typedef QrCameraBuilder =
-    Widget Function(
-      BuildContext context,
-      ValueChanged<String> onCodeDetected,
-      ValueChanged<QrCameraIssue> onCameraIssue,
-    );
+export '../../widgets/qr_camera.dart' show QrCameraBuilder, QrCameraIssue;
 
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({
@@ -42,10 +36,8 @@ class QrScannerScreen extends StatefulWidget {
 class _QrScannerScreenState extends State<QrScannerScreen> {
   final _manualFormKey = GlobalKey<FormState>();
   final _manualCtrl = TextEditingController();
-  MobileScannerController? _scannerController;
 
   bool _manualMode = false;
-  QrCameraIssue? _cameraIssue;
   bool _processing = false;
   String? _lastCode;
   QrResolucionResult? _result;
@@ -76,19 +68,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.cameraBuilder == null && QrPermissions.canUseQr(widget.user)) {
-      _scannerController = MobileScannerController(
-        detectionSpeed: DetectionSpeed.noDuplicates,
-      );
-    }
-  }
-
-  @override
   void dispose() {
     _manualCtrl.dispose();
-    unawaited(_scannerController?.dispose());
     super.dispose();
   }
 
@@ -135,69 +116,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             'No se pudo validar el código QR. Verifica tu conexión e intenta nuevamente.';
       });
     }
-  }
-
-  Widget _defaultCamera(BuildContext context) {
-    final controller = _scannerController!;
-    return MobileScanner(
-      controller: controller,
-      onDetect: (capture) {
-        for (final barcode in capture.barcodes) {
-          final value = barcode.rawValue;
-          if (value != null && value.trim().isNotEmpty) {
-            unawaited(_handleCode(value));
-            break;
-          }
-        }
-      },
-      errorBuilder: (context, error) {
-        final issue = error.errorCode == MobileScannerErrorCode.permissionDenied
-            ? QrCameraIssue.permissionDenied
-            : QrCameraIssue.unavailable;
-        return _cameraIssueCard(context, issue);
-      },
-    );
-  }
-
-  Widget _cameraIssueCard(BuildContext context, QrCameraIssue issue) {
-    final isDenied = issue == QrCameraIssue.permissionDenied;
-    return Center(
-      child: SingleChildScrollView(
-        key: const ValueKey('qr.camera_issue_card'),
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.no_photography_outlined,
-              size: 36,
-              color: AppTheme.ink,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              isDenied ? 'Permiso de cámara denegado' : 'Cámara no disponible',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              isDenied
-                  ? 'Habilita el permiso de cámara en los ajustes del dispositivo para escanear, o ingresa el código QR manualmente.'
-                  : 'No se pudo iniciar la cámara en este dispositivo. Puedes ingresar el código QR manualmente para continuar.',
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              key: const ValueKey('qr.usar_manual_btn'),
-              onPressed: () => setState(() => _manualMode = true),
-              icon: const Icon(Icons.keyboard_alt_outlined),
-              label: const Text('Ingresar código manualmente'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -257,15 +175,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                         borderRadius: BorderRadius.circular(AppTheme.radius),
                         border: Border.all(color: AppTheme.ink, width: 2),
                       ),
-                      child: _cameraIssue != null
-                          ? _cameraIssueCard(context, _cameraIssue!)
-                          : widget.cameraBuilder != null
-                          ? widget.cameraBuilder!(
-                              context,
-                              (code) => unawaited(_handleCode(code)),
-                              (issue) => setState(() => _cameraIssue = issue),
-                            )
-                          : _defaultCamera(context),
+                      child: QrCameraView(
+                        cameraBuilder: widget.cameraBuilder,
+                        onCode: (code) => unawaited(_handleCode(code)),
+                        onManual: () => setState(() => _manualMode = true),
+                        cardKey: const ValueKey('qr.camera_issue_card'),
+                        buttonKey: const ValueKey('qr.usar_manual_btn'),
+                      ),
                     ),
                   ] else ...[
                     const SectionTitle('Ingreso manual del código'),
@@ -410,7 +326,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           onPressed: _processing
               ? null
               : () => Navigator.of(context).pushNamed(
-                  '/modules/envios/${result.envio.tipo.value}/${result.envio.id}',
+                  AppRoutes.envio(result.envio.tipo, result.envio.id),
                   arguments: result,
                 ),
           icon: Icon(

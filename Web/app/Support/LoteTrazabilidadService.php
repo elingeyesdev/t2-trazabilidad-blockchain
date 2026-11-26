@@ -200,7 +200,14 @@ class LoteTrazabilidadService
 
     private function milestonePreparacion(Lote $lote): bool
     {
+        // Los lotes anteriores a la elección del terreno podían comenzar con Siembra asignada.
+        // Conservan ese recorrido únicamente si no tienen una preparación registrada.
+        $siembraLegacyAsignada = $lote->preparacion_requerida === null
+            && $this->actividadExistenteConKeywords($lote, ['siembra'], true)
+            && ! $this->actividadExistenteConKeywords($lote, ['labranza', 'prepar'], true);
+
         return $lote->preparacion_requerida === false
+            || $siembraLegacyAsignada
             || $this->actividadCompletadaConKeywords($lote, ['labranza', 'prepar']);
     }
 

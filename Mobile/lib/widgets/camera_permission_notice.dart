@@ -1,7 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'action_confirmation.dart';
+
+Future<XFile?> captureCameraPhoto() => ImagePicker().pickImage(
+  source: ImageSource.camera,
+  maxWidth: 1920,
+  imageQuality: 85,
+);
+
+Future<XFile?> retrieveLostCameraPhoto() async {
+  try {
+    final response = await ImagePicker().retrieveLostData();
+    if (response.isEmpty) return null;
+    if (response.file != null) return response.file;
+    if (response.files != null && response.files!.isNotEmpty) {
+      return response.files!.first;
+    }
+  } catch (_) {}
+  return null;
+}
 
 class CameraPermissionException implements Exception {
   const CameraPermissionException([
