@@ -45,6 +45,7 @@ class ActividadCierreService
         abort_unless(ActividadPermisos::puedeEjecutarCierre($request->user(), $actividad), 403, 'No tienes permiso para cerrar esta actividad.');
         $data = $request->validate(self::reglas(), [
             'resultado.required' => 'Describe el resultado de la actividad.',
+            'resultado.max' => 'El resultado de la actividad no puede superar los 250 caracteres.',
             'evidencia_foto.required' => 'Debe subir una foto del trabajo realizado.',
             'evidencia_foto.max' => 'La imagen no puede superar 5 MB.',
             'consumos.*.insumoid.distinct' => 'No repitas el mismo insumo; indica su cantidad total en una sola línea.',
@@ -67,6 +68,7 @@ class ActividadCierreService
                 Lote::query()->whereKey($actividad->loteid)->lockForUpdate()->firstOrFail();
                 $locked = $resolver ? $resolver() : Actividad::query()->whereKey($actividad->actividadid)->lockForUpdate()->firstOrFail();
                 $locked->load(['lote', 'tipoActividad']);
+                abort_if($locked->cancelada_en !== null, 409, 'Esta actividad fue cancelada y no puede completarse.');
                 abort_unless(ActividadPermisos::puedeEjecutarCierre($request->user(), $locked), 403, 'No tienes permiso para cerrar esta actividad.');
                 $detalle = json_decode($locked->detalle_json ?? '', true) ?: [];
                 $filasEntrada = $data['consumos'] ?? ($detalle['insumos'] ?? []);
@@ -141,6 +143,7 @@ class ActividadCierreService
                     'detalle_json' => json_encode($detalle, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                 ])->save();
                 app(LoteEstadoPorActividad::class)->aplicarDesdeActividad($locked);
+                app(LoteInicioService::class)->continuarTrasPreparacion($locked);
                 if (str_contains(mb_strtolower($locked->tipoActividad?->nombre ?? ''), 'siembra') && ! $locked->lote->fechasiembra) {
                     $locked->lote->update(['fechasiembra' => $locked->fechafin->toDateString(), 'fechamodificacion' => now()]);
                 }

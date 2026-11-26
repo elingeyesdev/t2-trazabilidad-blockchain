@@ -27,6 +27,9 @@ class Actividad extends Model
         'evidencia_foto_path',
         'detalle_json',
         'orden_secuencia',
+        'cancelada_en',
+        'cancelada_por_usuarioid',
+        'motivo_cancelacion',
     ];
 
     protected $casts = [
@@ -40,6 +43,8 @@ class Actividad extends Model
         'fechainicio'     => 'datetime',
         'fecha_planificada' => 'date',
         'fechafin'        => 'datetime',
+        'cancelada_en' => 'datetime',
+        'cancelada_por_usuarioid' => 'integer',
     ];
 
     protected $hidden = [
@@ -55,4 +60,14 @@ class Actividad extends Model
     public function tipoActividad(){return $this->belongsTo(TipoActividad::class,'tipoactividadid','tipoactividadid');}
     public function prioridad()  { return $this->belongsTo(Prioridad::class,'prioridadid','prioridadid'); }
     public function consumos() { return $this->hasMany(LoteInsumo::class, 'actividadid', 'actividadid'); }
+
+    public function scopePendientes($query)
+    {
+        return $query->whereNull('fechafin')->whereNull('cancelada_en');
+    }
+
+    public function estaPendiente(): bool
+    {
+        return $this->fechafin === null && $this->cancelada_en === null;
+    }
 }

@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\EnvioAsignacionMultiple;
+use App\Models\RecepcionQrEnvio;
 use App\Models\RutaDistribucion;
+use App\Services\EnvioMovilConsultaService;
+use App\Services\EnvioRecepcionQrService;
 use App\Services\RecepcionQrFirmaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +19,52 @@ class RecepcionQrPublicaController extends Controller
     public function __construct(
         private readonly RecepcionQrFirmaService $recepcionQr,
     ) {}
+
+    public function desdePlanta(Request $request, int $asignacion, EnvioMovilConsultaService $consulta, EnvioRecepcionQrService $service): View
+    {
+        $operacion = $this->autorizarRecepcionPlanta($request, $asignacion, $consulta, $service);
+        $qr = RecepcionQrEnvio::where('envioasignacionmultipleid', $asignacion)->first();
+        abort_unless($qr?->utilizado_en || $service->listaParaRecepcion($operacion), 409,
+            'El envío todavía no está listo para recepción: faltan llegada, revisión de incidentes o firma del transportista.');
+        $qr = $service->emitir($operacion)[0];
+
+        return view('recepcion.confirmar', [
+            'qr' => $qr, 'token' => $qr->token,
+            'envio' => $consulta->datos($operacion, $request->user()),
+            'puedeConfirmar' => ! $qr->utilizado_en && $service->listaParaRecepcion($operacion),
+            'accionFirma' => route('recepcion.planta.confirmar', $asignacion, absolute: false),
+            'desdeDashboard' => true,
+        ]);
+    }
+
+    public function confirmarEnPlanta(Request $request, int $asignacion, EnvioMovilConsultaService $consulta, EnvioRecepcionQrService $service): RedirectResponse
+    {
+        $operacion = $this->autorizarRecepcionPlanta($request, $asignacion, $consulta, $service);
+        $qr = $service->emitir($operacion)[0];
+        $this->confirmarConLineas($request, $qr);
+
+        return redirect()->to(route('recepcion.planta', $asignacion, absolute: false))
+            ->with('exito', 'Recepción registrada correctamente.');
+    }
+
+    private function autorizarRecepcionPlanta(Request $request, int $asignacion, EnvioMovilConsultaService $consulta, EnvioRecepcionQrService $service): EnvioAsignacionMultiple
+    {
+        $operacion = $consulta->buscar('agricola', $asignacion, $request->user());
+        abort_unless($service->puedeConfirmar(new RecepcionQrEnvio, $request->user(), $operacion), 403);
+
+        return $operacion;
+    }
+
+    private function confirmarConLineas(Request $request, RecepcionQrEnvio $qr): void
+    {
+        $data = $request->validate(['imagen_firma' => ['required', 'string', 'max:1400000'], 'lineas' => ['required', 'array', 'min:1', 'max:500'], 'lineas.*' => ['required', 'array'],
+            'firmante_usuarioid' => ['missing'], 'usuarioid' => ['missing'], 'fecha' => ['missing'], 'estado' => ['missing']]);
+        try {
+            app(EnvioRecepcionQrService::class)->confirmar($qr, $request->user(), $data['lineas'], $data['imagen_firma']);
+        } catch (\InvalidArgumentException $e) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['recepcion' => $e->getMessage()]);
+        }
+    }
 
     public function show(Request $request, string $token): View|RedirectResponse
     {
@@ -89,13 +138,7 @@ class RecepcionQrPublicaController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['codigo' => 'Abra el enlace de recepción para utilizar el código específico del destinatario.']);
         }
         if ($qr->clave_operacion) {
-            $data = $request->validate(['imagen_firma' => ['required', 'string', 'max:1400000'], 'lineas' => ['required', 'array', 'min:1', 'max:500'], 'lineas.*' => ['required', 'array'],
-                'firmante_usuarioid' => ['missing'], 'usuarioid' => ['missing'], 'fecha' => ['missing'], 'estado' => ['missing']]);
-            try {
-                app(\App\Services\EnvioRecepcionQrService::class)->confirmar($qr, $request->user(), $data['lineas'], $data['imagen_firma']);
-            } catch (\InvalidArgumentException $e) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['recepcion' => $e->getMessage()]);
-            }
+            $this->confirmarConLineas($request, $qr);
             return $request->expectsJson()
                 ? response()->json(['mensaje' => 'Recepción registrada correctamente.'])
                 : redirect()->route('recepcion.publica', $token)->with('exito', 'Recepción registrada correctamente.');

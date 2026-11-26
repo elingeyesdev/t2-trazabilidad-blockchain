@@ -60,6 +60,7 @@ class ActividadSecuenciaTest extends TestCase
         return Lote::create([
             'usuarioid' => $responsable->usuarioid,
             'nombre' => 'Lote secuencia',
+            'fechasiembra' => now()->subDay()->toDateString(),
             'ubicacion' => 'Parcela',
             'superficie' => 1,
             'unidadsuperficieid' => $unidad->unidadmedidaid,

@@ -94,6 +94,9 @@ class CatalogoSelectorController extends Controller
 
         if ($request->boolean('solo_empleados_equipo') && $request->filled('supervisor_usuarioid')) {
             $query->where('supervisor_usuarioid', (int) $request->supervisor_usuarioid);
+            if (UsuarioRol::esJefeAgricultor($request->user())) {
+                $query->whereIn('usuarioid', UsuarioRol::idsEmpleadosOperativosDeJefeAgricultor($request->user()));
+            }
         } elseif ($request->filled('supervisor_usuarioid')) {
             $query->where('supervisor_usuarioid', (int) $request->supervisor_usuarioid);
         } elseif (

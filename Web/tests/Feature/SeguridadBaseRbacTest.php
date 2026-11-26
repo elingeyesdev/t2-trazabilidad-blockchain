@@ -137,6 +137,9 @@ class SeguridadBaseRbacTest extends TestCase
         if (str_starts_with($ruta->uri(), 'api/incidentes/afectados/')) {
             $uri = str_replace('{tipo}', 'envio_agricola', $uri);
         }
+        if ($ruta->uri() === 'api/catalogos-operativos/{catalogo}') {
+            $uri = str_replace('{catalogo}', 'tipoactividades', $uri);
+        }
 
         return '/'.ltrim((string) preg_replace('/\{[^}]+\}/', '1', $uri), '/');
     }

@@ -32,7 +32,7 @@ final class LoteAcceso
         return Actividad::query()
             ->where('loteid', $lote->loteid)
             ->where('usuarioid', (int) $user->usuarioid)
-            ->whereNull('fechafin')
+            ->whereNull('fechafin')->whereNull('cancelada_en')
             ->exists();
     }
 
@@ -129,7 +129,7 @@ final class LoteAcceso
                 $q->where('usuarioid', $uid)
                     ->orWhereHas('actividades', fn (Builder $a) => $a
                         ->where('usuarioid', $uid)
-                        ->whereNull('fechafin'));
+                        ->whereNull('fechafin')->whereNull('cancelada_en'));
             });
         } elseif (UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user)) {
             $query->whereIn('usuarioid', UsuarioRol::idsUsuariosBajoJefeAgricultor($user));

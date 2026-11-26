@@ -71,12 +71,18 @@ final class ActividadPermisos
     public static function puedeMarcarCompletada(?Usuario $user, Actividad $actividad): bool
     {
         // El admin supervisa actividades pero no las completa en nombre de otros.
-        if (! UsuarioRol::puedeOperar($user) || $actividad->fechafin !== null) {
+        if (! UsuarioRol::puedeOperar($user) || ! $actividad->estaPendiente()) {
             return false;
         }
 
         $secuencia = app(ActividadSecuenciaService::class);
         if (! $secuencia->esSiguienteEnCola($actividad, false)) {
+            return false;
+        }
+
+        $trazabilidad = app(LoteTrazabilidadService::class);
+        if (! $trazabilidad->tipoActividadPermitidoEnFase($actividad->tipoActividad?->nombre,
+            $trazabilidad->resolverFaseActual($actividad->lote))) {
             return false;
         }
 
@@ -104,5 +110,18 @@ final class ActividadPermisos
             && ((int) $actividad->usuarioid === (int) $user->usuarioid
                 || (int) $actividad->usuarioid_ejecutor === (int) $user->usuarioid)
             && $actividad->lote !== null && LoteAcceso::puedeVer($user, $actividad->lote);
+    }
+
+    public static function puedeReasignar(?Usuario $user, Actividad $actividad): bool
+    {
+        return UsuarioRol::gestionaCampo($user) && $user->can('lotes.update')
+            && $actividad->estaPendiente() && self::puedeAcceder($user, $actividad);
+    }
+
+    public static function puedeCancelarPreparacion(?Usuario $user, Actividad $actividad): bool
+    {
+        return self::puedeReasignar($user, $actividad)
+            && app(LoteTrazabilidadService::class)->esPreparacion($actividad->tipoActividad?->nombre)
+            && app(LoteTrazabilidadService::class)->siembraCompletada($actividad->lote);
     }
 }

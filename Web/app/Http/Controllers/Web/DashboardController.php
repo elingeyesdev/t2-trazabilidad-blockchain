@@ -832,7 +832,7 @@ class DashboardController extends Controller
             ],
             'lotesRecientes' => (clone $lotes)->with(['cultivo', 'estadoTipo'])->orderByDesc('loteid')->limit(5)->get(),
             'actividadesPendientes' => (clone $actividades)->with(['lote', 'tipoActividad'])
-                ->whereNull('fechafin')->orderBy('fechainicio')->limit(8)->get(),
+                ->whereNull('fechafin')->whereNull('cancelada_en')->orderBy('fechainicio')->limit(8)->get(),
             'tareasPendientes' => $tareasPendientes,
             'totalTareasPendientes' => count($tareasPendientes),
         ];
@@ -853,7 +853,7 @@ class DashboardController extends Controller
             CampoJefeScope::aplicarEnLote($lotes, $viewer);
         }
 
-        $actividades = Actividad::query()->whereNull('fechafin');
+        $actividades = Actividad::query()->whereNull('fechafin')->whereNull('cancelada_en');
         $filtros->aplicarCultivoEnLote($actividades);
         if ($sujeto && ! $todos) {
             $actividades->whereHas('lote', fn ($q) => $q->where('usuarioid', $sujeto->usuarioid));

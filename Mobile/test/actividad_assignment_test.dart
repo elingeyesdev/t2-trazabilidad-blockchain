@@ -132,13 +132,13 @@ void main() {
       await startApp(tester, (request) async {
         if (request.url.path == '/api/me') return jsonResponse(jefeProfile);
         if (request.url.path == '/api/lotes') return jsonResponse(lotsPayload);
-        if (request.url.path == '/api/usuarios') {
+        if (request.url.path == '/api/actividades/responsables') {
           return jsonResponse(usersPayload);
         }
-        if (request.url.path == '/api/tipoactividades') {
+        if (request.url.path == '/api/catalogos-operativos/tipoactividades') {
           return jsonResponse(tiposPayload);
         }
-        if (request.url.path == '/api/prioridades') {
+        if (request.url.path == '/api/catalogos-operativos/prioridades') {
           return jsonResponse(prioridadesPayload);
         }
         if (request.url.path == '/api/actividades' && request.method == 'GET') {
@@ -254,13 +254,13 @@ void main() {
       await startApp(tester, (request) async {
         if (request.url.path == '/api/me') return jsonResponse(jefeProfile);
         if (request.url.path == '/api/lotes') return jsonResponse(lotsPayload);
-        if (request.url.path == '/api/usuarios') {
+        if (request.url.path == '/api/actividades/responsables') {
           return jsonResponse(usersPayload);
         }
-        if (request.url.path == '/api/tipoactividades') {
+        if (request.url.path == '/api/catalogos-operativos/tipoactividades') {
           return jsonResponse(tiposPayload);
         }
-        if (request.url.path == '/api/prioridades') {
+        if (request.url.path == '/api/catalogos-operativos/prioridades') {
           return jsonResponse(prioridadesPayload);
         }
         if (request.url.path == '/api/actividades' && request.method == 'GET') {

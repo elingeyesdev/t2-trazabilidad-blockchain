@@ -107,7 +107,8 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label class="required-field"><i class="fas fa-tasks mr-1"></i> Tipo de Actividad</label>
-                            <select name="tipoactividadid" class="form-control" required>
+                            <input type="hidden" name="tipoactividadid" value="{{ $actividad->tipoactividadid }}">
+                            <select class="form-control" disabled>
                                 <option value="">Seleccionar...</option>
                                 @foreach($tipos as $t)
                                     <option value="{{ $t->tipoactividadid }}" {{ $t->tipoactividadid == $actividad->tipoactividadid ? 'selected' : '' }}>
@@ -120,7 +121,8 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label class="required-field"><i class="fas fa-map-marked-alt mr-1"></i> Lote</label>
-                            <select name="loteid" class="form-control" required>
+                            <input type="hidden" name="loteid" value="{{ $actividad->loteid }}">
+                            <select class="form-control" disabled>
                                 <option value="">Seleccionar...</option>
                                 @foreach($lotes as $l)
                                     <option value="{{ $l->loteid }}" {{ $l->loteid == $actividad->loteid ? 'selected' : '' }}>

@@ -40,7 +40,7 @@ final class ActividadSecuenciaService
 
         $query = Actividad::query()
             ->where('loteid', $lote->loteid)
-            ->whereNull('fechafin')
+            ->pendientes()
             ->with('tipoActividad')
             ->orderBy('orden_secuencia')
             ->orderBy('fechainicio')
@@ -63,7 +63,7 @@ final class ActividadSecuenciaService
 
     public function esSiguienteEnCola(Actividad $actividad, bool $soloFaseActual = false): bool
     {
-        if ($actividad->fechafin !== null) {
+        if (! $actividad->estaPendiente()) {
             return false;
         }
 
@@ -102,6 +102,7 @@ final class ActividadSecuenciaService
      */
     public function asegurarEnTurnoParaCompletar(Actividad $actividad): void
     {
+        abort_unless($actividad->estaPendiente(), 409, 'La actividad ya fue cerrada o cancelada.');
         $bloqueo = $this->mensajeBloqueoOrden($actividad);
         if ($bloqueo !== null) {
             throw \Illuminate\Validation\ValidationException::withMessages([

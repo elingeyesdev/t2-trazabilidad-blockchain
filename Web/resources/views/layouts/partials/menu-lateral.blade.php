@@ -456,6 +456,15 @@
                 @endif
                 @endif {{-- /TEMPORAL ! $isAdmin --}}
 
+                @if($isAdmin && $authUser->can('vehiculos.view'))
+                <li class="ag-nav-li">
+                    <a href="{{ route('envios.vehiculos') }}" class="ag-nav-a {{ request()->routeIs('envios.vehiculos*') ? 'active' : '' }}">
+                        <i class="ag-nav-icon fas fa-truck"></i>
+                        <span class="ag-nav-text">Vehículos</span>
+                    </a>
+                </li>
+                @endif
+
                 @if(\App\Support\UsuarioRol::puedeGestionarUsuarios($authUser) || \App\Support\ReporteCatalogo::usuarioTieneAcceso(auth()->user()))
                 <span class="ag-nav-label">{{ ($esJefeAgr || ($authUser && $authUser->hasRole('jefe_planta'))) && ! $isAdmin ? 'Equipo' : 'Administración' }}</span>
 

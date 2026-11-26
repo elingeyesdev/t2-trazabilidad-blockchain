@@ -41,9 +41,33 @@
 
         <form action="{{ route('lotes.store') }}" method="POST" enctype="multipart/form-data" id="formNuevoLote">
             @csrf
+            <input type="hidden" name="solicitud_registro_id" value="{{ old('solicitud_registro_id', (string) \Illuminate\Support\Str::uuid()) }}">
             <div class="card-body">
                 <div class="row">
                     <div class="col-lg-5">
+                        <div class="form-group">
+                            <label>Encargado del lote</label>
+                            <p class="form-control-plaintext mb-0">{{ auth()->user()->nombreCompleto() }}</p>
+                            <small class="text-muted">Supervisa la parcela. El agricultor seleccionado ejecutará la primera tarea.</small>
+                        </div>
+                        @include('partials.selector-catalogo', [
+                            'id' => 'lote_agricultor_inicial',
+                            'name' => 'agricultor_inicial_usuarioid',
+                            'label' => 'Agricultor de la primera actividad',
+                            'value' => old('agricultor_inicial_usuarioid'),
+                            'labelSelected' => old('agricultor_inicial_usuarioid') ? optional(\App\Models\Usuario::find(old('agricultor_inicial_usuarioid')))->nombreCompleto() : '',
+                            'endpoint' => route('catalogo-selector.usuarios'),
+                            'params' => ['roles' => 'agricultor', 'supervisor_usuarioid' => auth()->id(), 'solo_empleados_equipo' => true, 'excluir_jefes_agricolas' => true],
+                            'title' => 'Seleccionar agricultor del equipo',
+                            'help' => 'Solo agricultores activos y aprobados de tu equipo.',
+                            'required' => true,
+                        ])
+                        <fieldset class="form-group">
+                            <legend class="h6">Estado del terreno <span class="text-danger">*</span></legend>
+                            <label class="d-block font-weight-normal"><input type="radio" name="preparacion_terreno" value="requiere_preparacion" required @checked(old('preparacion_terreno') === 'requiere_preparacion')> El terreno requiere preparación</label>
+                            <label class="d-block font-weight-normal"><input type="radio" name="preparacion_terreno" value="ya_preparado" required @checked(old('preparacion_terreno') === 'ya_preparado')> El terreno ya está preparado</label>
+                            <small class="text-muted">Se asignará primero la preparación o la siembra, según esta elección.</small>
+                        </fieldset>
                         @if($mostrarSelectorPropietario)
                             @include('partials.selector-catalogo', [
                                 'id' => 'lote_responsable',

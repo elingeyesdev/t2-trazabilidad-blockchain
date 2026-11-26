@@ -365,7 +365,7 @@ final class DashboardCharts
                 ->whereYear('fechafin', $mes['año'])
                 ->count();
             $pendientesMes[] = (clone $base)
-                ->whereNull('fechafin')
+                ->whereNull('fechafin')->whereNull('cancelada_en')
                 ->whereMonth('fechainicio', $mes['mes'])
                 ->whereYear('fechainicio', $mes['año'])
                 ->count();

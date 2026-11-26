@@ -154,7 +154,7 @@ void main() {
         if (request.url.path == '/api/lotes' && request.method == 'GET') {
           return jsonResponse(lotesPayload);
         }
-        if (request.url.path == '/api/unidadesmedida' &&
+        if (request.url.path == '/api/catalogos-operativos/unidadesmedida' &&
             request.method == 'GET') {
           return jsonResponse(unidadesPayload);
         }
@@ -283,7 +283,7 @@ void main() {
         if (request.url.path == '/api/lotes' && request.method == 'GET') {
           return jsonResponse(lotesPayload);
         }
-        if (request.url.path == '/api/unidadesmedida' &&
+        if (request.url.path == '/api/catalogos-operativos/unidadesmedida' &&
             request.method == 'GET') {
           return jsonResponse(unidadesPayload);
         }

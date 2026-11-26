@@ -73,7 +73,7 @@
                         </span>
                     </div>
                     <a href="{{ $envioPlanta['url'] }}" class="btn btn-success btn-sm font-weight-bold">
-                        <i class="fas fa-arrow-right mr-1"></i> Ir al envío
+                        <i class="fas fa-arrow-right mr-1"></i> {{ $envioPlanta['accion'] ?? 'Ir al envío' }}
                     </a>
                 </div>
             </div>

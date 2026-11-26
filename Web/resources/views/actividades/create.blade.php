@@ -67,7 +67,7 @@
                             'title' => 'Seleccionar responsable',
                             'searchPlaceholder' => 'Nombre, correo o usuario…',
                             'help' => ! empty($esJefeAgricultorDesignando)
-                                ? 'Elija un operario de su equipo o «Asignarse a sí mismo» si va a ejecutar la tarea.'
+                                ? 'Elija al agricultor de su equipo que ejecutará la tarea.'
                                 : 'Elija el operario que ejecutará la actividad, o «Asignarse a sí mismo».',
                             'required' => true,
                         ])
@@ -224,6 +224,43 @@
     </form>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const lote = document.querySelector('[name="loteid"]');
+    const tipos = document.getElementById('tipoactividadid');
+    let version = 0;
+    async function actualizarTipos() {
+        const actual = ++version;
+        const anterior = tipos.value;
+        tipos.disabled = true;
+        tipos.replaceChildren(new Option('Seleccione un lote para ver sus actividades permitidas', ''));
+        if (!lote?.value) return;
+        try {
+            const url = new URL(@json(route('actividades.tipos-permitidos')), window.location.origin);
+            url.searchParams.set('loteid', lote.value);
+            const respuesta = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (!respuesta.ok) throw new Error('No se pudieron consultar los tipos permitidos.');
+            const datos = await respuesta.json();
+            if (actual !== version) return;
+            tipos.replaceChildren(new Option(datos.tipos.length ? '— Elija el tipo —' : 'No hay nuevas actividades habilitadas para esta etapa', ''));
+            datos.tipos.forEach(tipo => tipos.add(new Option(tipo.nombre, tipo.id)));
+            tipos.value = anterior;
+            tipos.disabled = false;
+            tipos.dispatchEvent(new Event('change'));
+        } catch (error) {
+            if (actual === version) tipos.replaceChildren(new Option(error.message + ' Vuelva a seleccionar el lote.', ''));
+        }
+    }
+    lote?.addEventListener('change', actualizarTipos);
+    document.addEventListener('selector-catalogo:change', function (evento) {
+        if (evento.target.contains(lote)) actualizarTipos();
+    });
+    actualizarTipos();
+});
+</script>
+@endpush
 
 @if($errors->any())
 @push('scripts')

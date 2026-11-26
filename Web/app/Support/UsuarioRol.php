@@ -245,6 +245,7 @@ final class UsuarioRol
             ->where('supervisor_usuarioid', $jefe->usuarioid)
             ->whereIn('role', self::rolesEmpleadosGestionables($jefe))
             ->where('activo', true)
+            ->where(fn (Builder $q) => $q->whereNull('estado_cuenta')->orWhere('estado_cuenta', 'aprobado'))
             ->whereDoesntHave('roles', fn (Builder $q) => $q->where('name', 'jefe_agricultor'))
             ->pluck('usuarioid')
             ->map(fn ($id) => (int) $id)
@@ -255,7 +256,7 @@ final class UsuarioRol
     /** Usuario que puede ejecutar una actividad de campo (no jefe ni admin). */
     public static function esResponsableActividadPermitido(?Usuario $user): bool
     {
-        if (! $user || ! $user->activo) {
+        if (! $user || ! $user->activo || ! in_array($user->estado_cuenta, [null, 'aprobado'], true)) {
             return false;
         }
 

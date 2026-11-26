@@ -71,8 +71,8 @@ class DemoLoteZanahoriaTrazabilidadSeeder extends Seeder
         if (Schema::hasTable('insumo') && Schema::hasColumn('insumo', 'codigo_trazabilidad')) {
             $service = app(TrazabilidadProductoPdvService::class);
             Insumo::query()
-                ->whereNull('codigo_trazabilidad')
-                ->orWhere('codigo_trazabilidad', '')
+                ->whereIn('almacenid', \App\Models\PuntoVenta::whereNotNull('almacenid')->select('almacenid'))
+                ->where(fn ($q) => $q->whereNull('codigo_trazabilidad')->orWhere('codigo_trazabilidad', ''))
                 ->each(fn (Insumo $i) => $service->asegurarCodigo($i));
         }
 

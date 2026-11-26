@@ -23,6 +23,7 @@ class LoteTrazabilidadHistorialOrdenTest extends TestCase
             $this->eventoPrueba('2026-06-24 19:30:00', 'actividad', 'en_crecimiento', 'Fertilización', 3),
             $this->eventoPrueba('2026-06-24 12:38:00', 'actividad', 'en_crecimiento', 'Control de plagas', 1),
             $this->eventoPrueba('2026-06-24 12:09:00', 'siembra', 'siembra', 'Siembra de Cebolla'),
+            $this->eventoPrueba('2026-06-24 14:00:00', 'actividad', 'preparacion', 'Preparación del terreno', 2),
             $this->eventoPrueba('2026-06-24 11:56:00', 'estado', 'preparacion', 'En planificación'),
         ]);
 
@@ -32,15 +33,35 @@ class LoteTrazabilidadHistorialOrdenTest extends TestCase
         $pasos = $ordenados->pluck('paso')->values()->all();
 
         $this->assertSame([
-            'Certificación de lote',
-            'Cosechado',
-            'Fertilización',
-            'Control de plagas',
-            'Siembra de Cebolla',
             'En planificación',
+            'Preparación del terreno',
+            'Siembra de Cebolla',
+            'Control de plagas',
+            'Fertilización',
+            'Cosechado',
+            'Certificación de lote',
         ], $titulos);
 
-        $this->assertSame([6, 5, 4, 3, 2, 1], $pasos);
+        $this->assertSame([1, 2, 3, 4, 5, 6, 7], $pasos);
+    }
+
+    public function test_historial_misma_etapa_usa_creacion_y_desempata_por_id(): void
+    {
+        $svc = app(LoteTrazabilidadService::class);
+        $numerar = (new ReflectionClass($svc))->getMethod('numerarYOrdenarEventosHistorial');
+        $eventos = collect([
+            $this->eventoPrueba('2026-06-24 13:00:00', 'actividad', 'en_crecimiento', 'Riego', 9)
+                + ['fecha_creacion' => '2026-06-24 13:00:00'],
+            $this->eventoPrueba('2026-06-24 14:00:00', 'actividad', 'en_crecimiento', 'Riego', 3)
+                + ['fecha_creacion' => '2026-06-24 12:00:00'],
+            $this->eventoPrueba('2026-06-26 18:00:00', 'actividad', 'en_crecimiento', 'Riego', 1)
+                + ['fecha_creacion' => '2026-06-24 12:00:00'],
+        ]);
+
+        $ordenados = $numerar->invoke($svc, $eventos);
+
+        $this->assertSame([1, 3, 9], $ordenados->pluck('actividadid')->all());
+        $this->assertSame([1, 2, 3], $ordenados->pluck('paso')->all());
     }
 
     /**

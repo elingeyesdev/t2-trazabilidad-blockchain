@@ -167,6 +167,7 @@ class ActividadLotePermisosTest extends TestCase
         TipoActividad::create(['nombre' => 'Siembra']);
         $agricultor = $this->createUser('agricultor');
         $lote = $this->crearLote($agricultor);
+        $lote->update(['preparacion_requerida' => false]);
 
         $this->actingAs($agricultor)
             ->get(route('lotes.siembra.create', [

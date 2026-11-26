@@ -20,6 +20,7 @@ class InsumoController extends Controller
                 ->get()
                 ->each(fn ($insumo) => $insumo->setAttribute('existencia', app(\App\Services\InventarioExistenciaService::class)->resumen($insumo)))
                 ->makeVisible(['tipo', 'unidadMedida'])
+                ->map(fn ($insumo) => (new \App\Http\Resources\Api\InsumoInventarioResource($insumo))->resolve($request))
         );
     }
 
@@ -31,7 +32,7 @@ class InsumoController extends Controller
             ->makeVisible(['tipo', 'unidadMedida']);
 
         $insumo->setAttribute('existencia', app(\App\Services\InventarioExistenciaService::class)->resumen($insumo));
-        return response()->json($insumo);
+        return response()->json((new \App\Http\Resources\Api\InsumoInventarioResource($insumo))->resolve($request));
     }
 
     public function store(Request $request)
@@ -43,7 +44,7 @@ class InsumoController extends Controller
         $data['stockminimo'] = $data['stockminimo'] ?? null;
         $insumo = Insumo::create($data);
 
-        return response()->json($insumo->load(['tipo', 'unidadMedida'])->makeVisible(['tipo', 'unidadMedida']), 201);
+        return response()->json((new \App\Http\Resources\Api\InsumoInventarioResource($insumo->load(['tipo', 'unidadMedida'])->makeVisible(['tipo', 'unidadMedida'])))->resolve($request), 201);
     }
 
     public function update(Request $request, $id)
@@ -57,7 +58,33 @@ class InsumoController extends Controller
 
         app(\App\Services\InventarioMovimientoService::class)->actualizarFicha($request->user(), $insumo, $data, $request->input('motivo_ajuste'), $request->filled('materiaprimaloteid') ? (int) $request->input('materiaprimaloteid') : null);
 
-        return response()->json($insumo->load(['tipo', 'unidadMedida'])->makeVisible(['tipo', 'unidadMedida']));
+        return response()->json((new \App\Http\Resources\Api\InsumoInventarioResource($insumo->load(['tipo', 'unidadMedida'])->makeVisible(['tipo', 'unidadMedida'])))->resolve($request));
+    }
+
+    public function indexPdv(Request $request)
+    {
+        $query = $this->consultaPdv($request)->with(['tipo', 'unidadMedida'])->get();
+
+        return response()->json($query->map(function ($insumo) use ($request) {
+            $insumo->setAttribute('existencia', app(\App\Services\InventarioExistenciaService::class)->resumen($insumo));
+
+            return (new \App\Http\Resources\Api\InsumoInventarioResource($insumo->makeVisible(['tipo', 'unidadMedida'])))->resolve($request);
+        }));
+    }
+
+    public function showPdv(Request $request, int $insumo)
+    {
+        $producto = $this->consultaPdv($request)->with(['tipo', 'unidadMedida'])->findOrFail($insumo);
+        $producto->setAttribute('existencia', app(\App\Services\InventarioExistenciaService::class)->resumen($producto));
+
+        return response()->json((new \App\Http\Resources\Api\InsumoInventarioResource($producto->makeVisible(['tipo', 'unidadMedida'])))->resolve($request));
+    }
+
+    private function consultaPdv(Request $request)
+    {
+        $puntos = \App\Support\PuntoVentaAccess::scopePuntosDelUsuario(\App\Models\PuntoVenta::query(), $request->user());
+
+        return Insumo::whereIn('almacenid', $puntos->whereNotNull('almacenid')->select('almacenid'));
     }
 
     public function destroy(Request $request, $id)
