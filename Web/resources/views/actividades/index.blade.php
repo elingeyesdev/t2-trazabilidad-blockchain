@@ -148,11 +148,13 @@
             filtros-target="#filtrosActividadesPanel"
             :view-toggle="true"
             view-default="table"
+            :nuevo-href="\App\Support\UsuarioRol::gestionaCampo(auth()->user()) && auth()->user()->can('lotes.view') ? route('actividades.create') : null"
+            nuevo-text="Nueva actividad"
         />
 
         <div class="consulta-banner">
             <i class="fas fa-info-circle mr-1"></i>
-            Vista de <strong>consulta</strong>. Para registrar o completar actividades, use la trazabilidad del lote correspondiente.
+            Consulte las tareas y sus responsables. El jefe agrícola puede crear y reasignar tareas pendientes; el agricultor las completa desde la trazabilidad del lote.
         </div>
 
         <div id="filtrosActividadesPanel" class="filtros-panel collapse {{ $filtrosActivos->isNotEmpty() ? 'show' : '' }}">
@@ -174,6 +176,7 @@
                             <option value="">Todos</option>
                             <option value="pendiente" @selected(($filtros['estado'] ?? '') === 'pendiente')>Pendientes</option>
                             <option value="completada" @selected(($filtros['estado'] ?? '') === 'completada')>Completadas</option>
+                            <option value="cancelada" @selected(($filtros['estado'] ?? '') === 'cancelada')>Canceladas</option>
                         </select>
                     </div>
                     <div class="col-lg-3 col-md-3 col-6 mb-2">
@@ -269,16 +272,21 @@
                             <td>
                                 @if($esCompletada)
                                     {{ \Carbon\Carbon::parse($act->fechafin)->format('d/m/Y') }}
+                                @elseif($act->cancelada_en)
+                                    <span class="text-muted">Cancelada {{ $act->cancelada_en->format('d/m/Y') }}</span>
                                 @else
                                     <span class="badge badge-light border text-muted font-weight-normal">Pendiente</span>
                                 @endif
                             </td>
                             <td>
-                                <span class="badge badge-{{ $esCompletada ? 'success' : 'warning' }}">
-                                    {{ $esCompletada ? 'Completada' : 'Pendiente' }}
+                                <span class="badge badge-{{ $act->cancelada_en ? 'secondary' : ($esCompletada ? 'success' : 'warning') }}">
+                                    {{ $act->cancelada_en ? 'Cancelada' : ($esCompletada ? 'Completada' : 'Pendiente') }}
                                 </span>
                             </td>
                             <td class="text-center text-nowrap">
+                                @if(\App\Support\ActividadPermisos::puedeReasignar(auth()->user(), $act))
+                                <a href="{{ route('actividades.edit', $act) }}" class="btn btn-outline-secondary btn-sm">Reasignar</a>
+                                @endif
                                 <a href="{{ route('actividades.show', $act) }}" class="btn btn-default btn-sm btn-actions" title="Ver detalle, cambiar responsable o cerrar">
                                     <i class="fas fa-clipboard-check text-success"></i>
                                 </a>
@@ -318,9 +326,12 @@
                             <span class="act-tipo">{{ $act->tipoActividad->nombre ?? 'Sin tipo' }}</span>
                         @endif
                         <div class="mt-1">
-                            <span class="badge badge-{{ $esCompletada ? 'success' : 'warning' }} badge-sm mr-1">
-                                {{ $esCompletada ? 'Completada' : 'Pendiente' }}
+                            <span class="badge badge-{{ $act->cancelada_en ? 'secondary' : ($esCompletada ? 'success' : 'warning') }} badge-sm mr-1">
+                                {{ $act->cancelada_en ? 'Cancelada' : ($esCompletada ? 'Completada' : 'Pendiente') }}
                             </span>
+                            @if(\App\Support\ActividadPermisos::puedeReasignar(auth()->user(), $act))
+                            <a href="{{ route('actividades.edit', $act) }}" class="btn btn-outline-secondary btn-sm mb-1">Reasignar</a>
+                            @endif
                             @if($act->prioridad)
                             <span class="badge badge-{{ $prioridadBadge($act->prioridad->nombre) }} badge-sm">
                                 {{ $act->prioridad->nombre }}

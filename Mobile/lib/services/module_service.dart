@@ -281,7 +281,10 @@ class ModuleService {
         statusCode: 403,
       );
     }
-    final response = await _api.request('GET', 'tipoactividades');
+    final response = await _api.request(
+      'GET',
+      'catalogos-operativos/tipoactividades',
+    );
     return ActividadTipoOption.listFromJson(response);
   }
 
@@ -293,7 +296,10 @@ class ModuleService {
         statusCode: 403,
       );
     }
-    final response = await _api.request('GET', 'prioridades');
+    final response = await _api.request(
+      'GET',
+      'catalogos-operativos/prioridades',
+    );
     return PrioridadOption.listFromJson(response);
   }
 
@@ -324,33 +330,8 @@ class ModuleService {
         statusCode: 403,
       );
     }
-    final byId = <int, ResponsableOption>{
-      user.id: ResponsableOption(
-        id: user.id,
-        name: user.fullName,
-        roleLabel: 'Yo (Jefe agrícola)',
-      ),
-    };
-    try {
-      Object? response;
-      try {
-        response = await _api.request('GET', 'actividades/responsables');
-      } on ApiException catch (error) {
-        if (error.statusCode == 401) rethrow;
-        if (error.statusCode == 404) {
-          response = await _api.request('GET', AppModule.usuarios.endpoint);
-        } else {
-          rethrow;
-        }
-      }
-      for (final item in ResponsableOption.listFromUsersJson(response)) {
-        if (item.id == user.id) continue;
-        byId[item.id] = item;
-      }
-    } on ApiException catch (error) {
-      if (error.statusCode == 401) rethrow;
-    }
-    return byId.values.toList();
+    final response = await _api.request('GET', 'actividades/responsables');
+    return ResponsableOption.listFromUsersJson(response);
   }
 
   Future<ModuleRecord> createActividad(
@@ -575,7 +556,10 @@ class ModuleService {
         statusCode: 403,
       );
     }
-    final response = await _api.request('GET', 'unidadesmedida');
+    final response = await _api.request(
+      'GET',
+      'catalogos-operativos/unidadesmedida',
+    );
     return CosechaUnidadOption.listFromJson(response);
   }
 

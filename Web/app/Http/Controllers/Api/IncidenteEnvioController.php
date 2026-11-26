@@ -14,6 +14,29 @@ use Illuminate\Http\Request;
 
 class IncidenteEnvioController extends Controller
 {
+    public function responsables(Request $request, IncidenteReferenciaService $referencias, IncidenteSeguimientoService $service)
+    {
+        $actor = $request->user();
+        abort_unless(\App\Support\UsuarioRol::puedeOperar($actor)
+            && ($actor->can('incidentes.create') || $actor->can('incidentes.update')), 403);
+        $datos = $request->validate(['afectado_tipo' => ['required', \Illuminate\Validation\Rule::in(IncidenteReferenciaService::TIPOS)],
+            'afectado_id' => ['required', 'integer', 'min:1']]);
+        $modelo = $referencias->buscar($datos['afectado_tipo'], (int) $datos['afectado_id'], $actor);
+        abort_unless($actor->can('incidentes.create') || $referencias->puedeAtenderTipo($datos['afectado_tipo'], $actor), 403);
+
+        return response()->json($service->responsables($datos['afectado_tipo'], $modelo));
+    }
+
+    public function asignar(Request $request, IncidenteEnvio $incidente, IncidenteReferenciaService $referencias, IncidenteSeguimientoService $service)
+    {
+        $service->obtener((int) $incidente->getKey(), $request->user());
+        abort_unless($referencias->puedeAtenderTipo((string) $incidente->afectado_tipo, $request->user()), 403);
+        $datos = $request->validate(['responsable_usuarioid' => ['required', 'integer', 'min:1']]);
+        $asignado = $service->actualizar($request->user(), (int) $incidente->getKey(), $datos);
+
+        return response()->json((new IncidenteEnvioResource($service->obtener((int) $asignado->getKey(), $request->user())))->resolve($request));
+    }
+
     public function index(Request $request, IncidenteConsultaService $consulta)
     {
         return response()->json($consulta->listado($request));

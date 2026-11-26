@@ -1,11 +1,16 @@
-@once
-
-@endonce
+@php
+    $actividadCierreReintento = isset($lote) && session('actividad_cierre_error_id')
+        ? $lote->actividades->firstWhere('actividadid', (int) session('actividad_cierre_error_id'))
+        : null;
+    $reabrirCierreActividad = $errors->any() && $actividadCierreReintento
+        && \App\Support\ActividadPermisos::puedeMarcarCompletada(auth()->user(), $actividadCierreReintento);
+@endphp
 
 <div class="modal fade" id="modalCompletarEvidencia" tabindex="-1" role="dialog" aria-labelledby="modalCompletarEvidenciaTitulo" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content border-0 " style="border-radius: 14px; overflow: hidden;">
-            <form id="formCompletarEvidencia" method="POST" enctype="multipart/form-data">
+            <form id="formCompletarEvidencia" method="POST" enctype="multipart/form-data"
+                  action="{{ $reabrirCierreActividad ? route('actividades.marcar-realizada', $actividadCierreReintento) : '' }}">
                 @csrf
                 <div class="modal-header border-0 py-3 px-4" >
                     <h5 class="modal-title fw-semibold mb-0" id="modalCompletarEvidenciaTitulo">
@@ -17,8 +22,15 @@
                 </div>
                 <div class="modal-body px-4 py-4">
                     <p class="text-secondary small mb-3" id="modalCompletarEvidenciaMensaje">
-                        Revise el resumen de la actividad asignada. Luego suba una foto como evidencia de que ya fue realizada.
+                        Revise el resumen, registre el resultado de la actividad y suba una foto del trabajo realizado.
                     </p>
+                    <div id="actividadModalErrores" class="alert alert-danger small" role="alert" @if(!$reabrirCierreActividad) hidden @endif>
+                        @if($reabrirCierreActividad)
+                        <strong>No se pudo completar la actividad:</strong>
+                        <ul class="mb-2 mt-1">@foreach($errors->all() as $errorCierre)<li>{{ $errorCierre }}</li>@endforeach</ul>
+                        <p class="mb-0">Corrija los campos indicados y vuelva a seleccionar la foto.</p>
+                        @endif
+                    </div>
 
                     <div id="actividadModalResumenCargando" class="text-center text-secondary py-4" style="display: none;">
                         <i class="ti ti-loader fa-spin fa-2x mb-2"></i>
@@ -56,14 +68,11 @@
 
                     <div id="actividadModalSeccionFoto" style="display: none;">
                         <div class="mb-3">
-                            <label class="fw-semibold d-block mb-1" for="actividadModalResultado">
-                                Resultado de la actividad <span class="text-danger">*</span>
-                            </label>
-                            <textarea name="resultado" id="actividadModalResultado" class="form-control" rows="2" maxlength="250" required
-                                      placeholder="Describe el resultado del trabajo realizado en campo…">{{ old('resultado') }}</textarea>
-                            @error('resultado')
-                                <div class="alert alert-danger small mt-2 mb-0">{{ $message }}</div>
-                            @enderror
+                            <label for="actividadModalResultado" class="fw-semibold d-block mb-2">Resultado de la actividad <span class="text-danger">*</span></label>
+                            <textarea id="actividadModalResultado" name="resultado" class="form-control{{ $reabrirCierreActividad && $errors->has('resultado') ? ' is-invalid' : '' }}"
+                                      required maxlength="250" rows="3" aria-describedby="actividadModalResultadoAyuda actividadModalResultadoError">{{ $reabrirCierreActividad ? old('resultado') : '' }}</textarea>
+                            <div id="actividadModalResultadoAyuda" class="small text-secondary mt-1">Obligatorio. Máximo 250 caracteres.</div>
+                            <div id="actividadModalResultadoError" class="invalid-feedback">{{ $reabrirCierreActividad ? $errors->first('resultado') : '' }}</div>
                         </div>
                         <label class="fw-semibold d-block mb-2">
                             <i class="ti ti-camera text-primary me-1"></i> Foto de evidencia <span class="text-danger">*</span>
@@ -77,9 +86,6 @@
                             'btnLabel' => 'Tomar o subir foto de la aplicación',
                             'hint' => 'Muestre el trabajo realizado: riego, aplicación de insumo, etc.',
                         ])
-                        @error('evidencia_foto')
-                            <div class="alert alert-danger small mt-2 mb-0">{{ $message }}</div>
-                        @enderror
                     </div>
                 </div>
                 <div class="modal-footer border-0 bg-light px-4 py-3">
@@ -151,6 +157,8 @@
     var cargandoEl = document.getElementById('actividadModalResumenCargando');
     var seccionFoto = document.getElementById('actividadModalSeccionFoto');
     var separadorFoto = document.getElementById('actividadModalSeparadorFoto');
+    var resultadoInput = document.getElementById('actividadModalResultado');
+    var erroresEl = document.getElementById('actividadModalErrores');
     var mapaConfigActual = null;
 
     function escHtml(s) {
@@ -219,6 +227,11 @@
 
     function resetForm() {
         if (form) form.reset();
+        if (resultadoInput) {
+            resultadoInput.value = '';
+            resultadoInput.classList.remove('is-invalid');
+        }
+        if (erroresEl) erroresEl.hidden = true;
         resetFoto();
         resetResumen();
         setScrollTo('');
@@ -331,11 +344,18 @@
         }
     }
 
-    function abrir(action, titulo, lote, scrollTo, resumenUrl) {
+    function abrir(action, titulo, lote, scrollTo, resumenUrl, reintento) {
         if (!form) return;
         form.action = action;
         resetForm();
         setScrollTo(scrollTo || '');
+        if (reintento) {
+            if (resultadoInput) {
+                resultadoInput.value = @json($reabrirCierreActividad ? old('resultado', '') : '');
+                resultadoInput.classList.toggle('is-invalid', @json($reabrirCierreActividad && $errors->has('resultado')));
+            }
+            if (erroresEl) erroresEl.hidden = false;
+        }
 
         var tituloModal = document.getElementById('modalCompletarEvidenciaTitulo');
         if (tituloModal) {
@@ -411,7 +431,7 @@
 
     document.getElementById('modalCompletarEvidencia')?.addEventListener('hidden.bs.modal', resetForm);
 
-    document.addEventListener('DOMContentLoaded', function () {
+    function iniciarFormularioCierre() {
         if (window.AgrofusionEvidenciaFotoCampo) {
             window.AgrofusionEvidenciaFotoCampo(
                 'actividadModalEvidenciaInput',
@@ -423,19 +443,25 @@
         }
         var inputFoto = document.getElementById('actividadModalEvidenciaInput');
         inputFoto?.addEventListener('change', function () {
-            if (btnEnviar && inputFoto.files && inputFoto.files[0]) {
-                btnEnviar.disabled = false;
-            }
+            if (btnEnviar) btnEnviar.disabled = !(inputFoto.files && inputFoto.files[0]);
         });
-    });
 
-    @if($errors->has('evidencia_foto'))
-    if (window.jQuery) {
-        window.jQuery(function () {
-            window.jQuery('#modalCompletarEvidencia').modal('show');
-        });
+        @if($reabrirCierreActividad)
+        abrir(
+            @json(route('actividades.marcar-realizada', $actividadCierreReintento)),
+            @json($actividadCierreReintento->descripcion ?: $actividadCierreReintento->tipoActividad?->nombre),
+            @json($lote->nombre),
+            'historial-eventos',
+            @json(route('actividades.resumen-completar', $actividadCierreReintento)),
+            true
+        );
+        @endif
     }
-    @endif
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', iniciarFormularioCierre);
+    } else {
+        iniciarFormularioCierre();
+    }
 })();
 </script>
 @endpush

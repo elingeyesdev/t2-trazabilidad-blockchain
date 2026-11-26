@@ -49,9 +49,11 @@ class ActividadController extends Controller
 
         if ($request->filled('estado')) {
             if ($request->estado === 'pendiente') {
-                $query->whereNull('fechafin');
+                $query->whereNull('fechafin')->whereNull('cancelada_en');
             } elseif ($request->estado === 'completada') {
                 $query->whereNotNull('fechafin');
+            } elseif ($request->estado === 'cancelada') {
+                $query->whereNotNull('cancelada_en');
             }
         }
 
@@ -66,7 +68,7 @@ class ActividadController extends Controller
         $baseStats = $this->queryActividadesVisibles($request);
         $stats = [
             'total' => (clone $baseStats)->count(),
-            'pendientes' => (clone $baseStats)->whereNull('fechafin')->count(),
+            'pendientes' => (clone $baseStats)->whereNull('fechafin')->whereNull('cancelada_en')->count(),
             'completadas' => (clone $baseStats)->whereNotNull('fechafin')->count(),
             'hoy' => (clone $baseStats)->whereDate('fechainicio', now()->toDateString())->count(),
         ];
@@ -150,7 +152,7 @@ class ActividadController extends Controller
             ->get()
             ->reject(fn (TipoActividad $t) => in_array(
                 mb_strtolower(trim($t->nombre)),
-                ['cosecha', 'labranza', 'fumigacion', 'fumigación', 'siembra'],
+                ['cosecha', 'siembra'],
                 true
             ))
             ->values();
@@ -162,7 +164,7 @@ class ActividadController extends Controller
         if ($lote) {
             $faseLote = $this->trazabilidad->resolverFaseActual($lote);
             $tipos = $tipos->filter(
-                fn (TipoActividad $t) => $this->trazabilidad->tipoActividadPermitidoEnFase($t->nombre, $faseLote)
+                fn (TipoActividad $t) => $this->trazabilidad->mensajeActividadNoPermitida($lote, $t->nombre) === null
             )->values();
         }
 
@@ -192,7 +194,7 @@ class ActividadController extends Controller
         }
 
         $responsablePinnedOption = null;
-        if ($puedeDesignarResponsable && $user) {
+        if ($puedeDesignarResponsable && $user && ! UsuarioRol::esJefeAgricultor($user)) {
             $responsablePinnedOption = [
                 'id' => (int) $user->usuarioid,
                 'label' => 'Asignarse a sí mismo',
@@ -258,7 +260,7 @@ class ActividadController extends Controller
         }
 
         $responsablePinnedOption = null;
-        if ($puedeDesignarResponsable && $user) {
+        if ($puedeDesignarResponsable && $user && ! UsuarioRol::esJefeAgricultor($user)) {
             $responsablePinnedOption = [
                 'id' => (int) $user->usuarioid,
                 'label' => 'Asignarse a sí mismo',
@@ -690,8 +692,8 @@ class ActividadController extends Controller
         $this->autorizarActividadAsignada($request, $actividad);
         $actividad->loadMissing(['lote', 'usuario']);
 
-        if ($actividad->fechafin !== null) {
-            return back()->with('error', 'No se puede cambiar el responsable de una actividad ya completada.');
+        if (! $actividad->estaPendiente()) {
+            return back()->with('error', 'No se puede cambiar el responsable de una actividad completada o cancelada.');
         }
 
         $user = $request->user();
@@ -716,7 +718,19 @@ class ActividadController extends Controller
             return back()->with('info', 'La actividad ya está asignada a ese responsable.');
         }
 
-        $actividad->update(['usuarioid' => $nuevoUsuarioId]);
+        DB::transaction(function () use ($actividad, $nuevoUsuarioId, $user) {
+            Lote::whereKey($actividad->loteid)->lockForUpdate()->firstOrFail();
+            $locked = Actividad::whereKey($actividad->actividadid)->lockForUpdate()->firstOrFail();
+            abort_unless(ActividadPermisos::puedeReasignar($user, $locked), 409, 'La tarea ya no está pendiente.');
+            $detalle = json_decode($locked->detalle_json ?? '', true) ?: [];
+            if ((int) $locked->usuarioid !== $nuevoUsuarioId) {
+                $detalle['historial_asignaciones'][] = ['anterior_usuarioid' => (int) $locked->usuarioid,
+                    'nuevo_usuarioid' => $nuevoUsuarioId, 'por_usuarioid' => (int) $user->usuarioid,
+                    'fecha' => now()->toIso8601String()];
+            }
+            $locked->update(['usuarioid' => $nuevoUsuarioId,
+                'detalle_json' => json_encode($detalle, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
+        });
         $actividad->refresh()->load('usuario');
 
         if ($nuevoUsuarioId !== (int) $user->usuarioid) {
@@ -730,7 +744,7 @@ class ActividadController extends Controller
 
     public function edit(Request $request, Actividad $actividad)
     {
-        $this->autorizarActividadAsignada($request, $actividad);
+        abort_unless(ActividadPermisos::puedeReasignar($request->user(), $actividad), 403, 'Solo el jefe del equipo puede editar tareas pendientes.');
 
         $user = $request->user();
         $lotes = $this->queryLotesParaActividad($request)->get();
@@ -759,7 +773,8 @@ class ActividadController extends Controller
 
     public function update(Request $request, Actividad $actividad)
     {
-        if ($actividad->fechafin !== null) {
+        abort_unless(UsuarioRol::gestionaCampo($request->user()) && ActividadPermisos::puedeAcceder($request->user(), $actividad), 403);
+        if (! $actividad->estaPendiente()) {
             return back()->with('error', 'El cierre confirmado de esta actividad no puede modificarse.');
         }
         $request->validate(['fechafin' => 'nullable|prohibited']);
@@ -777,6 +792,9 @@ class ActividadController extends Controller
         ]);
 
         $lote = Lote::findOrFail($data['loteid']);
+        $this->autorizarLoteParaActividad($request, $lote);
+        abort_unless((int) $lote->loteid === (int) $actividad->loteid, 422, 'La reasignación debe conservar el lote.');
+        abort_unless((int) $data['tipoactividadid'] === (int) $actividad->tipoactividadid, 422, 'La reasignación debe conservar el tipo de actividad.');
         $responsableAnterior = (int) $actividad->usuarioid;
         $data['usuarioid'] = $this->resolverUsuarioidActividad($request, $lote);
 
@@ -785,7 +803,20 @@ class ActividadController extends Controller
             unset($data['fechafin']);
         }
 
-        $actividad->update($data);
+        DB::transaction(function () use ($actividad, $data, $request) {
+            Lote::whereKey($actividad->loteid)->lockForUpdate()->firstOrFail();
+            $locked = Actividad::whereKey($actividad->actividadid)->lockForUpdate()->firstOrFail();
+            abort_unless(ActividadPermisos::puedeReasignar($request->user(), $locked), 409, 'La tarea ya no está pendiente.');
+            $detalle = json_decode($locked->detalle_json ?? '', true) ?: [];
+            if ((int) $locked->usuarioid !== (int) $data['usuarioid']) {
+                $detalle['historial_asignaciones'][] = ['anterior_usuarioid' => (int) $locked->usuarioid,
+                    'nuevo_usuarioid' => (int) $data['usuarioid'], 'por_usuarioid' => (int) $request->user()->usuarioid,
+                    'fecha' => now()->toIso8601String()];
+            }
+            $locked->fill($data);
+            $locked->detalle_json = json_encode($detalle, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $locked->save();
+        });
         $actividad->refresh();
 
         if (
@@ -808,10 +839,47 @@ class ActividadController extends Controller
 
     public function destroy(Actividad $actividad)
     {
+        abort_unless(ActividadPermisos::puedeReasignar(auth()->user(), $actividad), 403);
         abort_if($actividad->fechafin !== null, 409, 'No se puede eliminar una actividad con cierre confirmado.');
         $actividad->delete();
 
         return redirect()->route('actividades.index')->with('success', 'Actividad eliminada.');
+    }
+
+    public function tiposPermitidos(Request $request)
+    {
+        abort_unless(UsuarioRol::gestionaCampo($request->user()), 403);
+        $data = $request->validate(['loteid' => 'required|integer|exists:lote,loteid']);
+        $lote = Lote::findOrFail($data['loteid']);
+        $this->autorizarLoteParaActividad($request, $lote);
+
+        return response()->json(['tipos' => TipoActividad::orderBy('nombre')->get()->filter(fn ($tipo) =>
+            ! in_array(mb_strtolower(trim($tipo->nombre)), ['siembra', 'cosecha'], true)
+            && $this->trazabilidad->mensajeActividadNoPermitida($lote, $tipo->nombre) === null
+        )->map(fn ($tipo) => ['id' => $tipo->tipoactividadid, 'nombre' => $tipo->nombre])->values()]);
+    }
+
+    public function cancelarPreparacion(Request $request, Actividad $actividad)
+    {
+        abort_unless(UsuarioRol::gestionaCampo($request->user()) && ActividadPermisos::puedeAcceder($request->user(), $actividad), 403);
+        $data = $request->validate(['motivo' => 'required|string|max:500']);
+        abort_if(trim($data['motivo']) === '', 422, 'Indique el motivo de cancelación.');
+        DB::transaction(function () use ($request, $actividad, $data) {
+            Lote::whereKey($actividad->loteid)->lockForUpdate()->firstOrFail();
+            $locked = Actividad::whereKey($actividad->actividadid)->lockForUpdate()->firstOrFail();
+            if ($locked->cancelada_en !== null) {
+                return;
+            }
+            abort_unless(ActividadPermisos::puedeCancelarPreparacion($request->user(), $locked), 409,
+                'Solo puede cancelarse una preparación pendiente incompatible con una siembra ya realizada.');
+            abort_if($locked->consumos()->exists() || ! empty((json_decode($locked->detalle_json ?? '', true) ?: [])['stock_aplicado']), 409,
+                'La preparación tiene consumos registrados y requiere revisión antes de cancelarse.');
+            $locked->fill(['cancelada_en' => now(), 'cancelada_por_usuarioid' => $request->user()->usuarioid,
+                'motivo_cancelacion' => trim($data['motivo'])])->save();
+            $this->notificaciones->descartarActividadAsignada((int) $locked->actividadid);
+        });
+
+        return redirect()->route('lotes.trazabilidad', $actividad->loteid)->with('success', 'Preparación cancelada. Se conservó su historial y la siembra existente.');
     }
 
     /**
@@ -836,7 +904,9 @@ class ActividadController extends Controller
         try {
             $actividad = app(\App\Services\ActividadCierreService::class)->cerrar($request, $actividad);
         } catch (ValidationException $e) {
-            return $this->redirectDespuesDeMarcar($request, $actividad)->withErrors($e->errors())->withInput();
+            return $this->redirectDespuesDeMarcar($request, $actividad)
+                ->withErrors($e->errors())->withInput()
+                ->with('actividad_cierre_error_id', (int) $actividad->actividadid);
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
             if ($e->getStatusCode() !== 409) {
                 throw $e;
@@ -964,7 +1034,6 @@ class ActividadController extends Controller
 
         if (UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user)) {
             $ids = UsuarioRol::idsEmpleadosOperativosDeJefeAgricultor($user);
-            $ids[] = (int) $user->usuarioid;
 
             return Usuario::query()
                 ->whereIn('usuarioid', array_values(array_unique($ids)))
@@ -994,6 +1063,8 @@ class ActividadController extends Controller
 
         if ($user && UsuarioRol::esJefeAgricultor($user) && ! UsuarioRol::esAdminGlobal($user)) {
             $params['supervisor_usuarioid'] = $user->usuarioid;
+            $params['solo_empleados_equipo'] = true;
+            $params['excluir_jefes_agricolas'] = true;
         }
 
         if ($user && UsuarioRol::esAdminGlobal($user)) {
@@ -1011,7 +1082,7 @@ class ActividadController extends Controller
         }
 
         if ($actor && (int) $usuarioid === (int) $actor->usuarioid) {
-            return UsuarioRol::gestionaCampo($actor);
+            return false;
         }
 
         if (! UsuarioRol::esResponsableActividadPermitido($usuario)) {
@@ -1039,8 +1110,14 @@ class ActividadController extends Controller
         }
 
         $usuarioid = $request->integer('usuarioid');
+        if ($request->has('usuarioid')) {
+            $request->validate(['usuarioid' => 'required|integer|exists:usuario,usuarioid']);
+        }
         if ($usuarioid && $this->puedeAsignarResponsableActividad($auth, $usuarioid)) {
             return $usuarioid;
+        }
+        if ($request->filled('usuarioid')) {
+            throw ValidationException::withMessages(['usuarioid' => 'Seleccione un agricultor activo y aprobado de su equipo.']);
         }
 
         if (
@@ -1058,7 +1135,7 @@ class ActividadController extends Controller
 
     private function formatEventoCalendario(Actividad $act): array
     {
-        $pendiente = $act->fechafin === null;
+        $pendiente = $act->estaPendiente();
         $fecha = $act->fecha_planificada ?? $act->fechainicio;
 
         return [
@@ -1067,11 +1144,11 @@ class ActividadController extends Controller
             'start' => $fecha->format('Y-m-d'),
             'allDay' => true,
             'url' => route('actividades.show', $act),
-            'classNames' => [$pendiente ? 'actividad-pendiente' : 'actividad-completada'],
+            'classNames' => [$act->cancelada_en ? 'actividad-cancelada' : ($pendiente ? 'actividad-pendiente' : 'actividad-completada')],
             'extendedProps' => [
                 'responsable' => trim(($act->usuario?->nombre ?? '').' '.($act->usuario?->apellido ?? '')) ?: 'Sin asignar',
                 'lote' => $act->lote?->nombre,
-                'estado' => $pendiente ? 'Pendiente' : 'Completada',
+                'estado' => $act->cancelada_en ? 'Cancelada' : ($pendiente ? 'Pendiente' : 'Completada'),
             ],
         ];
     }

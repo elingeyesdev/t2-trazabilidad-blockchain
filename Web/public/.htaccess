@@ -5,8 +5,8 @@
 
     RewriteEngine On
 
-    # Activity evidence must pass through its authenticated controller.
-    RewriteRule ^storage/actividades_evidencia(?:/|$) - [F,L,NC]
+    # Internal files must pass through authorized controllers; approved evidence uses its own endpoint.
+    RewriteRule ^storage/(?:actividades_evidencia|documentos_entrega|certificados|recepciones-envio|evidencias_publicadas|actividades_privadas)(?:/|$) - [F,L,NC]
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .

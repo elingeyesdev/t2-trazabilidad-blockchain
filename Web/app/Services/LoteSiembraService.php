@@ -1,10 +1,6 @@
 <?php
 
-
-
 namespace App\Services;
-
-
 
 use App\Models\Actividad;
 use App\Models\Lote;
@@ -22,8 +18,6 @@ use Illuminate\Support\Facades\DB;
 
 use Illuminate\Validation\ValidationException;
 
-
-
 class LoteSiembraService
 
 {
@@ -38,118 +32,41 @@ class LoteSiembraService
 
     ) {}
 
-
-
     public function asignar(Lote $lote, int $responsableId, ?int $asignadoPorId = null): Actividad
-
     {
-
-        $tipo = $this->tipoSiembra();
-
-        $faseActual = $this->trazabilidad->resolverFaseActual($lote);
-
-
-
-        if ($this->trazabilidad->siembraCompletada($lote)) {
-
-            throw ValidationException::withMessages([
-
-                'siembra' => 'Este lote ya fue sembrado.',
-
-            ]);
-
-        }
-
-
-
-        if ($this->trazabilidad->actividadSiembraPendiente($lote) !== null) {
-
-            throw ValidationException::withMessages([
-
-                'siembra' => 'Ya hay una siembra asignada pendiente de realizar.',
-
-            ]);
-
-        }
-
-
-
-        if (! $this->trazabilidad->tipoActividadPermitidoEnFase($tipo->nombre, $faseActual)) {
-
-            throw ValidationException::withMessages([
-
-                'siembra' => 'El lote no está en fase de siembra.',
-
-            ]);
-
-        }
-
-
-
-        $bloqueo = $this->trazabilidad->mensajeActividadNoPermitida($lote, $tipo->nombre);
-
-        if ($bloqueo !== null) {
-
-            throw ValidationException::withMessages(['siembra' => $bloqueo]);
-
-        }
-
-
-
-        $ahora = now();
-
-
-
-        $actividad = DB::transaction(function () use ($lote, $tipo, $responsableId, $ahora) {
-
-            $prioridadId = Prioridad::query()->orderBy('prioridadid')->value('prioridadid');
-
-            if (! $prioridadId) {
-                $prioridadId = Prioridad::firstOrCreate(['nombre' => 'Media'], ['nombre' => 'Media'])->prioridadid;
+        return DB::transaction(function () use ($lote, $responsableId, $asignadoPorId) {
+            $lote = Lote::whereKey($lote->loteid)->lockForUpdate()->firstOrFail();
+            $tipo = $this->tipoSiembra();
+            if ($this->trazabilidad->siembraCompletada($lote)) {
+                throw ValidationException::withMessages(['siembra' => 'Este lote ya fue sembrado.']);
             }
-
+            $pendiente = $this->trazabilidad->actividadSiembraPendiente($lote);
+            if ($pendiente !== null) {
+                return $pendiente;
+            }
+            $bloqueo = $this->trazabilidad->mensajeActividadNoPermitida($lote, $tipo->nombre);
+            if ($bloqueo !== null) {
+                throw ValidationException::withMessages(['siembra' => $bloqueo]);
+            }
+            $responsable = Usuario::find($responsableId);
+            if (! $responsable || ! UsuarioRol::esResponsableActividadPermitido($responsable)) {
+                throw ValidationException::withMessages(['usuarioid' => 'Seleccione al agricultor que ejecutará la siembra.']);
+            }
+            $prioridad = Prioridad::query()->orderBy('prioridadid')->value('prioridadid')
+                ?? Prioridad::firstOrCreate(['nombre' => 'Media'])->prioridadid;
             $actividad = Actividad::create([
-
-                'loteid' => $lote->loteid,
-
-                'usuarioid' => $responsableId,
-
-                'descripcion' => $tipo->nombre ?? 'Siembra',
-
-                'fechainicio' => $ahora,
-
-                'fechafin' => null,
-
-                'tipoactividadid' => $tipo->tipoactividadid,
-
-                'prioridadid' => $prioridadId,
-
+                'loteid' => $lote->loteid, 'usuarioid' => $responsableId,
+                'descripcion' => $tipo->nombre, 'fechainicio' => now(),
+                'tipoactividadid' => $tipo->tipoactividadid, 'prioridadid' => $prioridad,
                 'observaciones' => 'Siembra asignada desde trazabilidad del lote.',
-
             ]);
-
             $this->secuencia->asignarOrden($actividad);
-
+            if ($asignadoPorId !== null && $asignadoPorId !== $responsableId) {
+                $this->notificaciones->actividadAsignada($actividad);
+            }
             return $actividad;
-
         });
-
-
-
-        if ($asignadoPorId !== null && (int) $asignadoPorId !== $responsableId) {
-
-            $this->notificaciones->actividadAsignada($actividad);
-
-        }
-
-
-
-        return $actividad;
-
     }
-
-
-
     /**
      * Registra la siembra como completada con foto (actividad pendiente o hito directo del agricultor).
      */

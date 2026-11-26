@@ -16,18 +16,23 @@
 <div class="container-fluid py-3" style="max-width:900px">
     <div class="mb-3"><div class="text-muted small">Envíos / Recepción</div><h1 class="h3 mb-1">{{ $envio['referencia'] }}</h1><span class="badge badge-light border">{{ $envio['tipo'] === 'agricola' ? \App\Support\EnvioAsignacionEstadoCatalogo::etiqueta($envio['estado']) : \App\Support\RutaDistribucionCatalogo::etiquetaEstado($envio['estado']) }}</span></div>
     @if($errors->any())<div class="alert alert-warning" role="alert">{{ $errors->first() }}</div>@endif
+    @if(session('exito'))<div class="alert alert-success" role="status">{{ session('exito') }}</div>@endif
+    @if($desdeDashboard ?? false)<a class="btn btn-outline-secondary btn-sm mb-3" href="{{ route('dashboard', absolute: false) }}">Volver al inicio</a>@endif
     <div class="card">
         <div class="card-header"><h2 class="card-title mb-0">{{ $qr->utilizado_en ? 'Recepción registrada' : 'Confirmar recepción' }}</h2></div>
         <div class="card-body">
             @foreach($envio['destinos'] as $destino)<p class="mb-2"><strong>Destino:</strong> {{ $destino['nombre'] ?? '' }} <span class="text-muted">{{ $destino['direccion'] ?? '' }}</span></p>@endforeach
             @if($qr->utilizado_en)
+                @if($envio['tipo'] === 'agricola' && in_array($envio['estado'], ['recibido_planta', 'entregado', 'entregada'], true))
+                    <p class="font-weight-bold text-success">Entrega finalizada</p>
+                @endif
                 <p>Este código ya fue utilizado el {{ $qr->utilizado_en->format('d/m/Y H:i') }}. Las cantidades y la firma quedaron registradas.</p>
                 <a class="btn btn-outline-success" href="{{ route('recepcion.comprobante', $qr->getKey()) }}">Ver comprobante</a>
             @elseif(! $puedeConfirmar)
                 <div class="alert alert-secondary mb-0">Puede consultar este envío. La confirmación corresponde al destinatario autorizado.</div>
             @else
                 <p class="text-muted small">Revise todas las cantidades antes de firmar. Esta confirmación se realiza una sola vez.</p>
-                <form method="POST" action="{{ route('recepcion.publica.firmar', $token) }}" id="recepcion-envio-form">
+                <form method="POST" action="{{ $accionFirma ?? route('recepcion.publica.firmar', $token, absolute: false) }}" id="recepcion-envio-form">
                     @csrf
                     <div class="table-responsive"><table class="table table-vcenter recepcion-lineas"><thead><tr><th>Pedido / Producto</th><th>Enviado</th><th style="min-width:160px">Recibido</th></tr></thead><tbody>
                     @foreach($envio['lineas'] as $i => $linea)

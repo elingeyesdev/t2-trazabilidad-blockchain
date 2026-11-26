@@ -153,6 +153,9 @@ class LoteTrazabilidadService
             && $this->milestonePreparacion($lote)) {
             return 'La preparación del lote ya fue registrada. Solo puede realizarse una vez.';
         }
+        if ($this->esPreparacion($nombre) && $this->actividadExistenteConKeywords($lote, ['labranza', 'prepar'], true)) {
+            return 'Este lote ya tiene una preparación pendiente. Complete o reasigne la tarea existente.';
+        }
 
         return null;
     }
@@ -175,7 +178,7 @@ class LoteTrazabilidadService
             return true;
         }
 
-        return $this->siguienteFase($faseActual) === $faseTipo;
+        return false;
     }
 
     private function faseDeTipoActividad(string $nombre): ?string
@@ -197,7 +200,20 @@ class LoteTrazabilidadService
 
     private function milestonePreparacion(Lote $lote): bool
     {
-        return $this->actividadCompletadaConKeywords($lote, ['labranza', 'prepar']);
+        // Los lotes anteriores a la elección del terreno podían comenzar con Siembra asignada.
+        // Conservan ese recorrido únicamente si no tienen una preparación registrada.
+        $siembraLegacyAsignada = $lote->preparacion_requerida === null
+            && $this->actividadExistenteConKeywords($lote, ['siembra'], true)
+            && ! $this->actividadExistenteConKeywords($lote, ['labranza', 'prepar'], true);
+
+        return $lote->preparacion_requerida === false
+            || $siembraLegacyAsignada
+            || $this->actividadCompletadaConKeywords($lote, ['labranza', 'prepar']);
+    }
+
+    public function esPreparacion(?string $nombre): bool
+    {
+        return $this->faseDeTipoActividad(mb_strtolower(trim($nombre ?? ''))) === 'preparacion';
     }
 
     public function trazabilidadCompleta(Lote $lote): bool
@@ -355,7 +371,7 @@ class LoteTrazabilidadService
         $lote->loadMissing('actividades.tipoActividad');
 
         return $lote->actividades
-            ->whereNull('fechafin')
+            ->whereNull('fechafin')->whereNull('cancelada_en')
             ->filter(fn (Actividad $actividad) => $this->esActividadCrecimientoEsencial($actividad))
             ->sortByDesc('fechainicio')
             ->values();
@@ -514,7 +530,7 @@ class LoteTrazabilidadService
         $lote->loadMissing('actividades.tipoActividad');
 
         return $lote->actividades
-            ->whereNull('fechafin')
+            ->whereNull('fechafin')->whereNull('cancelada_en')
             ->first(function (Actividad $actividad) {
                 $nombre = mb_strtolower(trim($actividad->tipoActividad->nombre ?? ''));
 
@@ -558,6 +574,7 @@ class LoteTrazabilidadService
     private function actividadExistenteConKeywords(Lote $lote, array $keywords, bool $incluirPendientes): bool
     {
         return $lote->actividades
+            ->whereNull('cancelada_en')
             ->when(! $incluirPendientes, fn (Collection $items) => $items->whereNotNull('fechafin'))
             ->contains(function ($actividad) use ($keywords) {
                 $nombre = mb_strtolower(trim($actividad->tipoActividad->nombre ?? ''));
@@ -807,6 +824,12 @@ class LoteTrazabilidadService
 
         $eventos = collect();
 
+        if ($lote->preparacion_requerida === false) {
+            $eventos->push($this->evento($lote->fechacreacion, 'estado', 'preparacion',
+                'Terreno declarado preparado', 'Al registrar el lote se indicó que el terreno ya estaba preparado.',
+                $lote->usuario?->nombreCompleto(), 'check', 'secondary'));
+        }
+
         foreach ($lote->historialEstados as $historial) {
             if ($this->historialEstadoOmitirEnTrazabilidad($historial, $lote)) {
                 continue;
@@ -826,7 +849,9 @@ class LoteTrazabilidadService
                 $presentacion['descripcion'],
                 $nombreHist,
                 'exchange-alt',
-                'info'
+                'info',
+                fechaCreacion: $historial->created_at ?? $historial->fecha_cambio,
+                registroId: (int) $historial->getKey(),
             ));
         }
 
@@ -861,10 +886,20 @@ class LoteTrazabilidadService
                 null,
                 null,
                 $imagenInsumo ? 'insumo' : null,
+                registroId: (int) $insumo->getKey(),
             ));
         }
 
         foreach ($lote->actividades as $actividad) {
+            if ($actividad->cancelada_en !== null) {
+                $eventos->push($this->evento(
+                    $actividad->cancelada_en, 'actividad', 'preparacion', 'Preparación cancelada',
+                    'Motivo: '.$actividad->motivo_cancelacion.' · Cancelada por usuario #'.$actividad->cancelada_por_usuarioid,
+                    null, 'ban', 'secondary', false, (int) $actividad->actividadid,
+                    fechaCreacion: $actividad->fechainicio,
+                ));
+                continue;
+            }
             $tipoNombre = strtolower(trim($actividad->tipoActividad->nombre ?? ''));
 
             // La siembra tiene pantalla y flujo propios; no aparece como «actividad» en el historial.
@@ -904,6 +939,7 @@ class LoteTrazabilidadService
                 $evidenciaHistorial['icono'],
                 $evidenciaHistorial['tipo'],
                 $evidenciaHistorial['foto_url'],
+                fechaCreacion: $actividad->fechainicio,
             ));
         }
 
@@ -925,6 +961,7 @@ class LoteTrazabilidadService
                 (int) $produccion->produccionid,
                 null,
                 $evidenciaCosecha ? 'foto' : null,
+                fechaCreacion: $produccion->fechacosecha,
             ));
 
             foreach ($produccion->almacenamientos as $alm) {
@@ -939,7 +976,8 @@ class LoteTrazabilidadService
                         .($alm->unidadMedida->abreviatura ?? 'kg'),
                     null,
                     'warehouse',
-                    'secondary'
+                    'secondary',
+                    registroId: (int) $alm->getKey(),
                 );
                 if ($alm->almacen) {
                     $eventoAlmacen['almacenid'] = (int) $alm->almacenid;
@@ -959,7 +997,8 @@ class LoteTrazabilidadService
                         .number_format((float) ($venta->preciounitario ?? 0), 2),
                     null,
                     'shopping-cart',
-                    'info'
+                    'info',
+                    registroId: (int) $venta->getKey(),
                 ));
             }
         }
@@ -981,7 +1020,8 @@ class LoteTrazabilidadService
                 $detalle,
                 trim(($cert->usuario->nombre ?? '').' '.($cert->usuario->apellido ?? '')) ?: null,
                 'certificate',
-                $cert->esNoConforme() ? 'danger' : 'success'
+                $cert->esNoConforme() ? 'danger' : 'success',
+                registroId: (int) $cert->getKey(),
             ));
         }
 
@@ -993,12 +1033,13 @@ class LoteTrazabilidadService
     /** @var array<string, int> */
     private const ETAPAS_HISTORIAL_ORDEN = [
         'planificacion' => 1,
-        'siembra' => 2,
-        'actividad' => 3,
-        'insumo' => 4,
-        'cosecha' => 5,
-        'certificacion' => 6,
-        'almacen' => 7,
+        'preparacion' => 2,
+        'siembra' => 3,
+        'actividad' => 4,
+        'insumo' => 5,
+        'cosecha' => 6,
+        'certificacion' => 7,
+        'almacen' => 8,
     ];
 
     /**
@@ -1013,26 +1054,26 @@ class LoteTrazabilidadService
     }
 
     /**
-     * Clave única para ordenar: etapa del ciclo (asc) y luego fecha/hora (asc).
+     * Etapa, fecha de creación e ID; cerrar una actividad no cambia su posición.
      * sortBy con un solo extractor es compatible con todas las versiones de Laravel.
      */
     private function claveOrdenHistorial(array $evento): string
     {
         $etapa = $this->etapaOrdenHistorial($evento);
-        $ts = str_pad((string) $this->parseFechaApp($evento['fecha'])->timestamp, 12, '0', STR_PAD_LEFT);
-        $desempate = str_pad((string) ($evento['actividadid'] ?? $evento['produccionid'] ?? 0), 8, '0', STR_PAD_LEFT);
+        $ts = $this->parseFechaApp($evento['fecha_creacion'] ?? $evento['fecha'])->format('YmdHisu');
+        $desempate = str_pad((string) ($evento['registro_id'] ?? $evento['actividadid'] ?? $evento['produccionid'] ?? 0), 20, '0', STR_PAD_LEFT);
 
         return sprintf('%02d-%s-%s', $etapa, $ts, $desempate);
     }
 
     /**
-     * Etapa fija del ciclo: planificación → siembra → actividades → cosecha → certificación → almacén.
+     * Etapa fija del ciclo: planificación → preparación → siembra → actividades → cosecha → certificación → almacén.
      */
     private function etapaOrdenHistorial(array $evento): int
     {
         $etapa = $this->clasificarEtapaHistorial($evento);
 
-        return self::ETAPAS_HISTORIAL_ORDEN[$etapa] ?? 3;
+        return self::ETAPAS_HISTORIAL_ORDEN[$etapa] ?? self::ETAPAS_HISTORIAL_ORDEN['actividad'];
     }
 
     private function clasificarEtapaHistorial(array $evento): string
@@ -1061,13 +1102,12 @@ class LoteTrazabilidadService
             return 'almacen';
         }
 
-        if ($tipo === 'estado' || ($tipo === 'actividad' && $fase === 'preparacion')) {
-            if (
-                $fase === 'preparacion'
-                || str_contains($titulo, 'planificacion')
-            ) {
-                return 'planificacion';
-            }
+        if ($tipo === 'estado' && str_contains($titulo, 'planificacion')) {
+            return 'planificacion';
+        }
+
+        if ($fase === 'preparacion') {
+            return 'preparacion';
         }
 
         if (in_array($tipo, ['actividad'], true)) {
@@ -1197,10 +1237,8 @@ class LoteTrazabilidadService
     {
         $base = $this->buildLoteDetalleBase($lote);
         $filtros = $this->parseFiltros($request);
-        $eventos = $this->buildEventos($lote);
-        $eventosFiltrados = $this->numerarYOrdenarEventosHistorial(
-            $this->filtrarEventos($eventos, $filtros)
-        );
+        $eventos = $this->numerarYOrdenarEventosHistorial($this->buildEventos($lote));
+        $eventosFiltrados = $this->filtrarEventos($eventos, $filtros);
         $faseActual = $this->resolverFaseActual($lote);
 
         $porFase = $eventos->groupBy('fase')->map->count();
@@ -1224,7 +1262,9 @@ class LoteTrazabilidadService
             $url = null;
             if ($estado === 'next' || ($estado === 'active' && ! $completo)) {
                 $candidata = $this->urlAccionFase($lote, $key);
-                if ($key === 'cosecha' && $faseActual === 'en_crecimiento' && ! $this->puedeUsuarioIrACosecha($lote, $user)) {
+                if ($key === 'siembra' && $faseActual !== 'siembra') {
+                    $url = null;
+                } elseif ($key === 'cosecha' && $faseActual === 'en_crecimiento' && ! $this->puedeUsuarioIrACosecha($lote, $user)) {
                     $url = null;
                 } elseif ($key === 'envio_almacen' && ! app(CertificacionCampoService::class)->estaCertificado($lote)) {
                     $url = null;
@@ -1271,6 +1311,9 @@ class LoteTrazabilidadService
 
         $siguienteFase = $this->siguienteFase($faseActual);
         $urlSiguienteFase = $siguienteFase ? $this->urlAccionFase($lote, $siguienteFase) : null;
+        if ($faseActual === 'preparacion') {
+            $urlSiguienteFase = null;
+        }
         $puedeCertificarCampo = $this->puedeCertificarCampo($lote, $user);
         $puedeEnviarAlmacen = $this->puedeEnviarAlmacenCampo($lote, $user);
         $produccionPendienteAlmacen = $this->produccionPendienteAlmacen($lote);
@@ -1285,11 +1328,7 @@ class LoteTrazabilidadService
             $siembraPendiente->loadMissing('usuario');
         }
         $actividadesMarcablesIds = $this->idsActividadesMarcables($lote, $user);
-        $puedeCompletarSiembraDirecta = $siguienteFase === 'siembra'
-            && ! $this->siembraCompletada($lote)
-            && $siembraPendiente === null
-            && $user
-            && UsuarioRol::gestionaCampo($user);
+        $puedeCompletarSiembraDirecta = false;
         $puedeCompletarSiembra = $puedeCompletarSiembraDirecta
             || ($siembraPendiente !== null
                 && in_array((int) $siembraPendiente->actividadid, $actividadesMarcablesIds, true));
@@ -1322,7 +1361,7 @@ class LoteTrazabilidadService
             'puede_enviar_almacen' => $puedeEnviarAlmacen,
             'produccion_pendiente_almacen' => $produccionPendienteAlmacen,
             'certificacion_campo' => $certCampo->ultima($lote),
-            'puede_asignar_siembra' => $siguienteFase === 'siembra'
+            'puede_asignar_siembra' => $faseActual === 'siembra' && UsuarioRol::gestionaCampo($user)
                 && ! $this->siembraCompletada($lote)
                 && $siembraPendiente === null
                 && ! $puedeCompletarSiembraDirecta,
@@ -1376,7 +1415,7 @@ class LoteTrazabilidadService
 
         return Actividad::query()
             ->where('loteid', $lote->loteid)
-            ->whereNull('fechafin')
+            ->whereNull('fechafin')->whereNull('cancelada_en')
             ->with('tipoActividad')
             ->get()
             ->filter(fn (Actividad $actividad) => ActividadPermisos::puedeMarcarCompletada($user, $actividad))
@@ -1416,7 +1455,7 @@ class LoteTrazabilidadService
             'total_insumos' => $lote->lote_insumos_count,
             'total_actividades' => $lote->actividades_count,
             'actividades_completadas' => $lote->actividades->whereNotNull('fechafin')->count(),
-            'actividades_pendientes' => $lote->actividades->whereNull('fechafin')->count(),
+            'actividades_pendientes' => $lote->actividades->whereNull('fechafin')->whereNull('cancelada_en')->count(),
             'total_aplicaciones' => $lote->lote_insumos_count,
             'total_cosechas' => $lote->producciones_count,
             'produccion_total' => $lote->producciones->sum('cantidad'),
@@ -1514,7 +1553,7 @@ class LoteTrazabilidadService
     {
         $tipoNombre = strtolower(trim($actividad->tipoActividad->nombre ?? ''));
 
-        if (str_contains($tipoNombre, 'labranza')) {
+        if ($this->esPreparacion($tipoNombre)) {
             return 'preparacion';
         }
         if (str_contains($tipoNombre, 'siembra')) {
@@ -1671,9 +1710,13 @@ class LoteTrazabilidadService
         ?string $evidenciaIcono = null,
         ?string $evidenciaTipo = null,
         ?string $evidenciaFotoUrl = null,
+        mixed $fechaCreacion = null,
+        ?int $registroId = null,
     ): array {
         $row = [
             'fecha' => $fecha,
+            'fecha_creacion' => $fechaCreacion ?? $fecha,
+            'registro_id' => $registroId ?? $actividadid ?? $produccionid,
             'fecha_iso' => $fecha ? $this->parseFechaApp($fecha)->toIso8601String() : null,
             'fecha_fmt' => $this->formatearFechaApp($fecha),
             'tipo' => $tipo,
@@ -1727,7 +1770,6 @@ class LoteTrazabilidadService
 
                 return $evento;
             })
-            ->reverse()
             ->values();
     }
 
@@ -2039,7 +2081,9 @@ class LoteTrazabilidadService
                 $cosechaIncluida = true;
             }
 
-            $clave = $tipo.'|'.$titulo.'|'.$fechaKey;
+            $clave = $evento['registro_id'] !== null
+                ? $tipo.'|'.$evento['registro_id']
+                : $tipo.'|'.$titulo.'|'.$fechaKey;
             if (isset($vistos[$clave])) {
                 return false;
             }
@@ -2248,6 +2292,7 @@ class LoteTrazabilidadService
             null,
             null,
             $evidenciaSiembra ? 'foto' : null,
+            fechaCreacion: $siembra?->fechainicio ?? $fecha,
         ));
     }
 

@@ -11,7 +11,7 @@ class ActividadConsultaResource extends JsonResource
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        $pendiente = $this->fechafin === null;
+        $pendiente = $this->resource->estaPendiente();
         $consulta = ActividadConsulta::presentar($this->resource, true);
 
         return [
@@ -30,8 +30,10 @@ class ActividadConsultaResource extends JsonResource
             // Keep the legacy key without disclosing a private storage locator.
             'evidencia_foto_path' => null,
             'pendiente' => $pendiente,
-            'completada' => ! $pendiente,
-            'estado_tarea' => $pendiente ? 'pendiente' : 'completada',
+            'completada' => $this->fechafin !== null,
+            'estado_tarea' => $this->cancelada_en ? 'cancelada' : ($pendiente ? 'pendiente' : 'completada'),
+            'cancelada_en' => $this->cancelada_en,
+            'motivo_cancelacion' => $this->motivo_cancelacion,
             'responsable' => $this->whenLoaded('usuario', fn () => $this->presentarUsuario($this->usuario)),
             'usuario' => $this->whenLoaded('usuario', fn () => $this->presentarUsuario($this->usuario)),
             'ejecutor' => $this->whenLoaded('ejecutor', fn () => $this->presentarUsuario($this->ejecutor)),

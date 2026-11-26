@@ -18,6 +18,8 @@ class Lote extends Model
 
     protected $fillable = [
         'usuarioid',
+        'preparacion_requerida',
+        'agricultor_inicial_usuarioid',
         'nombre',
         'ubicacion',
         'superficie',
@@ -40,6 +42,8 @@ class Lote extends Model
     protected $casts = [
         'loteid'              => 'integer',
         'usuarioid'           => 'integer',
+        'preparacion_requerida' => 'boolean',
+        'agricultor_inicial_usuarioid' => 'integer',
         'superficie'          => 'float',
         'unidadsuperficieid'  => 'integer',
         'cultivoid'           => 'integer',

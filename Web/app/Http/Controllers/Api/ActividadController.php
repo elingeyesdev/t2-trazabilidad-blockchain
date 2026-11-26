@@ -123,7 +123,7 @@ class ActividadController extends Controller
         }
 
         if (($filters['estado'] ?? null) === 'pendiente') {
-            $query->whereNull('fechafin');
+            $query->whereNull('fechafin')->whereNull('cancelada_en');
         } elseif (($filters['estado'] ?? null) === 'completada') {
             $query->whereNotNull('fechafin');
         }
@@ -205,7 +205,7 @@ class ActividadController extends Controller
         $actor = $request->user();
         $id = $request->integer('usuarioid');
         $usuario = \App\Models\Usuario::find($id);
-        $permitido = $usuario && $usuario->activo && UsuarioRol::puedeOperar($actor)
+        $permitido = $usuario && \App\Support\CuentaEstado::puedeIniciarSesion($usuario->estado_cuenta, (bool) $usuario->activo) && UsuarioRol::puedeOperar($actor)
             && (($id === (int) $actor->usuarioid && UsuarioRol::gestionaCampo($actor))
                 || (UsuarioRol::esJefeAgricultor($actor)
                     && UsuarioRol::esResponsableActividadPermitido($usuario)
@@ -225,7 +225,7 @@ class ActividadController extends Controller
             403,
             'No tienes acceso a esta actividad.'
         );
-        abort_if($actividad->fechafin !== null, 409, 'El cierre confirmado de esta actividad no puede modificarse.');
+        abort_unless($actividad->estaPendiente(), 409, 'Una actividad cerrada o cancelada no puede modificarse.');
 
         $data = $request->validate([
             'loteid' => 'sometimes|exists:lote,loteid',
@@ -301,7 +301,7 @@ class ActividadController extends Controller
             403,
             'No tienes permiso para eliminar esta actividad.'
         );
-        abort_if($actividad->fechafin !== null, 409, 'No se puede eliminar una actividad con cierre confirmado.');
+        abort_unless($actividad->estaPendiente(), 409, 'No se puede eliminar una actividad cerrada o cancelada.');
 
         $actividad->delete();
 

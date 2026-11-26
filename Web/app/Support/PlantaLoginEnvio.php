@@ -3,89 +3,68 @@
 namespace App\Support;
 
 use App\Models\EnvioAsignacionMultiple;
+use App\Models\RecepcionQrEnvio;
 use App\Models\RutaDistribucion;
 use App\Models\Usuario;
+use App\Services\EnvioMovilConsultaService;
+use App\Services\EnvioRecepcionQrService;
+use App\Services\RecepcionPlantaEnvioService;
 
 final class PlantaLoginEnvio
 {
-    /**
-     * Envío logístico activo que requiere atención de planta (prioridad operativa).
-     *
-     * @return array{codigo: string, url: string, producto: string, tipo: string}|null
-     */
+    /** @return array{codigo: string, url: string, producto: string, tipo: string, accion: string, puede_recibir: bool}|null */
     public static function envioPrioritario(?Usuario $user): ?array
     {
-        if (! $user || ! self::aplicaRedirect($user)) {
-            return null;
-        }
-
-        $trasladoEnRuta = RutaDistribucion::query()
-            ->where('tipo_ruta', RutaDistribucionCatalogo::TIPO_RUTA_PLANTA_MAYORISTA)
-            ->where('estado', RutaDistribucionCatalogo::ESTADO_EN_RUTA)
-            ->with(['detallesTraslado.insumo'])
-            ->orderByDesc('updated_at')
-            ->first();
-
-        if ($trasladoEnRuta) {
-            return self::mapearTraslado($trasladoEnRuta, route('logistica.traslados-planta.cierre.panel', $trasladoEnRuta));
-        }
-
-        $trasladoPlanificado = RutaDistribucion::query()
-            ->where('tipo_ruta', RutaDistribucionCatalogo::TIPO_RUTA_PLANTA_MAYORISTA)
-            ->where('estado', RutaDistribucionCatalogo::ESTADO_PLANIFICADA)
-            ->with(['detallesTraslado.insumo'])
-            ->orderByDesc('updated_at')
-            ->first();
-
-        if ($trasladoPlanificado) {
-            return self::mapearTraslado($trasladoPlanificado, route('logistica.traslados-planta.show', $trasladoPlanificado));
-        }
-
-        $trasladoPendiente = RutaDistribucion::query()
-            ->where('tipo_ruta', RutaDistribucionCatalogo::TIPO_RUTA_PLANTA_MAYORISTA)
-            ->where('estado', RutaDistribucionCatalogo::ESTADO_PENDIENTE_APROBACION)
-            ->with(['detallesTraslado.insumo'])
-            ->orderByDesc('created_at')
-            ->first();
-
-        if ($trasladoPendiente) {
-            return self::mapearTraslado($trasladoPendiente, route('logistica.traslados-planta.show', $trasladoPendiente));
-        }
-
-        $asignacion = EnvioAsignacionMultiple::query()
-            ->whereIn('estado', ['en_ruta', 'en_transporte_planta', 'en_transito'])
-            ->whereNull('fecha_recepcion_planta')
-            ->with(['pedido.detalles'])
-            ->orderByDesc('fecha_asignacion')
-            ->first();
-
-        if ($asignacion) {
-            $pedido = $asignacion->pedido;
-
-            return [
-                'tipo' => 'agricola',
-                'codigo' => $asignacion->externo_envio_id ?? $pedido?->numero_solicitud ?? '#'.$asignacion->envioasignacionmultipleid,
-                'producto' => $pedido?->detalles?->first()?->cultivo_personalizado ?? 'Envío agrícola hacia planta',
-                'url' => route('logistica.asignaciones.show', $asignacion),
-            ];
-        }
-
-        return null;
+        return self::enviosPendientesPlanta($user, 1)[0] ?? null;
     }
 
-    /**
-     * @return list<array{codigo: string, url: string, producto: string, tipo: string}>
-     */
+    /** @return list<array{codigo: string, url: string, producto: string, tipo: string, accion: string, puede_recibir: bool}> */
     public static function enviosPendientesPlanta(?Usuario $user, int $limite = 5): array
     {
         if (! $user || ! self::aplicaRedirect($user)) {
             return [];
         }
 
-        $items = collect();
+        $consulta = app(EnvioMovilConsultaService::class);
+        $recepcion = app(EnvioRecepcionQrService::class);
+        $destinos = app(RecepcionPlantaEnvioService::class);
+        $almacenesPropios = PlantaAccess::idsAlmacenesPlanta($user);
+
+        $items = $consulta->consulta('agricola', $user)
+            ->whereIn('estado', ['en_ruta', 'en_transporte_planta', 'en_transito'])
+            ->whereNull('fecha_recepcion_planta')
+            ->with(['pedido.detalles'])
+            ->orderByDesc('fecha_asignacion')
+            ->get()
+            ->filter(function (EnvioAsignacionMultiple $envio) use ($destinos, $almacenesPropios) {
+                if (! $envio->pedido) {
+                    return false;
+                }
+                try {
+                    return in_array((int) $destinos->resolverAlmacenPlantaDesdePedido($envio->pedido)->getKey(), $almacenesPropios, true);
+                } catch (\InvalidArgumentException) {
+                    return false;
+                }
+            })
+            ->map(function (EnvioAsignacionMultiple $envio) use ($user, $recepcion) {
+                $puedeRecibir = $recepcion->puedeConfirmar(new RecepcionQrEnvio, $user, $envio)
+                    && $recepcion->listaParaRecepcion($envio);
+
+                return [
+                    'tipo' => 'agricola',
+                    'codigo' => $envio->pedido?->numero_solicitud ?? $envio->externo_envio_id ?? '#'.$envio->getKey(),
+                    'producto' => $envio->pedido?->detalles?->first()?->cultivo_personalizado ?? 'Envío agrícola hacia planta',
+                    'url' => $puedeRecibir
+                        ? route('recepcion.planta', $envio->getKey(), absolute: false)
+                        : route('envios.operacion', ['tipo' => 'agricola', 'envio' => $envio->getKey()], absolute: false),
+                    'accion' => $puedeRecibir ? 'Recibir envío' : 'Ver seguimiento',
+                    'puede_recibir' => $puedeRecibir,
+                ];
+            });
 
         RutaDistribucion::query()
             ->where('tipo_ruta', RutaDistribucionCatalogo::TIPO_RUTA_PLANTA_MAYORISTA)
+            ->whereIn('almacen_planta_origenid', $almacenesPropios)
             ->whereNotIn('estado', [
                 RutaDistribucionCatalogo::ESTADO_COMPLETADA,
                 RutaDistribucionCatalogo::ESTADO_CANCELADA,
@@ -99,53 +78,21 @@ final class PlantaLoginEnvio
                 $url = $ruta->estado === RutaDistribucionCatalogo::ESTADO_EN_RUTA
                     ? route('logistica.traslados-planta.cierre.panel', $ruta)
                     : route('logistica.traslados-planta.show', $ruta);
-                $items->push(self::mapearTraslado($ruta, $url));
-            });
-
-        EnvioAsignacionMultiple::query()
-            ->whereIn('estado', ['en_ruta', 'en_transporte_planta', 'en_transito'])
-            ->whereNull('fecha_recepcion_planta')
-            ->with(['pedido.detalles'])
-            ->orderByDesc('fecha_asignacion')
-            ->limit($limite)
-            ->get()
-            ->each(function (EnvioAsignacionMultiple $a) use ($items) {
-                $pedido = $a->pedido;
                 $items->push([
-                    'tipo' => 'agricola',
-                    'codigo' => $a->externo_envio_id ?? $pedido?->numero_solicitud ?? '#'.$a->envioasignacionmultipleid,
-                    'producto' => $pedido?->detalles?->first()?->cultivo_personalizado ?? 'Envío agrícola hacia planta',
-                    'url' => route('logistica.asignaciones.show', $a),
+                    'tipo' => 'planta_mayorista',
+                    'codigo' => $ruta->codigo,
+                    'producto' => $ruta->detallesTraslado?->first()?->insumo?->nombre ?? $ruta->nombre ?? 'Traslado planta → mayorista',
+                    'url' => $url, 'accion' => 'Ir al envío', 'puede_recibir' => false,
                 ]);
             });
 
-        return $items
-            ->unique(fn (array $row) => $row['url'])
-            ->take($limite)
-            ->values()
-            ->all();
+        return $items->sortByDesc('puede_recibir')->unique('url')->take($limite)->values()->all();
     }
 
     private static function aplicaRedirect(Usuario $user): bool
     {
-        if (UsuarioRol::esAdminGlobal($user)) {
-            return false;
-        }
-
-        return UsuarioRol::esJefePlanta($user)
-            || ($user->can('panel_planta.view') && $user->can('pedidos.view'));
-    }
-
-    /** @return array{codigo: string, url: string, producto: string, tipo: string} */
-    private static function mapearTraslado(RutaDistribucion $ruta, string $url): array
-    {
-        $detalle = $ruta->detallesTraslado?->first();
-
-        return [
-            'tipo' => 'planta_mayorista',
-            'codigo' => $ruta->codigo,
-            'producto' => $detalle?->insumo?->nombre ?? $ruta->nombre ?? 'Traslado planta → mayorista',
-            'url' => $url,
-        ];
+        return ! UsuarioRol::esAdminGlobal($user)
+            && (UsuarioRol::esJefePlanta($user)
+                || ($user->can('panel_planta.view') && $user->can('pedidos.view')));
     }
 }

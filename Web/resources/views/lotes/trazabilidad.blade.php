@@ -394,7 +394,7 @@
                         <div class="evento-trz{{ $puedeCompletarEvento ? ' tiene-accion' : '' }}"
                             data-tipo="{{ $evento['tipo'] }}"
                             data-fase="{{ $evento['fase'] }}"
-                            data-paso="{{ $loop->iteration }}"
+                            data-paso="{{ $evento['paso'] ?? $loop->iteration }}"
                             >
                             <div class="evento-trz-cuerpo">
                                 <div class="d-flex justify-content-between flex-wrap">
@@ -452,6 +452,12 @@
                                         <i class="ti ti-check me-1"></i> Completar
                                     </button>
                                 </div>
+                            @endif
+                            @if(!empty($evento['actividadid']))
+                                @php($actividadGestion = $lote->actividades->firstWhere('actividadid', $evento['actividadid']))
+                                @if($actividadGestion)
+                                    @include('actividades.partials.gestion-pendiente', ['actividad' => $actividadGestion])
+                                @endif
                             @endif
                         </div>
                         </div>

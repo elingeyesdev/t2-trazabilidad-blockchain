@@ -35,27 +35,20 @@ class TrazabilidadProductoPdvService
 
     public function asegurarCodigo(Insumo $insumo): string
     {
-        if (filled($insumo->codigo_trazabilidad)) {
-            return $insumo->codigo_trazabilidad;
-        }
-
-        do {
-            $codigo = 'TRZ-PDV-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
-        } while (Insumo::query()->where('codigo_trazabilidad', $codigo)->exists());
-
-        $insumo->update(['codigo_trazabilidad' => $codigo]);
-
-        return $codigo;
+        return CodigoTrazabilidadPdv::asegurar($insumo);
     }
 
     public function urlPublica(Insumo $insumo): string
     {
-        $codigo = $this->asegurarCodigo($insumo);
-        $path = route('trazabilidad.publica', ['codigo' => $codigo], false);
+        $datos = CodigoTrazabilidadPdv::datos($insumo);
+        if ($datos['trazabilidad_url'] === null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'codigo_trazabilidad' => 'Este producto no tiene un código público admitido. Revise la regularización PDV.',
+            ]);
+        }
 
-        return PublicUrlHelper::absoluteForQr($path);
+        return $datos['trazabilidad_url'];
     }
-
     /**
      * @return array<string, mixed>|null
      */

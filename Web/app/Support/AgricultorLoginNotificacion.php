@@ -46,7 +46,7 @@ final class AgricultorLoginNotificacion
         $actividades = Actividad::query()
             ->with(['lote', 'tipoActividad', 'prioridad'])
             ->where('usuarioid', $user->usuarioid)
-            ->whereNull('fechafin')
+            ->whereNull('fechafin')->whereNull('cancelada_en')
             ->orderByDesc('fechainicio')
             ->limit(20)
             ->get();

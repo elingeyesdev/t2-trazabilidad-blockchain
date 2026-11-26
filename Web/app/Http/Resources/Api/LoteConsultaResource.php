@@ -66,7 +66,7 @@ class LoteConsultaResource extends JsonResource
             'actividades' => $actividades,
             'actividades_pendientes' => $this->whenLoaded(
                 'actividades',
-                fn () => $this->actividades->whereNull('fechafin')->count()
+                fn () => $this->actividades->whereNull('fechafin')->whereNull('cancelada_en')->count()
             ),
             'producciones' => $this->whenLoaded('producciones', fn () => $this->producciones->map(fn ($produccion) => [
                 'produccionid' => (int) $produccion->produccionid,

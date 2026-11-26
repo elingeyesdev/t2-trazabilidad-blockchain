@@ -51,6 +51,15 @@ class Insumo extends Model
         'loteInsumos',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $insumo) {
+            if (blank($insumo->codigo_trazabilidad) && \App\Support\CodigoTrazabilidadPdv::elegible($insumo)) {
+                $insumo->codigo_trazabilidad = \App\Support\CodigoTrazabilidadPdv::generar();
+            }
+        });
+    }
+
     public function tipo()
     {
         return $this->belongsTo(TipoInsumo::class, 'tipoinsumoid', 'tipoinsumoid');

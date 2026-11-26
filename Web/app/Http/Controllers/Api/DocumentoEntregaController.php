@@ -76,6 +76,9 @@ class DocumentoEntregaController extends Controller
     public function download(DocumentoEntrega $documento): StreamedResponse
     {
         abort_unless(\App\Support\DocumentoEntregaAcceso::puedeVerDocumento($documento, auth()->user()), 403);
+        $path = (string) $documento->archivo_path;
+        abort_if($path === '' || str_contains($path, '..') || str_contains($path, '\\')
+            || str_starts_with($path, '/') || str_contains($path, ':') || str_contains($path, "\0"), 404, 'Documento no encontrado.');
         abort_unless(Storage::disk('public')->exists($documento->archivo_path), 404, 'Documento no encontrado.');
 
         return Storage::disk('public')->download(

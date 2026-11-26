@@ -281,7 +281,25 @@ class LoteController extends Controller
 
     public function store(Request $request, bool $devolverModelo = false)
     {
+        $lote = $devolverModelo
+            ? $this->crearLote($request, false)
+            : app(\App\Services\LoteInicioService::class)->registrar($request, fn () => $this->crearLote($request, true));
+
+        if ($devolverModelo) {
+            return $lote->fresh();
+        }
+
+        return redirect()->route('lotes.index')->with('lote_creado_modal', [
+            'nombre' => $lote->nombre,
+            'trazabilidad_url' => route('lotes.trazabilidad', $lote, absolute: false),
+        ]);
+    }
+
+    private function crearLote(Request $request, bool $inicioWeb): Lote
+    {
         $data = $request->validate([
+            'preparacion_terreno' => [$inicioWeb ? 'required' : 'required_with:agricultor_inicial_usuarioid', 'in:requiere_preparacion,ya_preparado'],
+            'agricultor_inicial_usuarioid' => [$inicioWeb ? 'required' : 'required_with:preparacion_terreno', 'integer', 'exists:usuario,usuarioid'],
             'usuarioid' => ['nullable', 'exists:usuario,usuarioid', $this->reglaResponsableLote($request->user())],
             'nombre' => 'required|string|max:100',
             'ubicacion' => 'nullable|string|max:200',
@@ -300,6 +318,14 @@ class LoteController extends Controller
         ]);
 
         $data['usuarioid'] = $this->resolverUsuarioidLote($request, $data['usuarioid'] ?? null);
+        $configurarInicio = $inicioWeb || $request->filled('preparacion_terreno');
+        if ($configurarInicio) {
+            $data['usuarioid'] = $request->user()->usuarioid;
+            $request->validate(['agricultor_inicial_usuarioid' => 'required|integer|exists:usuario,usuarioid']);
+            app(\App\Services\LoteInicioService::class)->validarAgricultor($request->user(), (int) $data['agricultor_inicial_usuarioid']);
+            $data['preparacion_requerida'] = $data['preparacion_terreno'] === 'requiere_preparacion';
+        }
+        unset($data['preparacion_terreno']);
         $data['insumosemillaid'] = $this->resolverInsumoSemilla($data['insumosemillaid'] ?? null);
         $data['cultivoid'] = LoteCultivoResolver::resolver($data['insumosemillaid']);
         if (empty(trim($data['nombre'])) && $data['insumosemillaid']) {
@@ -348,19 +374,14 @@ class LoteController extends Controller
         $data = LoteDefaults::enrich($data, true);
         $lote = Lote::create($data);
         LoteDefaults::registrarHistorialInicial($lote);
-        $this->asignarSiembraInicialSiCorresponde($lote, (int) $request->user()->usuarioid);
+        if ($configurarInicio) {
+            app(\App\Services\LoteInicioService::class)->inicializar($lote, $request->user());
+        } else {
+            $this->asignarSiembraInicialSiCorresponde($lote, (int) $request->user()->usuarioid);
+        }
         $this->notificaciones->loteAsignado($lote);
 
-        if ($devolverModelo) {
-            return $lote->fresh();
-        }
-
-        return redirect()
-            ->route('lotes.index')
-            ->with('lote_creado_modal', [
-                'nombre' => $lote->nombre,
-                'trazabilidad_url' => route('lotes.trazabilidad', $lote, absolute: false),
-            ]);
+        return $lote;
     }
 
 
@@ -1026,7 +1047,7 @@ class LoteController extends Controller
 
     private function asignarSiembraInicialSiCorresponde(Lote $lote, ?int $asignadoPorId): void
     {
-        if (! $lote->usuarioid) {
+        if (! $lote->usuarioid || ! UsuarioRol::esResponsableActividadPermitido(Usuario::find($lote->usuarioid))) {
             return;
         }
 

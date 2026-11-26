@@ -25,9 +25,18 @@
 <div class="card mb-3">
  <div class="card-header justify-content-between gap-2 flex-wrap">
   <h2 class="card-title">{{ $actividad->descripcion ?: ($actividad->tipoActividad?->nombre ?? 'Actividad') }}</h2>
-  <span class="badge {{ $completada ? 'bg-success-lt' : 'bg-warning-lt' }}">{{ $completada ? 'Completada' : 'Pendiente' }}</span>
+  <span class="badge {{ $completada ? 'bg-success-lt' : 'bg-warning-lt' }}">{{ $actividad->cancelada_en ? 'Cancelada' : ($completada ? 'Completada' : 'Pendiente') }}</span>
  </div>
  <div class="card-body">
+  @include('actividades.partials.gestion-pendiente', ['actividad' => $actividad])
+  @if($actividad->cancelada_en)
+   <div class="alert alert-secondary">Cancelada el {{ $actividad->cancelada_en->format('d/m/Y H:i') }} por usuario #{{ $actividad->cancelada_por_usuarioid }}. Motivo: {{ $actividad->motivo_cancelacion }}</div>
+  @endif
+  @php($reasignaciones = (json_decode($actividad->detalle_json ?? '', true) ?: [])['historial_asignaciones'] ?? [])
+  @if($reasignaciones)
+   <h3 class="h4">Historial de asignación</h3>
+   <ul>@foreach($reasignaciones as $cambio)<li>{{ $cambio['fecha'] }}: usuario #{{ $cambio['anterior_usuarioid'] }} → #{{ $cambio['nuevo_usuarioid'] }}, por usuario #{{ $cambio['por_usuarioid'] }}.</li>@endforeach</ul>
+  @endif
   <dl class="row">
    <dt class="col-sm-4">Lote</dt><dd class="col-sm-8">{{ $actividad->lote?->nombre }}</dd>
    <dt class="col-sm-4">Tipo</dt><dd class="col-sm-8">{{ $actividad->tipoActividad?->nombre }}</dd>

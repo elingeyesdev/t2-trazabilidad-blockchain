@@ -353,7 +353,7 @@ class RecepcionPuntoVentaService
             ->first();
 
         if ($insumoDestino === null) {
-            $codigo = 'TRZ-PDV-'.now()->format('Ymd').'-'.strtoupper(substr(uniqid(), -6));
+            $codigo = \App\Support\CodigoTrazabilidadPdv::generar();
             $insumoDestino = Insumo::create([
                 'nombre' => $nombrePdv,
                 'codigo_trazabilidad' => $codigo,
@@ -487,7 +487,7 @@ class RecepcionPuntoVentaService
         $producto = Insumo::where('almacenid', $destino->getKey())->where('nombre', $origen->nombre)->lockForUpdate()->first();
         if (! $producto) {
             $producto = Insumo::create(['nombre' => $origen->nombre, 'almacenid' => $destino->getKey(), 'unidadmedidaid' => $origen->unidadmedidaid,
-                'tipoinsumoid' => $origen->tipoinsumoid, 'stock' => 0, 'codigo_trazabilidad' => 'TRZ-PDV-'.Str::uuid()]);
+                'tipoinsumoid' => $origen->tipoinsumoid, 'stock' => 0, 'codigo_trazabilidad' => \App\Support\CodigoTrazabilidadPdv::generar()]);
         }
         // No se reemplaza la presentación anterior si el catálogo cambió después del pedido.
         $presDestino = InsumoPresentacion::firstOrCreate(['insumoid' => $producto->getKey(),

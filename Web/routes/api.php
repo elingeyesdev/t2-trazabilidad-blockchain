@@ -107,6 +107,19 @@ Route::name('api.')->group(function () use ($recursoProtegido) {
         Route::post('recepciones/{pedido}/confirmar', [$controller, 'confirmar'])->whereNumber('pedido')->middleware('action.permission:recepcion_planta,confirm');
     });
 
+    // Read-only options for already-authorized operations; no global users/catalog grant.
+    Route::get('catalogos-operativos/{catalogo}', [\App\Http\Controllers\Api\SelectorOperativoController::class, 'catalogo'])
+        ->whereIn('catalogo', ['tipoactividades', 'prioridades', 'unidadesmedida'])->middleware('auth:sanctum');
+    Route::get('actividades/responsables', [\App\Http\Controllers\Api\SelectorOperativoController::class, 'responsablesActividad'])
+        ->middleware(['auth:sanctum', 'action.permission:lotes,read']);
+    Route::get('punto-venta/inventario', [InsumoController::class, 'indexPdv'])
+        ->middleware(['auth:sanctum', 'action.permission:punto_venta,read']);
+    Route::get('punto-venta/inventario/{insumo}', [InsumoController::class, 'showPdv'])->whereNumber('insumo')
+        ->middleware(['auth:sanctum', 'action.permission:punto_venta,read']);
+    Route::get('incidentes/responsables', [IncidenteEnvioController::class, 'responsables'])
+        ->middleware('auth:sanctum');
+    Route::patch('incidentes/{incidente}/asignar', [IncidenteEnvioController::class, 'asignar'])->whereNumber('incidente')
+        ->middleware(['auth:sanctum', 'action.permission:incidentes,update']);
     // ENDPOINT DE PRUEBA
     Route::get('/test-api', function () {
         return response()->json(['ok' => true]);

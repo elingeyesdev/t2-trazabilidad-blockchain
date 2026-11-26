@@ -111,6 +111,10 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
 
     Route::get('/api/cierre/firmas-estado', [CierreFirmasEstadoController::class, 'show'])->name('cierre.firmas-estado');
     Route::post('/recepcion/{token}', [RecepcionQrPublicaController::class, 'firmar'])->name('recepcion.publica.firmar');
+    Route::get('/recepciones-planta/{asignacion}', [RecepcionQrPublicaController::class, 'desdePlanta'])
+        ->whereNumber('asignacion')->middleware('action.permission:recepcion_planta,confirm')->name('recepcion.planta');
+    Route::post('/recepciones-planta/{asignacion}', [RecepcionQrPublicaController::class, 'confirmarEnPlanta'])
+        ->whereNumber('asignacion')->middleware('action.permission:recepcion_planta,confirm')->name('recepcion.planta.confirmar');
 
     // Perfil de Usuario
     Route::get('/perfil', [UserProfileController::class, 'show'])->name('profile.show');
@@ -161,11 +165,13 @@ Route::middleware(['auth', 'cuenta.aprobada'])->group(function () {
     // Actividades: consulta con lotes,read; mutaciones requieren lotes,update (separación planta solo lectura en lotes)
     Route::get('actividades/calendario', [ActividadController::class, 'calendario'])->name('actividades.calendario')->middleware('action.permission:lotes,read');
     Route::get('actividades', [ActividadController::class, 'index'])->name('actividades.index')->middleware('action.permission:lotes,read');
+    Route::get('actividades/tipos-permitidos', [ActividadController::class, 'tiposPermitidos'])->name('actividades.tipos-permitidos')->middleware('action.permission:lotes,read');
     Route::get('actividades/create', [ActividadController::class, 'create'])->name('actividades.create')->middleware('action.permission:lotes,read');
     Route::post('actividades', [ActividadController::class, 'store'])->name('actividades.store')->middleware('action.permission:lotes,read');
     Route::get('actividades/{actividad}', [ActividadController::class, 'show'])->name('actividades.show')->middleware('action.permission:lotes,read');
     Route::get('actividades/{actividad}/edit', [ActividadController::class, 'edit'])->name('actividades.edit')->middleware('action.permission:lotes,update');
     Route::put('actividades/{actividad}', [ActividadController::class, 'update'])->name('actividades.update')->middleware('action.permission:lotes,update');
+    Route::post('actividades/{actividad}/cancelar-preparacion', [ActividadController::class, 'cancelarPreparacion'])->name('actividades.cancelar-preparacion')->middleware('action.permission:lotes,update');
     Route::patch('actividades/{actividad}/responsable', [ActividadController::class, 'reasignarResponsable'])->name('actividades.reasignar-responsable')->middleware('action.permission:lotes,update');
     Route::delete('actividades/{actividad}', [ActividadController::class, 'destroy'])->name('actividades.destroy')->middleware('action.permission:lotes,update');
     Route::get('actividades/{actividad}/resumen-completar', [ActividadController::class, 'resumenCompletar'])->name('actividades.resumen-completar');

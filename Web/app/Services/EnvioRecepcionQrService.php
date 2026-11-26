@@ -126,9 +126,7 @@ class EnvioRecepcionQrService
                 if ($tipo === 'distribucion' && ! $qr->destinatario_usuarioid) {
                     $this->error('codigo', 'Utilice el QR específico del destinatario.');
                 }
-                $estadoValido = $tipo === 'agricola' ? in_array($envio->estado, ['en_transporte_planta', 'en_ruta', 'en_transito'], true) && ! $envio->fecha_recepcion_planta
-                    : $envio->estado === 'en_ruta';
-                if (! $estadoValido || ! $envio->llegada_confirmada_at || ! $envio->checklistIncidente()->exists() || ! $envio->firmaTransportista()->exists()) {
+                if (! $this->listaParaRecepcion($envio)) {
                     $this->error('envio', 'La recepción requiere un envío en ruta, llegada confirmada, incidentes revisados y firma del transportista.');
                 }
                 $esperadas = $this->consulta->lineas($envio, $user);
@@ -218,6 +216,16 @@ class EnvioRecepcionQrService
             }
             throw $e;
         }
+    }
+
+    public function listaParaRecepcion(EnvioAsignacionMultiple|RutaDistribucion $envio): bool
+    {
+        $estadoValido = $envio instanceof EnvioAsignacionMultiple
+            ? in_array($envio->estado, ['en_transporte_planta', 'en_ruta', 'en_transito'], true) && ! $envio->fecha_recepcion_planta
+            : $envio->estado === 'en_ruta';
+
+        return $estadoValido && $envio->llegada_confirmada_at !== null
+            && $envio->checklistIncidente()->exists() && $envio->firmaTransportista()->exists();
     }
 
     private function bloquear(EnvioAsignacionMultiple|RutaDistribucion $envio): EnvioAsignacionMultiple|RutaDistribucion
